@@ -14,7 +14,152 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      members: {
+        Row: {
+          avatar: string
+          created_at: string
+          id: string
+          is_host: boolean
+          nickname: string
+          room_id: string
+          token_hash: string
+        }
+        Insert: {
+          avatar: string
+          created_at?: string
+          id?: string
+          is_host?: boolean
+          nickname: string
+          room_id: string
+          token_hash: string
+        }
+        Update: {
+          avatar?: string
+          created_at?: string
+          id?: string
+          is_host?: boolean
+          nickname?: string
+          room_id?: string
+          token_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "members_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nominations: {
+        Row: {
+          created_at: string
+          id: string
+          member_id: string
+          restaurant: Json
+          room_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          member_id: string
+          restaurant: Json
+          room_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          member_id?: string
+          restaurant?: Json
+          room_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nominations_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nominations_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rooms: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          result: Json | null
+          settings: Json
+          status: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          result?: Json | null
+          settings?: Json
+          status?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          result?: Json | null
+          settings?: Json
+          status?: string
+        }
+        Relationships: []
+      }
+      votes: {
+        Row: {
+          could_id: string
+          created_at: string
+          id: string
+          member_id: string
+          room_id: string
+          want_id: string
+        }
+        Insert: {
+          could_id: string
+          created_at?: string
+          id?: string
+          member_id: string
+          room_id: string
+          want_id: string
+        }
+        Update: {
+          could_id?: string
+          created_at?: string
+          id?: string
+          member_id?: string
+          room_id?: string
+          want_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "votes_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "votes_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
