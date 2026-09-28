@@ -74,7 +74,7 @@ export const getRoomState = createServerFn({ method: "POST" })
       loadNominations(room.id),
     ]);
     const voted = new Set((votes ?? []).map((v: any) => v.member_id));
-    const showVotes = !settings.anonymous || room.status === "closed" && !settings.anonymous;
+    const showVotes = !settings.anonymous;
     const my = (votes ?? []).find((v: any) => v.member_id === member.id);
     return {
       code: room.code as string,
