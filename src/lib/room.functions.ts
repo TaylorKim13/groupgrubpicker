@@ -285,8 +285,8 @@ export const closeVoting = createServerFn({ method: "POST" })
       bump(v.could_id, 1);
     }
     const scores = [...tally.values()].sort((a, b) => b.points - a.points || b.wants - a.wants);
-    const top = scores.filter((s) => s.points === scores[0].points);
-    const pick = top[Math.floor(Math.random() * top.length)];
+    const top = scores.filter((s) => s.points === scores[0]!.points);
+    const pick = top[Math.floor(Math.random() * top.length)]!;
     const result: Result = {
       winner: byId.get(pick.id)!,
       scores,

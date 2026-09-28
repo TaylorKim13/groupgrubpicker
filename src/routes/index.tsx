@@ -28,13 +28,16 @@ function Home() {
   const join = useServerFn(joinRoom);
   const list = useServerFn(listPublicRooms);
   const [nickname, setNickname] = useState("");
-  const [avatar, setAvatar] = useState(AVATARS[0]);
+  const [avatar, setAvatar] = useState<string>(AVATARS[0]!);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const rooms = useQuery({ queryKey: ["public-rooms"], queryFn: () => list(), refetchInterval: 10000 });
 
   async function go(kind: "host" | "join", joinCode?: string) {
-    if (!nickname.trim()) return toast.error("Pick a nickname first");
+    if (!nickname.trim()) {
+      toast.error("Pick a nickname first");
+      return;
+    }
     setBusy(true);
     try {
       const s =
@@ -97,7 +100,7 @@ function Home() {
           <p className="text-sm text-muted-foreground">Public rooms you can hop into.</p>
           <ul className="mt-4 space-y-2">
             {rooms.data?.length ? (
-              rooms.data.map((r) => (
+              rooms.data.map((r: { code: string; label: string; status: string; members: number }) => (
                 <li key={r.code} className="flex items-center justify-between rounded-lg border-2 px-3 py-2">
                   <div>
                     <div className="font-display text-lg tracking-widest">{r.code}</div>

@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { ProfilePicker } from "@/components/ProfilePicker";
 import { RestaurantMap } from "@/components/RestaurantMap";
 import { Reveal } from "@/components/Reveal";
+import type { Result } from "@/lib/room.functions";
 import {
   castVote,
   closeVoting,
@@ -49,7 +50,7 @@ function RoomPage() {
 function JoinGate({ code, onJoined }: { code: string; onJoined: (s: Session) => void }) {
   const join = useServerFn(joinRoom);
   const [nickname, setNickname] = useState("");
-  const [avatar, setAvatar] = useState(AVATARS[1]);
+  const [avatar, setAvatar] = useState<string>(AVATARS[1]!);
   const [busy, setBusy] = useState(false);
   return (
     <main className="mx-auto max-w-md px-5 py-14">
@@ -83,7 +84,18 @@ function JoinGate({ code, onJoined }: { code: string; onJoined: (s: Session) => 
   );
 }
 
-type State = Awaited<ReturnType<typeof getRoomState>>;
+type State = {
+  code: string;
+  status: "lobby" | "voting" | "closed";
+  settings: RoomSettings;
+  me: { id: string; isHost: boolean };
+  members: { id: string; nickname: string; avatar: string; isHost: boolean; voted: boolean }[];
+  pool: Restaurant[];
+  myNomination: Restaurant | null;
+  myVote: { want: string; could: string } | null;
+  publicVotes: { memberId: string; want: string; could: string }[] | null;
+  result: Result | null;
+};
 
 function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
   const fetchState = useServerFn(getRoomState);
@@ -91,7 +103,7 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
   const key = ["room", session.code];
   const q = useQuery({
     queryKey: key,
-    queryFn: () => fetchState({ data: session }),
+    queryFn: () => fetchState({ data: session }) as Promise<State>,
     refetchInterval: (query) => ((query.state.data as State | undefined)?.status === "closed" ? false : 2500),
     retry: 1,
   });
@@ -289,7 +301,7 @@ function HostSettings({ s, session, refresh }: { s: State; session: Session; ref
       </div>
       <div>
         <label className="text-xs font-bold uppercase">Radius: {st.radiusKm} km</label>
-        <Slider className="mt-3" min={0.5} max={20} step={0.5} value={[st.radiusKm]} onValueChange={([v]) => set({ radiusKm: v })} />
+        <Slider className="mt-3" min={0.5} max={20} step={0.5} value={[st.radiusKm]} onValueChange={([v]) => set({ radiusKm: v ?? 5 })} />
       </div>
       <div>
         <label className="text-xs font-bold uppercase">Price range</label>
@@ -334,7 +346,7 @@ function HostSettings({ s, session, refresh }: { s: State; session: Session; ref
       </div>
       <div>
         <label className="text-xs font-bold uppercase">Max wait: {st.maxWait} min</label>
-        <Slider className="mt-3" min={5} max={120} step={5} value={[st.maxWait]} onValueChange={([v]) => set({ maxWait: v })} />
+        <Slider className="mt-3" min={5} max={120} step={5} value={[st.maxWait]} onValueChange={([v]) => set({ maxWait: v ?? 60 })} />
       </div>
       <div className="flex items-center justify-between">
         <span className="text-sm font-bold">Public lobby</span>
@@ -458,7 +470,7 @@ function RestaurantCard({
   onPick: (s: "want" | "could") => void;
   focused: boolean;
   onFocus: () => void;
-  tally?: { want: string[]; could: string[] };
+  tally?: { want: string[]; could: string[] } | undefined;
 }) {
   return (
     <div

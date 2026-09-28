@@ -3,7 +3,8 @@ import type { Result } from "@/lib/room.functions";
 import { priceLabel } from "@/lib/restaurants";
 
 function CoinFlip({ result, onDone }: { result: Result; onDone: () => void }) {
-  const [a, b] = result.tie!.candidates;
+  const a = result.tie!.candidates[0]!;
+  const b = result.tie!.candidates[1]!;
   const winnerIsA = result.winner.id === a.id;
   useEffect(() => {
     const t = setTimeout(onDone, 3200);
