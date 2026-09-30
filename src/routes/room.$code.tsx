@@ -109,7 +109,7 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
   });
   const refresh = () => qc.invalidateQueries({ queryKey: key });
 
-  if (q.error)
+  if (q.error && !q.data)
     return (
       <main className="mx-auto max-w-md px-5 py-20 text-center">
         <p className="text-lg">{(q.error as Error).message}</p>
@@ -123,7 +123,7 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-6">
-      <TopBar s={s} />
+      <TopBar s={s} onLeave={onLeave} />
       {s.status === "closed" && s.result ? (
         <div className="py-10">
           <Reveal result={s.result} />
@@ -144,7 +144,7 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
   );
 }
 
-function TopBar({ s }: { s: State }) {
+function TopBar({ s, onLeave }: { s: State; onLeave: () => void }) {
   const link = typeof window !== "undefined" ? `${window.location.origin}/room/${s.code}` : "";
   const phase = { lobby: "Lobby", voting: "Voting open", closed: "Winner!" }[s.status];
   return (
@@ -156,6 +156,12 @@ function TopBar({ s }: { s: State }) {
         <span className="rounded-full bg-secondary px-3 py-1 text-xs font-bold uppercase">{phase}</span>
       </div>
       <div className="flex items-center gap-2">
+        <button
+          onClick={onLeave}
+          className="rounded-lg border-2 bg-background px-3 py-2 text-sm font-bold"
+        >
+          ← Back
+        </button>
         <span className="font-display text-3xl tracking-[0.25em]">{s.code}</span>
         <button
           onClick={() => {

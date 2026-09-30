@@ -262,6 +262,7 @@ export const closeVoting = createServerFn({ method: "POST" })
   .inputValidator((d) => Auth.parse(d))
   .handler(async ({ data }) => {
     const { room } = await requireHost(data);
+    if (room.status === "closed") return { ok: true, alreadyClosed: true };
     if (room.status !== "voting") throw new Error("Voting isn't open");
     const [{ data: votes }, noms] = await Promise.all([
       db().from("votes").select("want_id, could_id").eq("room_id", room.id),
