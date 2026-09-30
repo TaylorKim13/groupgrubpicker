@@ -109,7 +109,7 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
   });
   const refresh = () => qc.invalidateQueries({ queryKey: key });
 
-  if (q.error)
+  if (q.error && !q.data)
     return (
       <main className="mx-auto max-w-md px-5 py-20 text-center">
         <p className="text-lg">{(q.error as Error).message}</p>
