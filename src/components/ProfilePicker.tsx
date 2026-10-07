@@ -1,4 +1,5 @@
 import { AVATARS } from "@/lib/restaurants";
+import { Button } from '@/components/ui/button';
 
 export function ProfilePicker({
   nickname,
@@ -13,8 +14,9 @@ export function ProfilePicker({
 }) {
   return (
     <div className="space-y-3">
-      <label className="block text-sm font-bold uppercase tracking-wide">Your nickname</label>
+      <label htmlFor="nickname" className="block text-sm font-bold uppercase tracking-wide">Your nickname</label>
       <input
+        id="nickname"
         value={nickname}
         maxLength={24}
         onChange={(e) => setNickname(e.target.value)}
@@ -23,7 +25,7 @@ export function ProfilePicker({
       />
       <div className="flex flex-wrap gap-2">
         {AVATARS.map((a) => (
-          <button
+          <Button variant="ghost"
             key={a}
             type="button"
             onClick={() => setAvatar(a)}
@@ -33,7 +35,7 @@ export function ProfilePicker({
             }`}
           >
             {a}
-          </button>
+          </Button>
         ))}
       </div>
     </div>

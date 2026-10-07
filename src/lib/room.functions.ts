@@ -1,7 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { authMember, db, getRoomByCode, hashToken, newCode, newToken } from "./room.server";
-import { buildPool, DEFAULT_SETTINGS, DIETS, type Restaurant, type RoomSettings } from "./restaurants";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { buildPool, distanceKm, DEFAULT_SETTINGS, DIETS, type Restaurant, type RoomSettings } from "./restaurants";
 
 const Auth = z.object({ code: z.string().min(6).max(6), memberId: z.string().uuid(), token: z.string().min(10) });
 const Profile = z.object({ nickname: z.string().trim().min(1).max(24), avatar: z.string().min(1).max(8) });
@@ -128,7 +129,14 @@ export const startVoting = createServerFn({ method: "POST" })
   .inputValidator((d) => Auth.parse(d))
   .handler(async ({ data }) => {
     const { room } = await requireHost(data);
-    await db().from("rooms").update({ status: "voting" }).eq("id", room.id);
+    if (room.status !== "lobby") throw new Error("Voting has already started");
+    const noms = await loadNominations(room.id);
+    const pool = buildPool(room.settings, noms.map(n => n.restaurant));
+    if (pool.length < 2) throw new Error("Choose filters with at least two restaurants");
+    const { error: snapshotError } = await db().from("room_restaurants").upsert(pool.map(r => ({ room_id: room.id, restaurant_id: r.id, restaurant: r, distance_km: distanceKm(room.settings.center, r) })), { onConflict: "room_id,restaurant_id" });
+    if (snapshotError) throw new Error("Could not save the restaurant list");
+    const { error } = await db().from("rooms").update({ status: "voting", voting_started_at: new Date().toISOString() }).eq("id", room.id);
+    if (error) throw new Error("Could not start voting");
     return { ok: true };
   });
 
@@ -286,13 +294,64 @@ export const closeVoting = createServerFn({ method: "POST" })
       bump(v.could_id, 1);
     }
     const scores = [...tally.values()].sort((a, b) => b.points - a.points || b.wants - a.wants);
-    const top = scores.filter((s) => s.points === scores[0]!.points);
-    const pick = top[Math.floor(Math.random() * top.length)]!;
+    const first = scores[0];
+    if (!first) throw new Error("No valid votes to count");
+    const top = scores.filter((s) => s.points === first.points);
+    const pick = top[Math.floor(Math.random() * top.length)];
+    const winner = pick ? byId.get(pick.id) : undefined;
+    if (!winner) throw new Error("Could not find a winner");
     const result: Result = {
-      winner: byId.get(pick.id)!,
+      winner,
       scores,
       tie: top.length > 1 ? { method: top.length === 2 ? "coin" : "wheel", candidates: top.map((t) => ({ id: t.id, name: t.name })) } : null,
     };
-    await db().from("rooms").update({ status: "closed", result }).eq("id", room.id);
+    const { error: snapshotError } = await db().from("room_restaurants").upsert(pool.map(r => ({ room_id: room.id, restaurant_id: r.id, restaurant: r, distance_km: distanceKm(room.settings.center, r), points: tally.get(r.id)?.points ?? 0 })), { onConflict: "room_id,restaurant_id" });
+    if (snapshotError) throw new Error("Could not save the scores");
+    const { error } = await db().from("rooms").update({ status: "closed", result, closed_at: new Date().toISOString() }).eq("id", room.id);
+    if (error) throw new Error("Could not save the result");
     return { ok: true };
+  });
+
+
+export const linkRoomAccount = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(d => Auth.parse(d))
+  .handler(async ({ data, context }) => {
+    const { member } = await authMember(data.code, data.memberId, data.token);
+    if (member.user_id && member.user_id !== context.userId) throw new Error("This seat belongs to another account");
+    const { error } = await db().from("members").update({ user_id: context.userId }).eq("id", member.id);
+    if (error) throw new Error("Could not save this group to your account");
+    return { ok: true };
+  });
+
+export const saveRoomPreferences = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(d => Auth.parse(d))
+  .handler(async ({ data, context }) => {
+    const { room } = await authMember(data.code, data.memberId, data.token);
+    const { error } = await context.supabase.from("preset_filters").upsert({ user_id: context.userId, settings: room.settings, updated_at: new Date().toISOString() });
+    if (error) throw new Error("Could not save preferences");
+    return { ok: true };
+  });
+
+export const applyRoomPreferences = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(d => Auth.parse(d))
+  .handler(async ({ data, context }) => {
+    const { room } = await requireHost(data);
+    if (room.status !== "lobby") throw new Error("Settings are locked once voting starts");
+    const { data: preset, error } = await context.supabase.from("preset_filters").select("settings").eq("user_id", context.userId).maybeSingle();
+    if (error || !preset) throw new Error("No saved preferences yet");
+    const settings = SettingsSchema.parse(preset.settings);
+    const { error: saveError } = await db().from("rooms").update({ settings }).eq("id", room.id);
+    if (saveError) throw new Error("Could not apply preferences");
+    return { ok: true };
+  });
+
+export const getGroupHistory = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await db().from("members").select("created_at, rooms(code, settings, status, result, voting_started_at, closed_at)").eq("user_id", context.userId).order("created_at", { ascending: false }).limit(30);
+    if (error) throw new Error("Could not load group history");
+    return (data ?? []).map((row: any) => ({ joinedAt: row.created_at as string, code: row.rooms.code as string, label: row.rooms.settings?.center?.label as string, status: row.rooms.status as string, winner: row.rooms.result?.winner?.name as string | undefined, votingStartedAt: row.rooms.voting_started_at as string | null, closedAt: row.rooms.closed_at as string | null }));
   });

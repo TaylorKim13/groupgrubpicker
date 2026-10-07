@@ -23,6 +23,7 @@ export type Database = {
           nickname: string
           room_id: string
           token_hash: string
+          user_id: string | null
         }
         Insert: {
           avatar: string
@@ -32,6 +33,7 @@ export type Database = {
           nickname: string
           room_id: string
           token_hash: string
+          user_id?: string | null
         }
         Update: {
           avatar?: string
@@ -41,6 +43,7 @@ export type Database = {
           nickname?: string
           room_id?: string
           token_hash?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -48,6 +51,13 @@ export type Database = {
             columns: ["room_id"]
             isOneToOne: false
             referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -91,30 +101,118 @@ export type Database = {
           },
         ]
       }
+      preset_filters: {
+        Row: {
+          settings: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          settings?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          settings?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "preset_filters_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar: string
+          created_at: string
+          display_name: string
+          id: string
+        }
+        Insert: {
+          avatar?: string
+          created_at?: string
+          display_name?: string
+          id: string
+        }
+        Update: {
+          avatar?: string
+          created_at?: string
+          display_name?: string
+          id?: string
+        }
+        Relationships: []
+      }
+      room_restaurants: {
+        Row: {
+          distance_km: number
+          id: string
+          points: number
+          restaurant: Json
+          restaurant_id: string
+          room_id: string
+        }
+        Insert: {
+          distance_km?: number
+          id?: string
+          points?: number
+          restaurant: Json
+          restaurant_id: string
+          room_id: string
+        }
+        Update: {
+          distance_km?: number
+          id?: string
+          points?: number
+          restaurant?: Json
+          restaurant_id?: string
+          room_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_restaurants_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rooms: {
         Row: {
+          closed_at: string | null
           code: string
           created_at: string
           id: string
           result: Json | null
           settings: Json
           status: string
+          voting_started_at: string | null
         }
         Insert: {
+          closed_at?: string | null
           code: string
           created_at?: string
           id?: string
           result?: Json | null
           settings?: Json
           status?: string
+          voting_started_at?: string | null
         }
         Update: {
+          closed_at?: string | null
           code?: string
           created_at?: string
           id?: string
           result?: Json | null
           settings?: Json
           status?: string
+          voting_started_at?: string | null
         }
         Relationships: []
       }

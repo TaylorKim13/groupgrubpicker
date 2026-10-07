@@ -1,0 +1,4 @@
+- [ ] Simplify home and room into contextual steps with first-time onboarding.
+- [ ] Add optional Google accounts, saved preferences and group history.
+- [ ] Persist screenshot-related group and restaurant information securely.
+- [ ] Verify guest flow and account data paths; apply required package update.
