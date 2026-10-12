@@ -129,7 +129,7 @@ export const startVoting = createServerFn({ method: "POST" })
   .inputValidator((d) => Auth.parse(d))
   .handler(async ({ data }) => {
     const { room } = await requireHost(data);
-    if (room.status !== "lobby") throw new Error("Voting has already started");
+    if (room.status !== "lobby") return { ok: true, alreadyStarted: true };
     const noms = await loadNominations(room.id);
     const pool = buildPool(room.settings, noms.map(n => n.restaurant));
     if (pool.length < 2) throw new Error("Choose filters with at least two restaurants");
