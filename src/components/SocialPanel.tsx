@@ -4,11 +4,12 @@ import { useServerFn } from '@tanstack/react-start';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import type { Social } from '@/lib/social.functions';
 import { createCrew, dismissTableInvite, getSocial, inviteToCrew, leaveCrew, removeFriend, respondCrewInvite, respondFriendRequest, sendFriendRequest } from '@/lib/social.functions';
 
 export function useSocial(userId: string | undefined) {
   const fn = useServerFn(getSocial);
-  return useQuery({ queryKey: ['social', userId], queryFn: () => fn(), enabled: !!userId, refetchInterval: 15000 });
+  return useQuery({ queryKey: ['social', userId], queryFn: () => fn() as Promise<Social>, enabled: !!userId, refetchInterval: 15000 });
 }
 
 export function SocialPanel({ userId }: { userId: string }) {
