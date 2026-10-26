@@ -70,7 +70,7 @@ export const getRoomState = createServerFn({ method: "POST" })
     const { room, member } = await authMember(data.code, data.memberId, data.token);
     const settings = { ...DEFAULT_SETTINGS, ...(room.settings as RoomSettings) };
     const [{ data: members }, { data: votes }, noms] = await Promise.all([
-      db().from("members").select("id, nickname, avatar, is_host, created_at").eq("room_id", room.id).order("created_at"),
+      db().from("members").select("id, nickname, avatar, is_host, created_at, user_id").eq("room_id", room.id).order("created_at"),
       db().from("votes").select("member_id, want_id, could_id").eq("room_id", room.id),
       loadNominations(room.id),
     ]);
@@ -81,12 +81,13 @@ export const getRoomState = createServerFn({ method: "POST" })
       code: room.code as string,
       status: room.status as "lobby" | "voting" | "closed",
       settings,
-      me: { id: member.id as string, isHost: member.is_host as boolean },
+      me: { id: member.id as string, isHost: member.is_host as boolean, linked: !!member.user_id },
       members: (members ?? []).map((m: any) => ({
         id: m.id as string,
         nickname: m.nickname as string,
         avatar: m.avatar as string,
         isHost: m.is_host as boolean,
+        hasAccount: !!m.user_id,
         voted: voted.has(m.id),
       })),
       pool: buildPool(settings, noms.map((n) => n.restaurant)),
