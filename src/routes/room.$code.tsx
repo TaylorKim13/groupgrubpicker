@@ -22,6 +22,9 @@ import {
 } from "@/lib/room.functions";
 import { AVATARS, DIETS, distanceKm, priceLabel, type Restaurant, type RoomSettings } from "@/lib/restaurants";
 import { clearSession, loadSession, saveSession, type Session } from "@/lib/session";
+import { useAccount } from "@/components/AccountProvider";
+import { useSocial } from "@/components/SocialPanel";
+import { addFriendFromRoom, inviteFriendsToTable, linkSeatToAccount } from "@/lib/social.functions";
 
 export const Route = createFileRoute("/room/$code")({
   ssr: false,
@@ -88,8 +91,8 @@ type State = {
   code: string;
   status: "lobby" | "voting" | "closed";
   settings: RoomSettings;
-  me: { id: string; isHost: boolean };
-  members: { id: string; nickname: string; avatar: string; isHost: boolean; voted: boolean }[];
+  me: { id: string; isHost: boolean; linked: boolean };
+  members: { id: string; nickname: string; avatar: string; isHost: boolean; hasAccount: boolean; voted: boolean }[];
   pool: Restaurant[];
   myNomination: Restaurant | null;
   myVote: { want: string; could: string } | null;
@@ -132,6 +135,7 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
         <div className="mt-6 grid gap-6 lg:grid-cols-[320px_1fr]">
           <aside className="space-y-6">
             <Members s={s} session={session} refresh={refresh} />
+            <RoomFriends s={s} session={session} refresh={refresh} />
             {s.me.isHost && s.status === "lobby" && <HostSettings s={s} session={session} refresh={refresh} />}
             {s.status === "lobby" && !s.me.isHost && <SettingsSummary settings={s.settings} />}
           </aside>
@@ -181,6 +185,9 @@ function Members({ s, session, refresh }: { s: State; session: Session; refresh:
   const start = useServerFn(startVoting);
   const close = useServerFn(closeVoting);
   const votedCount = s.members.filter((m) => m.voted).length;
+  const user = useAccount();
+  const addFriend = useServerFn(addFriendFromRoom);
+  const [asked, setAsked] = useState<Set<string>>(new Set());
   const run = async (fn: any) => {
     try {
       await fn({ data: session });
@@ -208,6 +215,21 @@ function Members({ s, session, refresh }: { s: State; session: Session; refresh:
               {m.id === s.me.id && <span className="text-muted-foreground"> (you)</span>}
               {m.isHost && <span className="ml-1 rounded bg-secondary px-1.5 text-[10px] font-bold uppercase">host</span>}
             </span>
+            {user && m.id !== s.me.id && m.hasAccount && (
+              <button
+                disabled={asked.has(m.id)}
+                onClick={async () => {
+                  try {
+                    const r = await addFriend({ data: { ...session, targetMemberId: m.id } });
+                    setAsked(new Set(asked).add(m.id));
+                    toast.success(r.status === "accepted" ? "You're now friends" : r.status === "already" ? "Already friends" : "Friend request sent");
+                  } catch (e: any) { toast.error(e.message); }
+                }}
+                className="rounded-md border-2 px-2 py-0.5 text-xs font-bold disabled:opacity-50"
+              >
+                {asked.has(m.id) ? "Sent" : "+ Friend"}
+              </button>
+            )}
             {s.status === "voting" && (
               <span className={`h-3 w-3 rounded-full border-2 ${m.voted ? "bg-success" : "bg-muted"}`} title={m.voted ? "Voted" : "Still deciding"} />
             )}
@@ -229,6 +251,39 @@ function Members({ s, session, refresh }: { s: State; session: Session; refresh:
         </button>
       )}
       {!s.me.isHost && s.status === "lobby" && <p className="mt-4 text-sm text-muted-foreground">Waiting for the host to open voting…</p>}
+    </div>
+  );
+}
+
+function RoomFriends({ s, session, refresh }: { s: State; session: Session; refresh: () => void }) {
+  const user = useAccount();
+  const link = useServerFn(linkSeatToAccount);
+  const invite = useServerFn(inviteFriendsToTable);
+  const social = useSocial(user?.id);
+  useEffect(() => {
+    if (user && !s.me.linked) link({ data: session }).then(refresh).catch(() => {});
+  }, [user?.id, s.me.linked]);
+  if (!user) return (
+    <div className="rounded-2xl bg-card p-5 text-sm chunky">
+      <p><b>Want to add friends from this table?</b></p>
+      <p className="mt-1 text-muted-foreground">Sign in to send friend requests and invite your groups.</p>
+      <Link to="/account" className="mt-3 inline-block font-bold underline">Sign in</Link>
+    </div>
+  );
+  const d = social.data;
+  if (!d || (!d.friends.length && !d.crews.length)) return null;
+  const send = async (ids: string[]) => {
+    try { const r = await invite({ data: { ...session, userIds: ids } }); toast.success(`Invited ${r.sent}`); } catch (e: any) { toast.error(e.message); }
+  };
+  const groups = d.crews.filter((c) => c.myStatus === "member");
+  return (
+    <div className="rounded-2xl bg-card p-5 chunky">
+      <h2 className="text-xl font-extrabold">Invite friends</h2>
+      {groups.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{groups.map((c) => {
+        const ids = c.members.filter((m) => m.status === "member" && m.id !== user.id).map((m) => m.id);
+        return <button key={c.id} disabled={!ids.length} onClick={() => send(ids)} className="rounded-lg bg-secondary px-3 py-1.5 text-sm font-bold chunky disabled:opacity-50">👥 {c.name}</button>;
+      })}</div>}
+      <ul className="mt-3 space-y-1">{d.friends.map((f) => <li key={f.id} className="flex items-center justify-between text-sm"><span>{f.avatar} {f.name}</span><button onClick={() => send([f.id])} className="font-bold underline">Invite</button></li>)}</ul>
     </div>
   );
 }
