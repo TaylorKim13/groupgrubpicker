@@ -208,3 +208,13 @@ export const linkSeatToAccount = createServerFn({ method: "POST" })
     await linkSeat(data, context.userId);
     return { ok: true };
   });
+
+export type Person = { id: string; name: string; avatar: string };
+export type Social = {
+  friendCode: string;
+  friends: (Person & { friendshipId: string })[];
+  incoming: (Person & { friendshipId: string })[];
+  outgoing: (Person & { friendshipId: string })[];
+  crews: { id: string; name: string; isOwner: boolean; myStatus: "invited" | "member"; members: (Person & { status: string })[] }[];
+  tableInvites: { id: string; code: string; from: Person }[];
+};
