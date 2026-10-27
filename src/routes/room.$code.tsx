@@ -1,10 +1,12 @@
+import { RoomSettingsFields } from "@/components/RoomSettingsFields";
+import { Button } from "@/components/ui/button";
+import { useDistanceUnit } from "@/lib/distance-context";
+import { formatDistance, SettingsSchema } from "@/lib/settings";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
 import { ProfilePicker } from "@/components/ProfilePicker";
 import { RestaurantMap } from "@/components/RestaurantMap";
 import { Reveal } from "@/components/Reveal";
@@ -19,8 +21,16 @@ import {
   searchPlaces,
   startVoting,
   updateSettings,
+  saveRoomPreferences,
+  applyRoomPreferences,
 } from "@/lib/room.functions";
-import { AVATARS, DIETS, distanceKm, priceLabel, type Restaurant, type RoomSettings } from "@/lib/restaurants";
+import {
+  AVATARS,
+  distanceKm,
+  priceLabel,
+  type Restaurant,
+  type RoomSettings,
+} from "@/lib/restaurants";
 import { clearSession, loadSession, saveSession, type Session } from "@/lib/session";
 import { useAccount } from "@/components/AccountProvider";
 import { useSocial } from "@/components/SocialPanel";
@@ -33,7 +43,10 @@ export const Route = createFileRoute("/room/$code")({
       { title: `Room ${params.code} — GROUP GRUB` },
       { name: "description", content: "You've been invited to vote on where the group eats." },
       { property: "og:title", content: `Join room ${params.code} on GROUP GRUB` },
-      { property: "og:description", content: "You've been invited to vote on where the group eats." },
+      {
+        property: "og:description",
+        content: "You've been invited to vote on where the group eats.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -61,7 +74,9 @@ function JoinGate({ code, onJoined }: { code: string; onJoined: (s: Session) => 
         GROUP<span className="text-primary"> GRUB</span>
       </Link>
       <div className="mt-6 rounded-2xl bg-card p-6 chunky">
-        <p className="text-sm uppercase tracking-wide text-muted-foreground">You're invited to room</p>
+        <p className="text-sm uppercase tracking-wide text-muted-foreground">
+          You're invited to room
+        </p>
         <p className="mb-5 font-display text-4xl tracking-[0.25em]">{code.toUpperCase()}</p>
         <ProfilePicker {...{ nickname, setNickname, avatar, setAvatar }} />
         <button
@@ -92,7 +107,14 @@ type State = {
   status: "lobby" | "voting" | "closed";
   settings: RoomSettings;
   me: { id: string; isHost: boolean; linked: boolean };
-  members: { id: string; nickname: string; avatar: string; isHost: boolean; hasAccount: boolean; voted: boolean }[];
+  members: {
+    id: string;
+    nickname: string;
+    avatar: string;
+    isHost: boolean;
+    hasAccount: boolean;
+    voted: boolean;
+  }[];
   pool: Restaurant[];
   myNomination: Restaurant | null;
   myVote: { want: string; could: string } | null;
@@ -107,7 +129,8 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
   const q = useQuery({
     queryKey: key,
     queryFn: () => fetchState({ data: session }) as Promise<State>,
-    refetchInterval: (query) => ((query.state.data as State | undefined)?.status === "closed" ? false : 2500),
+    refetchInterval: (query) =>
+      (query.state.data as State | undefined)?.status === "closed" ? false : 2500,
     retry: 1,
   });
   const refresh = () => qc.invalidateQueries({ queryKey: key });
@@ -116,13 +139,21 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
     return (
       <main className="mx-auto max-w-md px-5 py-20 text-center">
         <p className="text-lg">{(q.error as Error).message}</p>
-        <button onClick={onLeave} className="mt-4 rounded-xl bg-secondary px-4 py-2 font-bold chunky">
+        <button
+          onClick={onLeave}
+          className="mt-4 rounded-xl bg-secondary px-4 py-2 font-bold chunky"
+        >
           Join again
         </button>
       </main>
     );
   const s = q.data;
-  if (!s) return <main className="grid min-h-screen place-items-center font-display text-2xl">Setting the table…</main>;
+  if (!s)
+    return (
+      <main className="grid min-h-screen place-items-center font-display text-2xl">
+        Setting the table…
+      </main>
+    );
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-6">
@@ -136,7 +167,9 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
           <aside className="space-y-6">
             <Members s={s} session={session} refresh={refresh} />
             <RoomFriends s={s} session={session} refresh={refresh} />
-            {s.me.isHost && s.status === "lobby" && <HostSettings s={s} session={session} refresh={refresh} />}
+            {s.me.isHost && s.status === "lobby" && (
+              <HostSettings s={s} session={session} refresh={refresh} />
+            )}
             {s.status === "lobby" && !s.me.isHost && <SettingsSummary settings={s.settings} />}
           </aside>
           <section className="space-y-6">
@@ -157,7 +190,9 @@ function TopBar({ s, onLeave }: { s: State; onLeave: () => void }) {
         <Link to="/" className="font-display text-2xl font-extrabold leading-none">
           GROUP<span className="text-primary"> GRUB</span>
         </Link>
-        <span className="rounded-full bg-secondary px-3 py-1 text-xs font-bold uppercase">{phase}</span>
+        <span className="rounded-full bg-secondary px-3 py-1 text-xs font-bold uppercase">
+          {phase}
+        </span>
       </div>
       <div className="flex items-center gap-2">
         <button
@@ -209,11 +244,17 @@ function Members({ s, session, refresh }: { s: State; session: Session; refresh:
       <ul className="mt-3 space-y-2">
         {s.members.map((m) => (
           <li key={m.id} className="flex items-center gap-3">
-            <span className="grid h-9 w-9 place-items-center rounded-full border-2 bg-background text-lg">{m.avatar}</span>
+            <span className="grid h-9 w-9 place-items-center rounded-full border-2 bg-background text-lg">
+              {m.avatar}
+            </span>
             <span className="flex-1 font-medium">
               {m.nickname}
               {m.id === s.me.id && <span className="text-muted-foreground"> (you)</span>}
-              {m.isHost && <span className="ml-1 rounded bg-secondary px-1.5 text-[10px] font-bold uppercase">host</span>}
+              {m.isHost && (
+                <span className="ml-1 rounded bg-secondary px-1.5 text-[10px] font-bold uppercase">
+                  host
+                </span>
+              )}
             </span>
             {user && m.id !== s.me.id && m.hasAccount && (
               <button
@@ -222,8 +263,16 @@ function Members({ s, session, refresh }: { s: State; session: Session; refresh:
                   try {
                     const r = await addFriend({ data: { ...session, targetMemberId: m.id } });
                     setAsked(new Set(asked).add(m.id));
-                    toast.success(r.status === "accepted" ? "You're now friends" : r.status === "already" ? "Already friends" : "Friend request sent");
-                  } catch (e: any) { toast.error(e.message); }
+                    toast.success(
+                      r.status === "accepted"
+                        ? "You're now friends"
+                        : r.status === "already"
+                          ? "Already friends"
+                          : "Friend request sent",
+                    );
+                  } catch (e: any) {
+                    toast.error(e.message);
+                  }
                 }}
                 className="rounded-md border-2 px-2 py-0.5 text-xs font-bold disabled:opacity-50"
               >
@@ -231,13 +280,19 @@ function Members({ s, session, refresh }: { s: State; session: Session; refresh:
               </button>
             )}
             {s.status === "voting" && (
-              <span className={`h-3 w-3 rounded-full border-2 ${m.voted ? "bg-success" : "bg-muted"}`} title={m.voted ? "Voted" : "Still deciding"} />
+              <span
+                className={`h-3 w-3 rounded-full border-2 ${m.voted ? "bg-success" : "bg-muted"}`}
+                title={m.voted ? "Voted" : "Still deciding"}
+              />
             )}
           </li>
         ))}
       </ul>
       {s.me.isHost && s.status === "lobby" && (
-        <button onClick={() => run(start)} className="mt-5 w-full rounded-xl bg-primary py-3 font-bold text-primary-foreground chunky">
+        <button
+          onClick={() => run(start)}
+          className="mt-5 w-full rounded-xl bg-primary py-3 font-bold text-primary-foreground chunky"
+        >
           Open voting
         </button>
       )}
@@ -250,7 +305,9 @@ function Members({ s, session, refresh }: { s: State; session: Session; refresh:
           Close voting & reveal
         </button>
       )}
-      {!s.me.isHost && s.status === "lobby" && <p className="mt-4 text-sm text-muted-foreground">Waiting for the host to open voting…</p>}
+      {!s.me.isHost && s.status === "lobby" && (
+        <p className="mt-4 text-sm text-muted-foreground">Waiting for the host to open voting…</p>
+      )}
     </div>
   );
 }
@@ -261,40 +318,84 @@ function RoomFriends({ s, session, refresh }: { s: State; session: Session; refr
   const invite = useServerFn(inviteFriendsToTable);
   const social = useSocial(user?.id);
   useEffect(() => {
-    if (user && !s.me.linked) link({ data: session }).then(refresh).catch(() => {});
+    if (user && !s.me.linked)
+      link({ data: session })
+        .then(refresh)
+        .catch(() => {});
   }, [user?.id, s.me.linked]);
-  if (!user) return (
-    <div className="rounded-2xl bg-card p-5 text-sm chunky">
-      <p><b>Want to add friends from this table?</b></p>
-      <p className="mt-1 text-muted-foreground">Sign in to send friend requests and invite your groups.</p>
-      <Link to="/account" className="mt-3 inline-block font-bold underline">Sign in</Link>
-    </div>
-  );
+  if (!user)
+    return (
+      <div className="rounded-2xl bg-card p-5 text-sm chunky">
+        <p>
+          <b>Want to add friends from this table?</b>
+        </p>
+        <p className="mt-1 text-muted-foreground">
+          Sign in to send friend requests and invite your groups.
+        </p>
+        <Link to="/account" className="mt-3 inline-block font-bold underline">
+          Sign in
+        </Link>
+      </div>
+    );
   const d = social.data;
   if (!d || (!d.friends.length && !d.crews.length)) return null;
   const send = async (ids: string[]) => {
-    try { const r = await invite({ data: { ...session, userIds: ids } }); toast.success(`Invited ${r.sent}`); } catch (e: any) { toast.error(e.message); }
+    try {
+      const r = await invite({ data: { ...session, userIds: ids } });
+      toast.success(`Invited ${r.sent}`);
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
   const groups = d.crews.filter((c) => c.myStatus === "member");
   return (
     <div className="rounded-2xl bg-card p-5 chunky">
       <h2 className="text-xl font-extrabold">Invite friends</h2>
-      {groups.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{groups.map((c) => {
-        const ids = c.members.filter((m) => m.status === "member" && m.id !== user.id).map((m) => m.id);
-        return <button key={c.id} disabled={!ids.length} onClick={() => send(ids)} className="rounded-lg bg-secondary px-3 py-1.5 text-sm font-bold chunky disabled:opacity-50">👥 {c.name}</button>;
-      })}</div>}
-      <ul className="mt-3 space-y-1">{d.friends.map((f) => <li key={f.id} className="flex items-center justify-between text-sm"><span>{f.avatar} {f.name}</span><button onClick={() => send([f.id])} className="font-bold underline">Invite</button></li>)}</ul>
+      {groups.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {groups.map((c) => {
+            const ids = c.members
+              .filter((m) => m.status === "member" && m.id !== user.id)
+              .map((m) => m.id);
+            return (
+              <button
+                key={c.id}
+                disabled={!ids.length}
+                onClick={() => send(ids)}
+                className="rounded-lg bg-secondary px-3 py-1.5 text-sm font-bold chunky disabled:opacity-50"
+              >
+                👥 {c.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <ul className="mt-3 space-y-1">
+        {d.friends.map((f) => (
+          <li key={f.id} className="flex items-center justify-between text-sm">
+            <span>
+              {f.avatar} {f.name}
+            </span>
+            <button onClick={() => send([f.id])} className="font-bold underline">
+              Invite
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
 
 function SettingsSummary({ settings: st }: { settings: RoomSettings }) {
+  const unit = useDistanceUnit();
   return (
     <div className="rounded-2xl bg-card p-5 text-sm chunky">
       <h2 className="mb-2 text-xl font-extrabold">House rules</h2>
       <p>📍 {st.center.label}</p>
-      <p>📏 Within {st.radiusKm} km</p>
-      <p>💸 {priceLabel(st.priceMin)}–{priceLabel(st.priceMax)}</p>
+      <p>📏 Within {formatDistance(st.radiusKm, unit)}</p>
+      <p>
+        💸 {priceLabel(st.priceMin)}–{priceLabel(st.priceMax)}
+      </p>
       <p>⏱ Max wait {st.maxWait} min</p>
       {st.diets.length > 0 && <p>🥦 {st.diets.join(", ")}</p>}
       <p>{st.anonymous ? "🙈 Anonymous voting" : "👀 Public voting"}</p>
@@ -302,122 +403,117 @@ function SettingsSummary({ settings: st }: { settings: RoomSettings }) {
   );
 }
 
-function HostSettings({ s, session, refresh }: { s: State; session: Session; refresh: () => void }) {
+function HostSettings({
+  s,
+  session,
+  refresh,
+}: {
+  s: State;
+  session: Session;
+  refresh: () => void;
+}) {
   const save = useServerFn(updateSettings);
+  const saveDefaults = useServerFn(saveRoomPreferences);
+  const applyDefaults = useServerFn(applyRoomPreferences);
+  const user = useAccount();
+  const qc = useQueryClient();
+  const [presetBusy, setPresetBusy] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const geo = useServerFn(geocodeCenter);
   const [st, setSt] = useState<RoomSettings>(s.settings);
-  const [addr, setAddr] = useState("");
   const [dirty, setDirty] = useState(false);
-  const set = (p: Partial<RoomSettings>) => (setSt({ ...st, ...p }), setDirty(true));
+  const unit = useDistanceUnit();
+  const set = (p: Partial<RoomSettings>) => {
+    setSt((current) => ({ ...current, ...p }));
+    setDirty(true);
+  };
+  useEffect(() => {
+    if (!dirty) setSt(s.settings);
+  }, [s.settings, dirty]);
 
   useEffect(() => {
     if (!dirty) return;
+    const validation = SettingsSchema.safeParse(st);
+    if (!validation.success) {
+      setSaveError(validation.error.issues[0]?.message ?? "Check your settings");
+      return;
+    }
+    setSaveError("");
+    let cancelled = false;
     const t = setTimeout(async () => {
       try {
-        await save({ data: { ...session, settings: st } });
-        setDirty(false);
-        refresh();
-      } catch (e: any) {
-        toast.error(e.message);
+        await save({ data: { ...session, settings: SettingsSchema.parse(st) } });
+        if (!cancelled) {
+          setDirty(false);
+          refresh();
+        }
+      } catch (e: unknown) {
+        if (!cancelled)
+          setSaveError(e instanceof Error ? e.message : "Could not save room settings");
       }
     }, 500);
-    return () => clearTimeout(t);
-  }, [st, dirty]);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [st, dirty, save, session, refresh]);
 
   return (
     <div className="space-y-5 rounded-2xl bg-card p-5 chunky">
       <h2 className="text-xl font-extrabold">Host controls</h2>
-      <div>
-        <label className="text-xs font-bold uppercase">Search center</label>
-        <p className="text-sm text-muted-foreground">{st.center.label}</p>
-        <form
-          className="mt-2 flex gap-2"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            try {
-              set({ center: await geo({ data: { ...session, address: addr } }) });
-              setAddr("");
-            } catch (err: any) {
-              toast.error(err.message);
-            }
-          }}
-        >
-          <input value={addr} onChange={(e) => setAddr(e.target.value)} placeholder="Address or neighborhood" className="min-w-0 flex-1 rounded-lg border-2 bg-background px-3 py-2 text-sm" />
-          <button disabled={addr.trim().length < 2} className="rounded-lg bg-secondary px-3 text-sm font-bold disabled:opacity-50">
-            Set
-          </button>
-        </form>
-        <button
-          type="button"
-          className="mt-1 text-xs underline"
-          onClick={() =>
-            navigator.geolocation?.getCurrentPosition(
-              (p) => set({ center: { lat: p.coords.latitude, lng: p.coords.longitude, label: "My location" } }),
-              () => toast.error("Couldn't get your location"),
-            )
-          }
-        >
-          Use my location
-        </button>
-      </div>
-      <div>
-        <label className="text-xs font-bold uppercase">Radius: {st.radiusKm} km</label>
-        <Slider className="mt-3" min={0.5} max={20} step={0.5} value={[st.radiusKm]} onValueChange={([v]) => set({ radiusKm: v ?? 5 })} />
-      </div>
-      <div>
-        <label className="text-xs font-bold uppercase">Price range</label>
-        <div className="mt-2 grid grid-cols-4 gap-1">
-          {[1, 2, 3, 4].map((p) => {
-            const on = p >= st.priceMin && p <= st.priceMax;
-            return (
-              <button
-                key={p}
-                type="button"
-                onClick={() => {
-                  if (p < st.priceMin) set({ priceMin: p });
-                  else if (p > st.priceMax) set({ priceMax: p });
-                  else if (p === st.priceMin && p < st.priceMax) set({ priceMin: p + 1 });
-                  else if (p === st.priceMax && p > st.priceMin) set({ priceMax: p - 1 });
-                }}
-                className={`rounded-md border-2 py-1.5 text-sm font-bold ${on ? "bg-primary text-primary-foreground" : "bg-background"}`}
-              >
-                {priceLabel(p)}
-              </button>
-            );
-          })}
+      <RoomSettingsFields
+        value={st}
+        onChange={set}
+        unit={unit}
+        geocode={(address) => geo({ data: { ...session, address } })}
+      />
+      {saveError ? (
+        <p role="alert" className="text-sm text-destructive">
+          {saveError}
+        </p>
+      ) : (
+        dirty && <p className="text-xs text-muted-foreground">Saving...</p>
+      )}
+      {user && (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            disabled={dirty || presetBusy}
+            onClick={async () => {
+              setPresetBusy(true);
+              try {
+                await saveDefaults({ data: session });
+                await qc.invalidateQueries({ queryKey: ["account", user.id] });
+                toast.success("Hosting preferences saved");
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Could not save preferences");
+              } finally {
+                setPresetBusy(false);
+              }
+            }}
+          >
+            Save as my defaults
+          </Button>
+          <Button
+            variant="outline"
+            disabled={dirty || presetBusy}
+            onClick={async () => {
+              setPresetBusy(true);
+              try {
+                await applyDefaults({ data: session });
+                refresh();
+                toast.success("Saved defaults applied");
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Could not apply preferences");
+              } finally {
+                setPresetBusy(false);
+              }
+            }}
+          >
+            Use my saved defaults
+          </Button>
         </div>
-      </div>
-      <div>
-        <label className="text-xs font-bold uppercase">Dietary / allergy needs</label>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {DIETS.map((d) => {
-            const on = st.diets.includes(d);
-            return (
-              <button
-                key={d}
-                type="button"
-                onClick={() => set({ diets: on ? st.diets.filter((x) => x !== d) : [...st.diets, d] })}
-                className={`rounded-full border-2 px-2.5 py-0.5 text-xs font-bold ${on ? "bg-secondary" : "bg-background"}`}
-              >
-                {d}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-      <div>
-        <label className="text-xs font-bold uppercase">Max wait: {st.maxWait} min</label>
-        <Slider className="mt-3" min={5} max={120} step={5} value={[st.maxWait]} onValueChange={([v]) => set({ maxWait: v ?? 60 })} />
-      </div>
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-bold">Public lobby</span>
-        <Switch checked={st.visibility === "public"} onCheckedChange={(c) => set({ visibility: c ? "public" : "private" })} />
-      </div>
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-bold">Anonymous voting</span>
-        <Switch checked={st.anonymous} onCheckedChange={(c) => set({ anonymous: c })} />
-      </div>
-      {dirty && <p className="text-xs text-muted-foreground">Saving…</p>}
+      )}
     </div>
   );
 }
@@ -453,7 +549,13 @@ function Pool({ s, session, refresh }: { s: State; session: Session; refresh: ()
   return (
     <>
       <div className="h-80 overflow-hidden rounded-2xl chunky md:h-96">
-        <RestaurantMap center={s.settings.center} radiusKm={s.settings.radiusKm} pool={pool} highlight={focus ?? want} onSelect={(r) => setFocus(r.id)} />
+        <RestaurantMap
+          center={s.settings.center}
+          radiusKm={s.settings.radiusKm}
+          pool={pool}
+          highlight={focus ?? want}
+          onSelect={(r) => setFocus(r.id)}
+        />
       </div>
 
       {s.status !== "closed" && <Nominate s={s} session={session} refresh={refresh} />}
@@ -461,8 +563,8 @@ function Pool({ s, session, refresh }: { s: State; session: Session; refresh: ()
       {voting && (
         <div className="sticky top-2 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-secondary p-4 chunky">
           <div className="text-sm">
-            <b>Want</b> (2 pts): {pool.find((r) => r.id === want)?.name ?? "—"} · <b>Could</b> (1 pt):{" "}
-            {pool.find((r) => r.id === could)?.name ?? "—"}
+            <b>Want</b> (2 pts): {pool.find((r) => r.id === want)?.name ?? "—"} · <b>Could</b> (1
+            pt): {pool.find((r) => r.id === could)?.name ?? "—"}
           </div>
           <button
             disabled={!want || !could}
@@ -484,11 +586,13 @@ function Pool({ s, session, refresh }: { s: State; session: Session; refresh: ()
 
       <div>
         <h2 className="mb-3 text-2xl font-extrabold">
-          The pool <span className="text-base font-normal text-muted-foreground">({pool.length} spots)</span>
+          The pool{" "}
+          <span className="text-base font-normal text-muted-foreground">({pool.length} spots)</span>
         </h2>
         {pool.length === 0 && (
           <p className="rounded-xl border-2 border-dashed p-6 text-center text-muted-foreground">
-            Nothing matches these filters. Widen the radius, price, or wait time — or nominate a spot.
+            Nothing matches these filters. Widen the radius, price, or wait time — or nominate a
+            spot.
           </p>
         )}
         <div className="grid gap-3 sm:grid-cols-2">
@@ -533,6 +637,7 @@ function RestaurantCard({
   onFocus: () => void;
   tally?: { want: string[]; could: string[] } | undefined;
 }) {
+  const unit = useDistanceUnit();
   return (
     <div
       onMouseEnter={onFocus}
@@ -542,10 +647,15 @@ function RestaurantCard({
         <div>
           <h3 className="text-lg font-extrabold leading-tight">{r.name}</h3>
           <p className="text-sm text-muted-foreground">
-            {r.cuisine} · {priceLabel(r.price)} · {distanceKm(center, r).toFixed(1)} km · ~{r.wait} min
+            {r.cuisine} · {priceLabel(r.price)} · {formatDistance(distanceKm(center, r), unit)} · ~
+            {r.wait} min
           </p>
         </div>
-        {r.custom && <span className="shrink-0 rounded bg-success px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary-foreground">by {r.nominatedBy}</span>}
+        {r.custom && (
+          <span className="shrink-0 rounded bg-success px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary-foreground">
+            by {r.nominatedBy}
+          </span>
+        )}
       </div>
       {r.diets.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
@@ -564,10 +674,16 @@ function RestaurantCard({
       )}
       {voting && (
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <button onClick={() => onPick("want")} className={`rounded-lg border-2 py-1.5 text-sm font-bold ${want ? "bg-primary text-primary-foreground" : "bg-background"}`}>
+          <button
+            onClick={() => onPick("want")}
+            className={`rounded-lg border-2 py-1.5 text-sm font-bold ${want ? "bg-primary text-primary-foreground" : "bg-background"}`}
+          >
             {want ? "★ Want" : "Want"}
           </button>
-          <button onClick={() => onPick("could")} className={`rounded-lg border-2 py-1.5 text-sm font-bold ${could ? "bg-secondary" : "bg-background"}`}>
+          <button
+            onClick={() => onPick("could")}
+            className={`rounded-lg border-2 py-1.5 text-sm font-bold ${could ? "bg-secondary" : "bg-background"}`}
+          >
             {could ? "☆ Could" : "Could"}
           </button>
         </div>
@@ -613,7 +729,9 @@ function Nominate({ s, session, refresh }: { s: State; session: Session; refresh
         <p className="mt-1 text-sm text-muted-foreground">Nominations lock once you've voted.</p>
       ) : (
         <>
-          <p className="text-sm text-muted-foreground">Add one real restaurant to the group pool.</p>
+          <p className="text-sm text-muted-foreground">
+            Add one real restaurant to the group pool.
+          </p>
           <form
             className="mt-3 flex gap-2"
             onSubmit={async (e) => {
@@ -628,21 +746,34 @@ function Nominate({ s, session, refresh }: { s: State; session: Session; refresh
               }
             }}
           >
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search a restaurant…" className="min-w-0 flex-1 rounded-lg border-2 bg-background px-3 py-2" />
-            <button disabled={busy || q.trim().length < 2} className="rounded-lg bg-secondary px-4 font-bold chunky disabled:opacity-50">
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search a restaurant…"
+              className="min-w-0 flex-1 rounded-lg border-2 bg-background px-3 py-2"
+            />
+            <button
+              disabled={busy || q.trim().length < 2}
+              className="rounded-lg bg-secondary px-4 font-bold chunky disabled:opacity-50"
+            >
               {busy ? "…" : "Search"}
             </button>
           </form>
           {results && (
             <ul className="mt-3 divide-y-2 rounded-lg border-2">
-              {results.length === 0 && <li className="p-3 text-sm text-muted-foreground">No matches.</li>}
+              {results.length === 0 && (
+                <li className="p-3 text-sm text-muted-foreground">No matches.</li>
+              )}
               {results.map((r) => (
                 <li key={r.id} className="flex items-center justify-between gap-3 p-3">
                   <div className="min-w-0">
                     <p className="truncate font-bold">{r.name}</p>
                     <p className="truncate text-xs text-muted-foreground">{r.address}</p>
                   </div>
-                  <button onClick={() => submit(r)} className="shrink-0 rounded-md bg-primary px-3 py-1 text-sm font-bold text-primary-foreground">
+                  <button
+                    onClick={() => submit(r)}
+                    className="shrink-0 rounded-md bg-primary px-3 py-1 text-sm font-bold text-primary-foreground"
+                  >
                     Nominate
                   </button>
                 </li>

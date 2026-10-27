@@ -14,6 +14,7 @@ export type Restaurant = {
   address?: string;
   custom?: boolean;
   nominatedBy?: string;
+  nominatedByMemberId?: string;
 };
 
 export type Center = { lat: number; lng: number; label: string };

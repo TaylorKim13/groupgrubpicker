@@ -1,3 +1,5 @@
+import { useDistanceUnit } from "@/lib/distance-context";
+import { formatDistance } from "@/lib/settings";
 import { useEffect, useRef, useState } from "react";
 import { distanceKm, priceLabel, type Center, type Restaurant } from "@/lib/restaurants";
 
@@ -39,6 +41,7 @@ export function RestaurantMap({
   highlight?: string | null;
   onSelect?: (r: Restaurant) => void;
 }) {
+  const unit = useDistanceUnit();
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<any>(null);
   const overlays = useRef<any[]>([]);
@@ -76,7 +79,14 @@ export function RestaurantMap({
         map: m,
         position: center,
         title: "Search center",
-        icon: { path: g.SymbolPath.CIRCLE, scale: 9, fillColor: "#222", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 3 },
+        icon: {
+          path: g.SymbolPath.CIRCLE,
+          scale: 9,
+          fillColor: "#222",
+          fillOpacity: 1,
+          strokeColor: "#fff",
+          strokeWeight: 3,
+        },
         zIndex: 999,
       }),
       new g.Circle({
@@ -110,13 +120,13 @@ export function RestaurantMap({
         },
       });
       mk.addListener("click", () => {
-        const d = distanceKm(center, r).toFixed(1);
+        const d = formatDistance(distanceKm(center, r), unit);
         const div = document.createElement("div");
         div.style.cssText = "font-family:Figtree,sans-serif;min-width:160px";
         const h = document.createElement("strong");
         h.textContent = r.name;
         const p = document.createElement("div");
-        p.textContent = `${r.cuisine} · ${priceLabel(r.price)} · ${d} km · ~${r.wait} min wait`;
+        p.textContent = `${r.cuisine} · ${priceLabel(r.price)} · ${d} · ~${r.wait} min wait`;
         div.append(h, p);
         info.current.setContent(div);
         info.current.open({ map: m, anchor: mk });
@@ -127,8 +137,11 @@ export function RestaurantMap({
     });
     if (pool.length) m.fitBounds(bounds, 40);
     else m.setCenter(center);
-  }, [ready, center.lat, center.lng, radiusKm, pool, highlight]);
+  }, [ready, center.lat, center.lng, radiusKm, pool, highlight, unit]);
 
-  if (err) return <div className="grid h-full place-items-center p-6 text-sm text-muted-foreground">{err}</div>;
+  if (err)
+    return (
+      <div className="grid h-full place-items-center p-6 text-sm text-muted-foreground">{err}</div>
+    );
   return <div ref={el} className="h-full w-full" />;
 }

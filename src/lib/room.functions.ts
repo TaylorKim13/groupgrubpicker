@@ -1,17 +1,39 @@
+import { SettingsSchema } from "./settings";
+import { optionalAccountAuth } from "./account-auth";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { authMember, db, getRoomByCode, hashToken, newCode, newToken } from "./room.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { buildPool, distanceKm, DEFAULT_SETTINGS, DIETS, type Restaurant, type RoomSettings } from "./restaurants";
+import {
+  buildPool,
+  distanceKm,
+  DEFAULT_SETTINGS,
+  DIETS,
+  type Restaurant,
+  type RoomSettings,
+} from "./restaurants";
 
-const Auth = z.object({ code: z.string().min(6).max(6), memberId: z.string().uuid(), token: z.string().min(10) });
-const Profile = z.object({ nickname: z.string().trim().min(1).max(24), avatar: z.string().min(1).max(8) });
+const Auth = z.object({
+  code: z.string().min(6).max(6),
+  memberId: z.string().uuid(),
+  token: z.string().min(10),
+});
+const Profile = z.object({
+  nickname: z.string().trim().min(1).max(24),
+  avatar: z.string().min(1).max(8),
+});
 
 async function addMember(roomId: string, p: z.infer<typeof Profile>, isHost: boolean) {
   const token = newToken();
   const { data, error } = await db()
     .from("members")
-    .insert({ room_id: roomId, nickname: p.nickname, avatar: p.avatar, is_host: isHost, token_hash: hashToken(token) })
+    .insert({
+      room_id: roomId,
+      nickname: p.nickname,
+      avatar: p.avatar,
+      is_host: isHost,
+      token_hash: hashToken(token),
+    })
     .select("id")
     .single();
   if (error) throw new Error(error.message);
@@ -19,13 +41,36 @@ async function addMember(roomId: string, p: z.infer<typeof Profile>, isHost: boo
 }
 
 export const createRoom = createServerFn({ method: "POST" })
+  .middleware([optionalAccountAuth])
   .inputValidator((d) => Profile.parse(d))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    let settings = DEFAULT_SETTINGS;
+    if (context.accountUserId) {
+      const { data: preset, error } = await db()
+        .from("preset_filters")
+        .select("settings")
+        .eq("user_id", context.accountUserId)
+        .maybeSingle();
+      if (error) throw new Error("Could not load hosting preferences");
+      if (preset)
+        settings = SettingsSchema.parse({ ...DEFAULT_SETTINGS, ...(preset.settings as object) });
+    }
     for (let i = 0; i < 5; i++) {
       const code = newCode();
-      const { data: room, error } = await db().from("rooms").insert({ code, settings: DEFAULT_SETTINGS }).select("id").single();
+      const { data: room, error } = await db()
+        .from("rooms")
+        .insert({ code, settings })
+        .select("id")
+        .single();
       if (error) continue;
       const m = await addMember(room.id, data, true);
+      if (context.accountUserId) {
+        const { error } = await db()
+          .from("members")
+          .update({ user_id: context.accountUserId })
+          .eq("id", m.memberId);
+        if (error) throw new Error("Could not link this group to your account");
+      }
       return { code, ...m };
     }
     throw new Error("Could not create room, try again");
@@ -60,7 +105,10 @@ export const listPublicRooms = createServerFn({ method: "GET" }).handler(async (
 });
 
 async function loadNominations(roomId: string) {
-  const { data } = await db().from("nominations").select("member_id, restaurant").eq("room_id", roomId);
+  const { data } = await db()
+    .from("nominations")
+    .select("member_id, restaurant")
+    .eq("room_id", roomId);
   return (data ?? []) as Array<{ member_id: string; restaurant: Restaurant }>;
 }
 
@@ -70,7 +118,11 @@ export const getRoomState = createServerFn({ method: "POST" })
     const { room, member } = await authMember(data.code, data.memberId, data.token);
     const settings = { ...DEFAULT_SETTINGS, ...(room.settings as RoomSettings) };
     const [{ data: members }, { data: votes }, noms] = await Promise.all([
-      db().from("members").select("id, nickname, avatar, is_host, created_at, user_id").eq("room_id", room.id).order("created_at"),
+      db()
+        .from("members")
+        .select("id, nickname, avatar, is_host, created_at, user_id")
+        .eq("room_id", room.id)
+        .order("created_at"),
       db().from("votes").select("member_id, want_id, could_id").eq("room_id", room.id),
       loadNominations(room.id),
     ]);
@@ -90,26 +142,22 @@ export const getRoomState = createServerFn({ method: "POST" })
         hasAccount: !!m.user_id,
         voted: voted.has(m.id),
       })),
-      pool: buildPool(settings, noms.map((n) => n.restaurant)),
+      pool: buildPool(
+        settings,
+        noms.map((n) => n.restaurant),
+      ),
       myNomination: noms.find((n) => n.member_id === member.id)?.restaurant ?? null,
       myVote: my ? { want: my.want_id as string, could: my.could_id as string } : null,
       publicVotes: showVotes
-        ? (votes ?? []).map((v: any) => ({ memberId: v.member_id as string, want: v.want_id as string, could: v.could_id as string }))
+        ? (votes ?? []).map((v: any) => ({
+            memberId: v.member_id as string,
+            want: v.want_id as string,
+            could: v.could_id as string,
+          }))
         : null,
       result: room.result as Result | null,
     };
   });
-
-const SettingsSchema = z.object({
-  center: z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180), label: z.string().max(200) }),
-  radiusKm: z.number().min(0.5).max(40),
-  priceMin: z.number().int().min(1).max(4),
-  priceMax: z.number().int().min(1).max(4),
-  diets: z.array(z.enum(DIETS as [string, ...string[]])),
-  visibility: z.enum(["public", "private"]),
-  maxWait: z.number().int().min(5).max(180),
-  anonymous: z.boolean(),
-});
 
 async function requireHost(a: z.infer<typeof Auth>) {
   const r = await authMember(a.code, a.memberId, a.token);
@@ -132,18 +180,34 @@ export const startVoting = createServerFn({ method: "POST" })
     const { room } = await requireHost(data);
     if (room.status !== "lobby") return { ok: true, alreadyStarted: true };
     const noms = await loadNominations(room.id);
-    const pool = buildPool(room.settings, noms.map(n => n.restaurant));
+    const pool = buildPool(
+      room.settings,
+      noms.map((n) => n.restaurant),
+    );
     if (pool.length < 2) throw new Error("Choose filters with at least two restaurants");
-    const { error: snapshotError } = await db().from("room_restaurants").upsert(pool.map(r => ({ room_id: room.id, restaurant_id: r.id, restaurant: r, distance_km: distanceKm(room.settings.center, r) })), { onConflict: "room_id,restaurant_id" });
+    const { error: snapshotError } = await db()
+      .from("room_restaurants")
+      .upsert(
+        pool.map((r) => ({
+          room_id: room.id,
+          restaurant_id: r.id,
+          restaurant: r,
+          distance_km: distanceKm(room.settings.center, r),
+        })),
+        { onConflict: "room_id,restaurant_id" },
+      );
     if (snapshotError) throw new Error("Could not save the restaurant list");
-    const { error } = await db().from("rooms").update({ status: "voting", voting_started_at: new Date().toISOString() }).eq("id", room.id);
+    const { error } = await db()
+      .from("rooms")
+      .update({ status: "voting", voting_started_at: new Date().toISOString() })
+      .eq("id", room.id);
     if (error) throw new Error("Could not start voting");
     return { ok: true };
   });
 
 // ---------- Google Maps (through the connector gateway) ----------
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_maps";
-async function gmaps(path: string, init: RequestInit & { fieldMask?: string } = {}) {
+export async function gmaps(path: string, init: RequestInit & { fieldMask?: string } = {}) {
   const lk = process.env["LOVABLE_API_KEY"];
   const gk = process.env["GOOGLE_MAPS_API_KEY"];
   if (!lk || !gk) throw new Error("Google Maps is not connected");
@@ -171,7 +235,11 @@ export const geocodeCenter = createServerFn({ method: "POST" })
     const j = await gmaps(`/maps/api/geocode/json?address=${encodeURIComponent(data.address)}`);
     const r = j.results?.[0];
     if (!r) throw new Error("Couldn't find that place");
-    return { lat: r.geometry.location.lat as number, lng: r.geometry.location.lng as number, label: r.formatted_address as string };
+    return {
+      lat: r.geometry.location.lat as number,
+      lng: r.geometry.location.lng as number,
+      label: r.formatted_address as string,
+    };
   });
 
 const PRICE_MAP: Record<string, number> = {
@@ -188,7 +256,8 @@ export const searchPlaces = createServerFn({ method: "POST" })
     const c = (room.settings as RoomSettings).center ?? DEFAULT_SETTINGS.center;
     const j = await gmaps("/places/v1/places:searchText", {
       method: "POST",
-      fieldMask: "places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.primaryTypeDisplayName,places.types",
+      fieldMask:
+        "places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.primaryTypeDisplayName,places.types",
       body: JSON.stringify({
         textQuery: data.query,
         pageSize: 6,
@@ -196,21 +265,19 @@ export const searchPlaces = createServerFn({ method: "POST" })
         locationBias: { circle: { center: { latitude: c.lat, longitude: c.lng }, radius: 30000 } },
       }),
     });
-    return ((j.places ?? []) as any[]).map(
-      (p): Restaurant => ({
-        id: `g_${p.id}`,
-        name: p.displayName?.text ?? "Unknown",
-        cuisine: p.primaryTypeDisplayName?.text ?? "Restaurant",
-        price: PRICE_MAP[p.priceLevel] ?? 2,
-        wait: 20,
-        diets: [],
-        fastFood: (p.types ?? []).includes("fast_food_restaurant"),
-        lat: p.location?.latitude,
-        lng: p.location?.longitude,
-        address: p.formattedAddress,
-        custom: true,
-      }),
-    );
+    return ((j.places ?? []) as any[]).map((p): Restaurant => ({
+      id: `g_${p.id}`,
+      name: p.displayName?.text ?? "Unknown",
+      cuisine: p.primaryTypeDisplayName?.text ?? "Restaurant",
+      price: PRICE_MAP[p.priceLevel] ?? 2,
+      wait: 20,
+      diets: [],
+      fastFood: (p.types ?? []).includes("fast_food_restaurant"),
+      lat: p.location?.latitude,
+      lng: p.location?.longitude,
+      address: p.formattedAddress,
+      custom: true,
+    }));
   });
 
 const RestaurantSchema = z.object({
@@ -231,31 +298,53 @@ export const nominate = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { room, member } = await authMember(data.code, data.memberId, data.token);
     if (room.status === "closed") throw new Error("Voting is over");
-    const { data: myVote } = await db().from("votes").select("id").eq("member_id", member.id).maybeSingle();
+    const { data: myVote } = await db()
+      .from("votes")
+      .select("id")
+      .eq("member_id", member.id)
+      .maybeSingle();
     if (myVote) throw new Error("You've already voted — nominations are locked for you");
     await db().from("nominations").delete().eq("member_id", member.id);
     if (data.restaurant) {
-      await db().from("nominations").insert({
-        room_id: room.id,
-        member_id: member.id,
-        restaurant: { ...data.restaurant, custom: true, nominatedBy: member.nickname },
-      });
+      await db()
+        .from("nominations")
+        .insert({
+          room_id: room.id,
+          member_id: member.id,
+          restaurant: {
+            ...data.restaurant,
+            custom: true,
+            nominatedBy: member.nickname,
+            nominatedByMemberId: member.id,
+          },
+        });
     }
     return { ok: true };
   });
 
 export const castVote = createServerFn({ method: "POST" })
-  .inputValidator((d) => Auth.extend({ want: z.string().max(200), could: z.string().max(200) }).parse(d))
+  .inputValidator((d) =>
+    Auth.extend({ want: z.string().max(200), could: z.string().max(200) }).parse(d),
+  )
   .handler(async ({ data }) => {
     if (data.want === data.could) throw new Error("Pick two different places");
     const { room, member } = await authMember(data.code, data.memberId, data.token);
     if (room.status !== "voting") throw new Error("Voting isn't open");
     const noms = await loadNominations(room.id);
-    const ids = new Set(buildPool(room.settings, noms.map((n) => n.restaurant)).map((r) => r.id));
-    if (!ids.has(data.want) || !ids.has(data.could)) throw new Error("That place isn't in the pool");
+    const ids = new Set(
+      buildPool(
+        room.settings,
+        noms.map((n) => n.restaurant),
+      ).map((r) => r.id),
+    );
+    if (!ids.has(data.want) || !ids.has(data.could))
+      throw new Error("That place isn't in the pool");
     const { error } = await db()
       .from("votes")
-      .upsert({ room_id: room.id, member_id: member.id, want_id: data.want, could_id: data.could }, { onConflict: "member_id" });
+      .upsert(
+        { room_id: room.id, member_id: member.id, want_id: data.want, could_id: data.could },
+        { onConflict: "member_id" },
+      );
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -278,7 +367,10 @@ export const closeVoting = createServerFn({ method: "POST" })
       loadNominations(room.id),
     ]);
     if (!votes?.length) throw new Error("Nobody has voted yet");
-    const pool = buildPool(room.settings, noms.map((n) => n.restaurant));
+    const pool = buildPool(
+      room.settings,
+      noms.map((n) => n.restaurant),
+    );
     const byId = new Map(pool.map((r) => [r.id, r]));
     const tally = new Map<string, Score>();
     const bump = (id: string, pts: number) => {
@@ -304,55 +396,109 @@ export const closeVoting = createServerFn({ method: "POST" })
     const result: Result = {
       winner,
       scores,
-      tie: top.length > 1 ? { method: top.length === 2 ? "coin" : "wheel", candidates: top.map((t) => ({ id: t.id, name: t.name })) } : null,
+      tie:
+        top.length > 1
+          ? {
+              method: top.length === 2 ? "coin" : "wheel",
+              candidates: top.map((t) => ({ id: t.id, name: t.name })),
+            }
+          : null,
     };
-    const { error: snapshotError } = await db().from("room_restaurants").upsert(pool.map(r => ({ room_id: room.id, restaurant_id: r.id, restaurant: r, distance_km: distanceKm(room.settings.center, r), points: tally.get(r.id)?.points ?? 0 })), { onConflict: "room_id,restaurant_id" });
+    const { error: snapshotError } = await db()
+      .from("room_restaurants")
+      .upsert(
+        pool.map((r) => ({
+          room_id: room.id,
+          restaurant_id: r.id,
+          restaurant: r,
+          distance_km: distanceKm(room.settings.center, r),
+          points: tally.get(r.id)?.points ?? 0,
+        })),
+        { onConflict: "room_id,restaurant_id" },
+      );
     if (snapshotError) throw new Error("Could not save the scores");
-    const { error } = await db().from("rooms").update({ status: "closed", result, closed_at: new Date().toISOString() }).eq("id", room.id);
+    const { error } = await db()
+      .from("rooms")
+      .update({ status: "closed", result, closed_at: new Date().toISOString() })
+      .eq("id", room.id);
     if (error) throw new Error("Could not save the result");
     return { ok: true };
   });
 
-
 export const linkRoomAccount = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(d => Auth.parse(d))
+  .inputValidator((d) => Auth.parse(d))
   .handler(async ({ data, context }) => {
     const { member } = await authMember(data.code, data.memberId, data.token);
-    if (member.user_id && member.user_id !== context.userId) throw new Error("This seat belongs to another account");
-    const { error } = await db().from("members").update({ user_id: context.userId }).eq("id", member.id);
+    if (member.user_id && member.user_id !== context.userId)
+      throw new Error("This seat belongs to another account");
+    const { error } = await db()
+      .from("members")
+      .update({ user_id: context.userId })
+      .eq("id", member.id);
     if (error) throw new Error("Could not save this group to your account");
     return { ok: true };
   });
 
 export const saveRoomPreferences = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(d => Auth.parse(d))
+  .inputValidator((d) => Auth.parse(d))
   .handler(async ({ data, context }) => {
     const { room } = await authMember(data.code, data.memberId, data.token);
-    const { error } = await context.supabase.from("preset_filters").upsert({ user_id: context.userId, settings: room.settings, updated_at: new Date().toISOString() });
+    const { error } = await context.supabase.from("preset_filters").upsert({
+      user_id: context.userId,
+      settings: SettingsSchema.parse({ ...DEFAULT_SETTINGS, ...room.settings }),
+      updated_at: new Date().toISOString(),
+    });
     if (error) throw new Error("Could not save preferences");
     return { ok: true };
   });
 
 export const applyRoomPreferences = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(d => Auth.parse(d))
+  .inputValidator((d) => Auth.parse(d))
   .handler(async ({ data, context }) => {
     const { room } = await requireHost(data);
     if (room.status !== "lobby") throw new Error("Settings are locked once voting starts");
-    const { data: preset, error } = await context.supabase.from("preset_filters").select("settings").eq("user_id", context.userId).maybeSingle();
+    const { data: preset, error } = await context.supabase
+      .from("preset_filters")
+      .select("settings")
+      .eq("user_id", context.userId)
+      .maybeSingle();
     if (error || !preset) throw new Error("No saved preferences yet");
-    const settings = SettingsSchema.parse(preset.settings);
+    const settings = SettingsSchema.parse({ ...DEFAULT_SETTINGS, ...(preset.settings as object) });
     const { error: saveError } = await db().from("rooms").update({ settings }).eq("id", room.id);
     if (saveError) throw new Error("Could not apply preferences");
     return { ok: true };
   });
 
+export type GroupHistoryEntry = {
+  joinedAt: string;
+  code: string;
+  label: string | undefined;
+  status: string;
+  winner: string | undefined;
+  votingStartedAt: string | null;
+  closedAt: string | null;
+};
+
 export const getGroupHistory = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { data, error } = await db().from("members").select("created_at, rooms(code, settings, status, result, voting_started_at, closed_at)").eq("user_id", context.userId).order("created_at", { ascending: false }).limit(30);
+  .handler(async ({ context }): Promise<GroupHistoryEntry[]> => {
+    const { data, error } = await db()
+      .from("members")
+      .select("created_at, rooms(code, settings, status, result, voting_started_at, closed_at)")
+      .eq("user_id", context.userId)
+      .order("created_at", { ascending: false })
+      .limit(30);
     if (error) throw new Error("Could not load group history");
-    return (data ?? []).map((row: any) => ({ joinedAt: row.created_at as string, code: row.rooms.code as string, label: row.rooms.settings?.center?.label as string, status: row.rooms.status as string, winner: row.rooms.result?.winner?.name as string | undefined, votingStartedAt: row.rooms.voting_started_at as string | null, closedAt: row.rooms.closed_at as string | null }));
+    return (data ?? []).map((row: any) => ({
+      joinedAt: row.created_at as string,
+      code: row.rooms.code as string,
+      label: row.rooms.settings?.center?.label as string,
+      status: row.rooms.status as string,
+      winner: row.rooms.result?.winner?.name as string | undefined,
+      votingStartedAt: row.rooms.voting_started_at as string | null,
+      closedAt: row.rooms.closed_at as string | null,
+    }));
   });
