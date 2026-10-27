@@ -41,7 +41,7 @@ function Home() {
   const [avatar, setAvatar] = useState<string>(AVATARS[0] ?? "🍕");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
-  const rooms = useQuery({ queryKey: ["public-rooms"], queryFn: () => list(), refetchInterval: 10000 });
+  const rooms = useQuery({ queryKey: ["public-rooms"], queryFn: () => list().catch(() => []), refetchInterval: 10000 });
 
   async function go(kind: "host" | "join", joinCode?: string) {
     if (!nickname.trim()) {
