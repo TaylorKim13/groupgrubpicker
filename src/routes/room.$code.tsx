@@ -1,3 +1,5 @@
+import { RoomInvite } from "@/components/RoomInvite";
+import { RoomCodeSchema, normalizeRoomCode } from "@/lib/room-access";
 import { RoomSettingsFields } from "@/components/RoomSettingsFields";
 import { Button } from "@/components/ui/button";
 import { useDistanceUnit } from "@/lib/distance-context";
@@ -68,6 +70,7 @@ function JoinGate({ code, onJoined }: { code: string; onJoined: (s: Session) => 
   const [nickname, setNickname] = useState("");
   const [avatar, setAvatar] = useState<string>(AVATARS[1]!);
   const [busy, setBusy] = useState(false);
+  const validCode = RoomCodeSchema.safeParse(code).success;
   return (
     <main className="mx-auto max-w-md px-5 py-14">
       <Link to="/" className="font-display text-2xl font-extrabold">
@@ -78,25 +81,43 @@ function JoinGate({ code, onJoined }: { code: string; onJoined: (s: Session) => 
           You're invited to room
         </p>
         <p className="mb-5 font-display text-4xl tracking-[0.25em]">{code.toUpperCase()}</p>
-        <ProfilePicker {...{ nickname, setNickname, avatar, setAvatar }} />
-        <button
-          disabled={busy || !nickname.trim()}
-          onClick={async () => {
+        {!validCode && (
+          <p role="alert" className="mb-4 text-destructive">
+            This invite link needs a 6-character room code. Ask your friend for a new link.
+          </p>
+        )}
+        <p className="mb-4 text-sm text-muted-foreground">
+          No account needed. Choose a nickname and join.
+        </p>
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (busy || !validCode || !nickname.trim()) return;
             setBusy(true);
             try {
-              const s = await join({ data: { code: code.toUpperCase(), nickname, avatar } });
-              saveSession(s);
-              onJoined(s);
-            } catch (e: any) {
-              toast.error(e.message);
+              const seat = await join({
+                data: { code: normalizeRoomCode(code), nickname, avatar },
+              });
+              saveSession(seat);
+              onJoined(seat);
+            } catch (error) {
+              toast.error(error instanceof Error ? error.message : "Could not join this group");
             } finally {
               setBusy(false);
             }
           }}
-          className="mt-6 w-full rounded-xl bg-primary py-4 text-lg font-bold text-primary-foreground chunky disabled:opacity-50"
         >
-          Join the table
-        </button>
+          <fieldset disabled={busy || !validCode}>
+            <ProfilePicker autoFocus {...{ nickname, setNickname, avatar, setAvatar }} />
+            <button
+              type="submit"
+              disabled={busy || !validCode || !nickname.trim()}
+              className="mt-6 w-full rounded-xl bg-primary py-4 text-lg font-bold text-primary-foreground chunky disabled:opacity-50"
+            >
+              {busy ? "Joining..." : "Join the table"}
+            </button>
+          </fieldset>
+        </form>
       </div>
     </main>
   );
@@ -182,7 +203,6 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
 }
 
 function TopBar({ s, onLeave }: { s: State; onLeave: () => void }) {
-  const link = typeof window !== "undefined" ? `${window.location.origin}/room/${s.code}` : "";
   const phase = { lobby: "Lobby", voting: "Voting open", closed: "Winner!" }[s.status];
   return (
     <header className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-card p-4 chunky">
@@ -194,23 +214,14 @@ function TopBar({ s, onLeave }: { s: State; onLeave: () => void }) {
           {phase}
         </span>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-3">
         <button
           onClick={onLeave}
           className="rounded-lg border-2 bg-background px-3 py-2 text-sm font-bold"
         >
           ← Back
         </button>
-        <span className="font-display text-3xl tracking-[0.25em]">{s.code}</span>
-        <button
-          onClick={() => {
-            navigator.clipboard.writeText(link);
-            toast.success("Invite link copied");
-          }}
-          className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground chunky"
-        >
-          Copy invite link
-        </button>
+        <RoomInvite code={s.code} />
       </div>
     </header>
   );
@@ -234,7 +245,7 @@ function Members({ s, session, refresh }: { s: State; session: Session; refresh:
   return (
     <div className="rounded-2xl bg-card p-5 chunky">
       <div className="flex items-baseline justify-between">
-        <h2 className="text-xl font-extrabold">At the table</h2>
+        <h2 className="text-xl font-extrabold">At the table ({s.members.length})</h2>
         {s.status === "voting" && (
           <span className="text-sm font-bold">
             {votedCount}/{s.members.length} voted

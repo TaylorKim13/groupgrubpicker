@@ -1,9 +1,14 @@
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { DEFAULT_SETTINGS, type RoomSettings } from "@/lib/restaurants";
-import { SettingsSchema, type DistanceUnit } from "@/lib/settings";
-import { geocodeAccountCenter, savePreferences } from "@/lib/account.functions";
+import { DEFAULT_SETTINGS } from "@/lib/restaurants";
+import {
+  PreferencesSchema,
+  getHostingPreferences,
+  type RoomPreferences,
+  type DistanceUnit,
+} from "@/lib/settings";
+import { savePreferences } from "@/lib/account.functions";
 import { RoomSettingsFields } from "./RoomSettingsFields";
 import { Button } from "./ui/button";
 
@@ -12,19 +17,18 @@ export function AccountPreferences({
   initialUnit,
   refresh,
 }: {
-  initialSettings: RoomSettings | null;
+  initialSettings: RoomPreferences | null;
   initialUnit: DistanceUnit;
   refresh: () => Promise<unknown>;
 }) {
-  const [settings, setSettings] = useState(initialSettings ?? DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState(() => getHostingPreferences(initialSettings));
   const [unit, setUnit] = useState(initialUnit);
   const [busy, setBusy] = useState(false);
   const save = useServerFn(savePreferences);
-  const geo = useServerFn(geocodeAccountCenter);
-  async function persist(next: RoomSettings, nextUnit: DistanceUnit) {
+  async function persist(next: RoomPreferences, nextUnit: DistanceUnit) {
     setBusy(true);
     try {
-      const checked = SettingsSchema.safeParse(next);
+      const checked = PreferencesSchema.safeParse(next);
       if (!checked.success)
         throw new Error(checked.error.issues[0]?.message ?? "Check your preferences");
       await save({ data: { settings: checked.data, distanceUnit: nextUnit } });
@@ -69,7 +73,6 @@ export function AccountPreferences({
           value={settings}
           onChange={(patch) => setSettings((s) => ({ ...s, ...patch }))}
           unit={unit}
-          geocode={(address) => geo({ data: { address } })}
           disabled={busy}
         />
         <div className="flex flex-wrap gap-3">
@@ -80,7 +83,7 @@ export function AccountPreferences({
             disabled={busy}
             type="button"
             variant="outline"
-            onClick={() => void persist(DEFAULT_SETTINGS, "mi")}
+            onClick={() => void persist(getHostingPreferences(DEFAULT_SETTINGS), "mi")}
           >
             Reset to app defaults
           </Button>

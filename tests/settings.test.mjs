@@ -19,7 +19,14 @@ const settingsSource = compile(
 )
   .replace(/['"]\.\/restaurants['"]/, JSON.stringify(restaurantsUrl))
   .replace(/['"]zod['"]/, JSON.stringify(import.meta.resolve("zod")));
-const { fromKm, toKm, formatDistance, SettingsSchema } = await import(moduleUrl(settingsSource));
+const {
+  fromKm,
+  toKm,
+  formatDistance,
+  SettingsSchema,
+  getHostingPreferences,
+  applyHostingPreferences,
+} = await import(moduleUrl(settingsSource));
 
 test("10 miles retains the same radius through repeated unit conversions", () => {
   let radius = toKm(10, "mi");
@@ -75,4 +82,25 @@ test("distance filters use kilometers regardless of display units", () => {
   };
   assert.ok(restaurants.matchesFilters(restaurant, settings));
   assert.equal(restaurants.matchesFilters(restaurant, { ...settings, radiusKm: 5 }), false);
+});
+
+test("hosting preferences omit legacy addresses and preserve the room's current location", () => {
+  const legacy = {
+    ...restaurants.DEFAULT_SETTINGS,
+    center: { lat: 40, lng: -111, label: "Old address" },
+    maxWait: 20,
+  };
+  const preferences = getHostingPreferences(legacy);
+  assert.equal("center" in preferences, false);
+  const current = {
+    ...restaurants.DEFAULT_SETTINGS,
+    center: { lat: 39, lng: -104, label: "Current group location" },
+  };
+  const updated = applyHostingPreferences(current, legacy);
+  assert.deepEqual(updated.center, current.center);
+  assert.equal(updated.maxWait, 20);
+  assert.deepEqual(
+    applyHostingPreferences(restaurants.DEFAULT_SETTINGS, legacy).center,
+    restaurants.DEFAULT_SETTINGS.center,
+  );
 });

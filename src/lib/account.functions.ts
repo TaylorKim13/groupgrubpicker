@@ -1,7 +1,5 @@
-import { SettingsSchema } from "./settings";
-import { DEFAULT_SETTINGS } from "./restaurants";
+import { PreferencesSchema, getHostingPreferences } from "./settings";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { gmaps } from "./room.functions";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
@@ -24,9 +22,7 @@ export const getAccount = createServerFn({ method: "GET" })
     return {
       profile,
       distanceUnit: profile.distance_unit,
-      settings: preset
-        ? SettingsSchema.parse({ ...DEFAULT_SETTINGS, ...(preset.settings as object) })
-        : null,
+      settings: preset ? getHostingPreferences(preset.settings) : null,
     };
   });
 
@@ -45,7 +41,7 @@ export const saveAccount = createServerFn({ method: "POST" })
 export const savePreferences = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
-    z.object({ settings: SettingsSchema, distanceUnit: z.enum(["mi", "km"]) }).parse(input),
+    z.object({ settings: PreferencesSchema, distanceUnit: z.enum(["mi", "km"]) }).parse(input),
   )
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase.rpc("save_grub_preferences", {
@@ -54,22 +50,6 @@ export const savePreferences = createServerFn({ method: "POST" })
     });
     if (error) throw new Error("Could not save preferences. Please try again.");
     return { ok: true };
-  });
-
-export const geocodeAccountCenter = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((input) => z.object({ address: z.string().trim().min(2).max(200) }).parse(input))
-  .handler(async ({ data }) => {
-    const result = await gmaps(
-      `/maps/api/geocode/json?address=${encodeURIComponent(data.address)}`,
-    );
-    const place = result.results?.[0];
-    if (!place) throw new Error("Couldn't find that place");
-    return {
-      lat: place.geometry.location.lat as number,
-      lng: place.geometry.location.lng as number,
-      label: place.formatted_address as string,
-    };
   });
 
 export const deleteAccount = createServerFn({ method: "POST" })

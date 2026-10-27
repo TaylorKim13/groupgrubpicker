@@ -10,7 +10,7 @@ empty generated Drizzle schema.
 
 The application server needs `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and
 `SUPABASE_SERVICE_ROLE_KEY`. The service key stays on the server. Address lookup
-uses the existing `LOVABLE_API_KEY` and `GOOGLE_MAPS_API_KEY` connector configuration.
+in room host controls uses the existing `LOVABLE_API_KEY` and `GOOGLE_MAPS_API_KEY` connector configuration. Locations are selected for each group and are never saved or applied as account preferences. Previously saved location keys are ignored.
 
 ## Authentication
 

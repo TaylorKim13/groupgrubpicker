@@ -1,5 +1,6 @@
-import { SettingsSchema } from "./settings";
+import { SettingsSchema, getHostingPreferences, applyHostingPreferences } from "./settings";
 import { optionalAccountAuth } from "./account-auth";
+import { RoomCodeSchema, RoomProfileSchema } from "./room-access";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { authMember, db, getRoomByCode, hashToken, newCode, newToken } from "./room.server";
@@ -18,12 +19,14 @@ const Auth = z.object({
   memberId: z.string().uuid(),
   token: z.string().min(10),
 });
-const Profile = z.object({
-  nickname: z.string().trim().min(1).max(24),
-  avatar: z.string().min(1).max(8),
-});
+const Profile = RoomProfileSchema;
 
-async function addMember(roomId: string, p: z.infer<typeof Profile>, isHost: boolean) {
+async function addMember(
+  roomId: string,
+  p: z.infer<typeof Profile>,
+  isHost: boolean,
+  userId: string | null = null,
+) {
   const token = newToken();
   const { data, error } = await db()
     .from("members")
@@ -33,6 +36,7 @@ async function addMember(roomId: string, p: z.infer<typeof Profile>, isHost: boo
       avatar: p.avatar,
       is_host: isHost,
       token_hash: hashToken(token),
+      user_id: userId,
     })
     .select("id")
     .single();
@@ -52,8 +56,7 @@ export const createRoom = createServerFn({ method: "POST" })
         .eq("user_id", context.accountUserId)
         .maybeSingle();
       if (error) throw new Error("Could not load hosting preferences");
-      if (preset)
-        settings = SettingsSchema.parse({ ...DEFAULT_SETTINGS, ...(preset.settings as object) });
+      if (preset) settings = applyHostingPreferences(DEFAULT_SETTINGS, preset.settings);
     }
     for (let i = 0; i < 5; i++) {
       const code = newCode();
@@ -62,22 +65,24 @@ export const createRoom = createServerFn({ method: "POST" })
         .insert({ code, settings })
         .select("id")
         .single();
-      if (error) continue;
-      const m = await addMember(room.id, data, true);
-      if (context.accountUserId) {
-        const { error } = await db()
-          .from("members")
-          .update({ user_id: context.accountUserId })
-          .eq("id", m.memberId);
-        if (error) throw new Error("Could not link this group to your account");
+      if (error) {
+        if (error.code === "23505") continue;
+        throw new Error("Could not create your group. Please try again.");
       }
-      return { code, ...m };
+      try {
+        const m = await addMember(room.id, data, true, context.accountUserId);
+        return { code, ...m };
+      } catch (error) {
+        // A room without its host cannot be used. Remove only this failed creation.
+        await db().from("rooms").delete().eq("id", room.id);
+        throw error;
+      }
     }
     throw new Error("Could not create room, try again");
   });
 
 export const joinRoom = createServerFn({ method: "POST" })
-  .inputValidator((d) => Profile.extend({ code: z.string().trim().length(6) }).parse(d))
+  .inputValidator((d) => Profile.extend({ code: RoomCodeSchema }).parse(d))
   .handler(async ({ data }) => {
     const room = await getRoomByCode(data.code);
     if (room.status === "closed") throw new Error("Voting in this room is already over");
@@ -447,7 +452,7 @@ export const saveRoomPreferences = createServerFn({ method: "POST" })
     const { room } = await authMember(data.code, data.memberId, data.token);
     const { error } = await context.supabase.from("preset_filters").upsert({
       user_id: context.userId,
-      settings: SettingsSchema.parse({ ...DEFAULT_SETTINGS, ...room.settings }),
+      settings: getHostingPreferences(room.settings),
       updated_at: new Date().toISOString(),
     });
     if (error) throw new Error("Could not save preferences");
@@ -466,7 +471,7 @@ export const applyRoomPreferences = createServerFn({ method: "POST" })
       .eq("user_id", context.userId)
       .maybeSingle();
     if (error || !preset) throw new Error("No saved preferences yet");
-    const settings = SettingsSchema.parse({ ...DEFAULT_SETTINGS, ...(preset.settings as object) });
+    const settings = applyHostingPreferences(room.settings as RoomSettings, preset.settings);
     const { error: saveError } = await db().from("rooms").update({ settings }).eq("id", room.id);
     if (saveError) throw new Error("Could not apply preferences");
     return { ok: true };

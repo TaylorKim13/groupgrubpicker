@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { DIETS, priceLabel, type Center, type RoomSettings } from "@/lib/restaurants";
-import { fromKm, toKm, type DistanceUnit } from "@/lib/settings";
+import { fromKm, toKm, type DistanceUnit, type RoomPreferences } from "@/lib/settings";
 import { Button } from "./ui/button";
 
 export function RoomSettingsFields({
@@ -11,10 +11,10 @@ export function RoomSettingsFields({
   geocode,
   disabled = false,
 }: {
-  value: RoomSettings;
+  value: RoomPreferences & { center?: Center };
   onChange: (patch: Partial<RoomSettings>) => void;
   unit: DistanceUnit;
-  geocode: (address: string) => Promise<Center>;
+  geocode?: (address: string) => Promise<Center>;
   disabled?: boolean;
 }) {
   const [address, setAddress] = useState("");
@@ -22,67 +22,73 @@ export function RoomSettingsFields({
   const input = "mt-2 w-full rounded-lg border-2 bg-background px-3 py-2";
   return (
     <fieldset disabled={disabled} className="space-y-5 disabled:opacity-60">
-      <div>
-        <label htmlFor="search-address" className="font-bold">
-          Search location
-        </label>
-        <p className="text-sm text-muted-foreground">{value.center.label}</p>
-        <div className="flex gap-2">
-          <input
-            id="search-address"
-            className={input}
-            value={address}
-            maxLength={200}
-            onChange={(e) => setAddress(e.target.value)}
-            placeholder="Address or neighborhood"
-          />
+      {geocode && value.center && (
+        <div>
+          <label htmlFor="search-address" className="font-bold">
+            Search location
+          </label>
+          <p className="text-sm text-muted-foreground">{value.center.label}</p>
+          <div className="flex gap-2">
+            <input
+              id="search-address"
+              className={input}
+              value={address}
+              maxLength={200}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Address or neighborhood"
+            />
+            <Button
+              type="button"
+              className="mt-2"
+              disabled={locating || address.trim().length < 2}
+              onClick={async () => {
+                setLocating(true);
+                try {
+                  onChange({ center: await geocode(address) });
+                  setAddress("");
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Location lookup failed");
+                } finally {
+                  setLocating(false);
+                }
+              }}
+            >
+              {locating ? "Finding…" : "Set"}
+            </Button>
+          </div>
           <Button
             type="button"
-            className="mt-2"
-            disabled={locating || address.trim().length < 2}
-            onClick={async () => {
-              setLocating(true);
-              try {
-                onChange({ center: await geocode(address) });
-                setAddress("");
-              } catch (e) {
-                toast.error(e instanceof Error ? e.message : "Location lookup failed");
-              } finally {
-                setLocating(false);
+            variant="link"
+            disabled={locating}
+            onClick={() => {
+              if (!navigator.geolocation) {
+                toast.error("Location is unavailable in this browser");
+                return;
               }
+              setLocating(true);
+              navigator.geolocation.getCurrentPosition(
+                (p) => {
+                  onChange({
+                    center: {
+                      lat: p.coords.latitude,
+                      lng: p.coords.longitude,
+                      label: "My location",
+                    },
+                  });
+                  setLocating(false);
+                },
+                () => {
+                  toast.error("Couldn't get your location");
+                  setLocating(false);
+                },
+                { timeout: 15000 },
+              );
             }}
           >
-            {locating ? "Finding…" : "Set"}
+            Use my location
           </Button>
         </div>
-        <Button
-          type="button"
-          variant="link"
-          disabled={locating}
-          onClick={() => {
-            if (!navigator.geolocation) {
-              toast.error("Location is unavailable in this browser");
-              return;
-            }
-            setLocating(true);
-            navigator.geolocation.getCurrentPosition(
-              (p) => {
-                onChange({
-                  center: { lat: p.coords.latitude, lng: p.coords.longitude, label: "My location" },
-                });
-                setLocating(false);
-              },
-              () => {
-                toast.error("Couldn't get your location");
-                setLocating(false);
-              },
-              { timeout: 15000 },
-            );
-          }}
-        >
-          Use my location
-        </Button>
-      </div>
+      )}
       <label className="block font-bold">
         Maximum distance ({unit})
         <input
