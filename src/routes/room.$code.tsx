@@ -309,6 +309,8 @@ function HostSettings({ s, session, refresh }: { s: State; session: Session; ref
   const [addr, setAddr] = useState("");
   const [dirty, setDirty] = useState(false);
   const set = (p: Partial<RoomSettings>) => (setSt({ ...st, ...p }), setDirty(true));
+  const [step, setStep] = useState(0);
+  const steps = ["Where", "Price & food", "Table rules"];
 
   useEffect(() => {
     if (!dirty) return;
@@ -327,6 +329,21 @@ function HostSettings({ s, session, refresh }: { s: State; session: Session; ref
   return (
     <div className="space-y-5 rounded-2xl bg-card p-5 chunky">
       <h2 className="text-xl font-extrabold">Host controls</h2>
+      <div className="flex flex-wrap gap-1.5 text-xs font-bold">
+        <span className="rounded-full border-2 bg-background px-2.5 py-0.5">📍 {st.center.label.split(",")[0]} · {st.radiusKm} km</span>
+        <span className="rounded-full border-2 bg-background px-2.5 py-0.5">{priceLabel(st.priceMin)}–{priceLabel(st.priceMax)} · ≤{st.maxWait} min</span>
+        {st.diets.length > 0 && <span className="rounded-full border-2 bg-background px-2.5 py-0.5">{st.diets.join(", ")}</span>}
+        <span className="rounded-full border-2 bg-background px-2.5 py-0.5">{st.visibility === "public" ? "Public" : "Private"} · {st.anonymous ? "Secret votes" : "Open votes"}</span>
+      </div>
+      <div className="grid grid-cols-3 gap-1" role="tablist">
+        {steps.map((t, i) => (
+          <button key={t} type="button" role="tab" aria-selected={step === i} onClick={() => setStep(i)}
+            className={`rounded-lg border-2 px-1 py-2 text-xs font-extrabold ${step === i ? "bg-primary text-primary-foreground" : "bg-background"}`}>
+            {i + 1}. {t}
+          </button>
+        ))}
+      </div>
+      {step === 0 && (<>
       <div>
         <label className="text-xs font-bold uppercase">Search center</label>
         <p className="text-sm text-muted-foreground">{st.center.label}</p>
@@ -364,6 +381,8 @@ function HostSettings({ s, session, refresh }: { s: State; session: Session; ref
         <label className="text-xs font-bold uppercase">Radius: {st.radiusKm} km</label>
         <Slider className="mt-3" min={0.5} max={20} step={0.5} value={[st.radiusKm]} onValueChange={([v]) => set({ radiusKm: v ?? 5 })} />
       </div>
+      </>)}
+      {step === 1 && (<>
       <div>
         <label className="text-xs font-bold uppercase">Price range</label>
         <div className="mt-2 grid grid-cols-4 gap-1">
@@ -409,13 +428,20 @@ function HostSettings({ s, session, refresh }: { s: State; session: Session; ref
         <label className="text-xs font-bold uppercase">Max wait: {st.maxWait} min</label>
         <Slider className="mt-3" min={5} max={120} step={5} value={[st.maxWait]} onValueChange={([v]) => set({ maxWait: v ?? 60 })} />
       </div>
+      </>)}
+      {step === 2 && (<>
       <div className="flex items-center justify-between">
-        <span className="text-sm font-bold">Public lobby</span>
+        <span className="text-sm font-bold">Public lobby <span className="block text-xs font-normal text-muted-foreground">Anyone can find and join from the start screen</span></span>
         <Switch checked={st.visibility === "public"} onCheckedChange={(c) => set({ visibility: c ? "public" : "private" })} />
       </div>
       <div className="flex items-center justify-between">
         <span className="text-sm font-bold">Anonymous voting</span>
         <Switch checked={st.anonymous} onCheckedChange={(c) => set({ anonymous: c })} />
+      </div>
+      </>)}
+      <div className="flex justify-between">
+        <button type="button" disabled={step === 0} onClick={() => setStep(step - 1)} className="text-sm font-bold underline disabled:opacity-30">← Back</button>
+        {step < 2 ? <button type="button" onClick={() => setStep(step + 1)} className="rounded-lg bg-secondary px-4 py-1.5 text-sm font-extrabold chunky">Next →</button> : <span className="text-sm font-bold">All set — open voting when ready</span>}
       </div>
       {dirty && <p className="text-xs text-muted-foreground">Saving…</p>}
     </div>
