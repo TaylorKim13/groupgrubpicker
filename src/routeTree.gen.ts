@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AccountRouteImport } from './routes/account'
+import { Route as HealthRouteImport } from './routes/health'
 import { Route as WaitRouteImport } from './routes/wait'
 import { Route as WaitCardDotpngRouteImport } from './routes/wait-card[.]png'
 import { Route as InviteCodeRouteImport } from './routes/invite.$code'
@@ -24,6 +25,11 @@ const IndexRoute = IndexRouteImport.update({
 const AccountRoute = AccountRouteImport.update({
   id: '/account',
   path: '/account',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HealthRoute = HealthRouteImport.update({
+  id: '/health',
+  path: '/health',
   getParentRoute: () => rootRouteImport,
 } as any)
 const WaitRoute = WaitRouteImport.update({
@@ -50,6 +56,7 @@ const RoomCodeRoute = RoomCodeRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
+  '/health': typeof HealthRoute
   '/wait': typeof WaitRoute
   '/wait-card.png': typeof WaitCardDotpngRoute
   '/invite/$code': typeof InviteCodeRoute
@@ -58,6 +65,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
+  '/health': typeof HealthRoute
   '/wait': typeof WaitRoute
   '/wait-card.png': typeof WaitCardDotpngRoute
   '/invite/$code': typeof InviteCodeRoute
@@ -67,6 +75,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
+  '/health': typeof HealthRoute
   '/wait': typeof WaitRoute
   '/wait-card.png': typeof WaitCardDotpngRoute
   '/invite/$code': typeof InviteCodeRoute
@@ -77,6 +86,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/account'
+    | '/health'
     | '/wait'
     | '/wait-card.png'
     | '/invite/$code'
@@ -85,6 +95,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/account'
+    | '/health'
     | '/wait'
     | '/wait-card.png'
     | '/invite/$code'
@@ -93,6 +104,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/account'
+    | '/health'
     | '/wait'
     | '/wait-card.png'
     | '/invite/$code'
@@ -102,6 +114,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AccountRoute: typeof AccountRoute
+  HealthRoute: typeof HealthRoute
   WaitRoute: typeof WaitRoute
   WaitCardDotpngRoute: typeof WaitCardDotpngRoute
   InviteCodeRoute: typeof InviteCodeRoute
@@ -122,6 +135,13 @@ declare module '@tanstack/react-router' {
       path: '/account'
       fullPath: '/account'
       preLoaderRoute: typeof AccountRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/health': {
+      id: '/health'
+      path: '/health'
+      fullPath: '/health'
+      preLoaderRoute: typeof HealthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/wait': {
@@ -158,6 +178,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccountRoute: AccountRoute,
+  HealthRoute: HealthRoute,
   WaitRoute: WaitRoute,
   WaitCardDotpngRoute: WaitCardDotpngRoute,
   InviteCodeRoute: InviteCodeRoute,

@@ -16,8 +16,13 @@ function loadMaps() {
     loader = new Promise((resolve, reject) => {
       window.__ggMapsReady = () => resolve();
       const env = import.meta.env as Record<string, string>;
+      const key = env["VITE_GOOGLE_MAPS_BROWSER_KEY"] || env["VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY"];
+      if (!key) {
+        reject(new Error("Map is not connected. You can still browse restaurant cards and vote."));
+        return;
+      }
       const s = document.createElement("script");
-      s.src = `https://maps.googleapis.com/maps/api/js?key=${env["VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY"]}&loading=async&callback=__ggMapsReady&channel=${env["VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_TRACKING_ID"]}`;
+      s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&loading=async&callback=__ggMapsReady`;
       s.async = true;
       s.onerror = () => reject(new Error("Map failed to load"));
       document.head.appendChild(s);

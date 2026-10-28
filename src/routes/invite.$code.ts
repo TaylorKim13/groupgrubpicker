@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { publicOrigin } from "@/lib/public-origin.server";
 
 // Serve complete metadata in the first HTML response. Link preview fetchers
 // do not need JavaScript, a room session, or database access.
@@ -8,7 +9,7 @@ export const Route = createFileRoute("/invite/$code")({
       GET: ({ request, params }) => {
         const code = params.code.toUpperCase();
         if (!/^[A-Z0-9]{6}$/.test(code)) return new Response("Invalid invitation", { status: 400 });
-        const origin = new URL(request.url).origin;
+        const origin = publicOrigin(request);
         const escape = (value: string) => value.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
         const image = escape(new URL("/invite-card.png", origin).href);
         const url = escape(new URL(`/invite/${code}`, origin).href);

@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { publicOrigin } from "@/lib/public-origin.server";
 import { waitCardInput } from "@/lib/wait-card.server";
 
 export const Route = createFileRoute("/wait")({
@@ -8,7 +9,9 @@ export const Route = createFileRoute("/wait")({
       const input = waitCardInput(url);
       if (!input) return new Response("Invalid wait-time card", { status: 400 });
       const escape = (value: string) => value.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
-      const imageUrl = new URL("/wait-card.png", url.origin);
+      const origin = publicOrigin(request);
+      const canonical = new URL(url.pathname + url.search, origin);
+      const imageUrl = new URL("/wait-card.png", origin);
       imageUrl.searchParams.set("name", input.name);
       imageUrl.searchParams.set("minutes", String(input.minutes));
       const image = escape(imageUrl.href);
@@ -18,7 +21,7 @@ export const Route = createFileRoute("/wait")({
 <meta name="description" content="A shared restaurant wait-time estimate. Times may change.">
 <meta property="og:type" content="website"><meta property="og:site_name" content="Group Grub">
 <meta property="og:title" content="${title}"><meta property="og:description" content="Estimated wait time. Shared snapshot, not live data.">
-<meta property="og:url" content="${escape(url.href)}"><meta property="og:image" content="${image}">
+<meta property="og:url" content="${escape(canonical.href)}"><meta property="og:image" content="${image}">
 <meta property="og:image:type" content="image/png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="${title}">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="${image}">
 <style>*{box-sizing:border-box}body{margin:0;padding:24px;min-height:100dvh;display:grid;place-items:center;background:#fff7df;font-family:system-ui,sans-serif;color:#241a14}main{max-width:900px;width:100%;border:3px solid #241a14;border-radius:22px;overflow:hidden;background:#fffdf5;box-shadow:8px 9px 0 #241a14}img{display:block;width:100%;height:auto}footer{padding:20px 28px;border-top:2px solid #241a14;color:#68584c;font-size:14px}a{color:#db3329;font-weight:700}</style>
