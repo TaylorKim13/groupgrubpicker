@@ -3,7 +3,8 @@ import { PGlite } from "@electric-sql/pglite";
 import { readFile } from "node:fs/promises";
 import assert from "node:assert/strict";
 const db = new PGlite();
-await db.exec(`CREATE ROLE authenticated; CREATE ROLE service_role; CREATE SCHEMA auth;
+await db.exec(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role; CREATE SCHEMA auth;
+CREATE SCHEMA storage; CREATE TABLE storage.buckets(id text PRIMARY KEY, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
 CREATE TABLE auth.users(id uuid PRIMARY KEY, raw_user_meta_data jsonb DEFAULT '{}');
 CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
 GRANT USAGE ON SCHEMA auth TO authenticated; GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated;`);
@@ -12,8 +13,17 @@ for (const path of [
   "drizzle/migrations/0000_saved_preferences_and_group_history.sql",
   "drizzle/migrations/0001_friends_and_crews.sql",
   "drizzle/migrations/0002_account_settings.sql",
+  "drizzle/migrations/0003_profile_photos.sql",
+  "drizzle/migrations/0004_filter_usage_metrics.sql",
+  "drizzle/migrations/0005_selection_abandonment.sql",
+  "drizzle/migrations/0006_group_creation_clicks.sql",
 ])
   await db.exec(await readFile(path, "utf8"));
+const photoBucket = (await db.query("SELECT * FROM storage.buckets WHERE id = 'profile-photos'"))
+  .rows[0];
+assert.equal(photoBucket.public, true);
+assert.equal(Number(photoBucket.file_size_limit), 1048576);
+assert.deepEqual(photoBucket.allowed_mime_types, ["image/jpeg"]);
 await db.exec(`INSERT INTO auth.users(id) VALUES ('00000000-0000-0000-0000-000000000001'),('00000000-0000-0000-0000-000000000002');
 SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
 SET ROLE authenticated;

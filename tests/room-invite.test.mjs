@@ -8,11 +8,15 @@ const transpile = (text) =>
   ts.transpileModule(text, {
     compilerOptions: { module: ts.ModuleKind.ESNext, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
+const avatarModule = url(
+  transpile(
+    await readFile(new URL("../src/lib/profile-avatar.ts", import.meta.url), "utf8"),
+  ).replace('"zod"', JSON.stringify(import.meta.resolve("zod"))),
+);
 const access = url(
-  transpile(await readFile(new URL("../src/lib/room-access.ts", import.meta.url), "utf8")).replace(
-    '"zod"',
-    JSON.stringify(import.meta.resolve("zod")),
-  ),
+  transpile(await readFile(new URL("../src/lib/room-access.ts", import.meta.url), "utf8"))
+    .replace('"zod"', JSON.stringify(import.meta.resolve("zod")))
+    .replace('"./profile-avatar"', JSON.stringify(avatarModule)),
 );
 const hook = url("export const useState = () => [false, () => {}];");
 const toast = url(

@@ -1,3 +1,5 @@
+import { ProfileAvatar } from "./ProfileAvatar";
+import { isProfilePhoto } from "@/lib/profile-avatar";
 import { AVATARS } from "@/lib/restaurants";
 import { Button } from "@/components/ui/button";
 
@@ -30,6 +32,12 @@ export function ProfilePicker({
         placeholder="e.g. Taco Tay"
         className="w-full rounded-lg border-2 bg-card px-4 py-3 text-lg outline-none focus:ring-2 focus:ring-ring"
       />
+      {isProfilePhoto(avatar) && (
+        <div className="flex items-center gap-2">
+          <ProfileAvatar avatar={avatar} name={nickname || "Your"} className="h-11 w-11 border-2" />
+          <span className="text-sm text-muted-foreground">Using your profile photo</span>
+        </div>
+      )}
       <div className="flex flex-wrap gap-2">
         {AVATARS.map((a) => (
           <Button

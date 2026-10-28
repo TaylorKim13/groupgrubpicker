@@ -1,3 +1,5 @@
+import { ProfileAvatar } from "@/components/ProfileAvatar";
+import { useSelectionTracking } from "@/components/useSelectionTracking";
 import { RoomInvite } from "@/components/RoomInvite";
 import { RoomCodeSchema, normalizeRoomCode } from "@/lib/room-access";
 import { RoomSettingsFields } from "@/components/RoomSettingsFields";
@@ -255,9 +257,11 @@ function Members({ s, session, refresh }: { s: State; session: Session; refresh:
       <ul className="mt-3 space-y-2">
         {s.members.map((m) => (
           <li key={m.id} className="flex items-center gap-3">
-            <span className="grid h-9 w-9 place-items-center rounded-full border-2 bg-background text-lg">
-              {m.avatar}
-            </span>
+            <ProfileAvatar
+              avatar={m.avatar}
+              name={m.nickname}
+              className="h-9 w-9 border-2 bg-background text-lg"
+            />
             <span className="flex-1 font-medium">
               {m.nickname}
               {m.id === s.me.id && <span className="text-muted-foreground"> (you)</span>}
@@ -385,7 +389,7 @@ function RoomFriends({ s, session, refresh }: { s: State; session: Session; refr
         {d.friends.map((f) => (
           <li key={f.id} className="flex items-center justify-between text-sm">
             <span>
-              {f.avatar} {f.name}
+              <ProfileAvatar avatar={f.avatar} name={f.name} /> {f.name}
             </span>
             <button onClick={() => send([f.id])} className="font-bold underline">
               Invite
@@ -530,6 +534,7 @@ function HostSettings({
 }
 
 function Pool({ s, session, refresh }: { s: State; session: Session; refresh: () => void }) {
+  useSelectionTracking(session, s.status !== "closed" && !s.myVote);
   const vote = useServerFn(castVote);
   const [want, setWant] = useState<string | null>(s.myVote?.want ?? null);
   const [could, setCould] = useState<string | null>(s.myVote?.could ?? null);
@@ -540,7 +545,7 @@ function Pool({ s, session, refresh }: { s: State; session: Session; refresh: ()
   const tally = useMemo(() => {
     const m: Record<string, { want: string[]; could: string[] }> = {};
     s.publicVotes?.forEach((v) => {
-      const name = s.members.find((x) => x.id === v.memberId)?.avatar ?? "•";
+      const name = s.members.find((x) => x.id === v.memberId)?.nickname ?? "•";
       (m[v.want] ??= { want: [], could: [] }).want.push(name);
       (m[v.could] ??= { want: [], could: [] }).could.push(name);
     });

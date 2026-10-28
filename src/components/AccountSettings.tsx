@@ -5,6 +5,10 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { saveAccount, deleteAccount } from "@/lib/account.functions";
 import { ProfilePicker } from "./ProfilePicker";
+import { ProfileAvatar } from "./ProfileAvatar";
+import { prepareProfilePhoto } from "@/lib/prepare-profile-photo";
+import { isProfilePhoto } from "@/lib/profile-avatar";
+import { AVATARS } from "@/lib/restaurants";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -28,6 +32,8 @@ export function AccountSettings({
 }) {
   const [nickname, setNickname] = useState(profile.display_name);
   const [avatar, setAvatar] = useState(profile.avatar);
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [preparingPhoto, setPreparingPhoto] = useState(false);
   const [email, setEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
@@ -58,16 +64,79 @@ export function AccountSettings({
           onSubmit={(e) => {
             e.preventDefault();
             void act(async () => {
-              await save({ data: { display_name: nickname, avatar } });
+              const saved = await save({
+                data: { display_name: nickname, avatar, ...(photo ? { photo } : {}) },
+              });
+              setAvatar(saved.avatar);
+              setPhoto(null);
               await refresh();
               toast.success("Profile saved");
             });
           }}
         >
-          <fieldset disabled={busy}>
-            <ProfilePicker {...{ nickname, setNickname, avatar, setAvatar }} />
-            <Button className="mt-4" disabled={busy || !nickname.trim()}>
-              Save profile
+          <fieldset disabled={busy || preparingPhoto}>
+            <div className="mb-5 space-y-3">
+              <h3 className="font-bold">Profile photo</h3>
+              <ProfileAvatar
+                avatar={photo ? `data:image/jpeg;base64,${photo}` : avatar}
+                name={nickname || "Your"}
+                preview
+                className="h-24 w-24 border-2 bg-card text-4xl"
+              />
+              <label className="block text-sm font-bold" htmlFor="profile-photo">
+                Upload or replace photo
+              </label>
+              <input
+                id="profile-photo"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="block w-full text-sm file:mr-3 file:rounded-lg file:border-2 file:bg-secondary file:px-3 file:py-2 file:font-bold"
+                aria-describedby="photo-help"
+                onChange={async (e) => {
+                  const file = e.currentTarget.files?.[0];
+                  e.currentTarget.value = "";
+                  if (!file) return;
+                  setPreparingPhoto(true);
+                  try {
+                    setPhoto(await prepareProfilePhoto(file));
+                  } catch (error) {
+                    toast.error(
+                      error instanceof Error ? error.message : "Could not prepare your photo",
+                    );
+                  } finally {
+                    setPreparingPhoto(false);
+                  }
+                }}
+              />
+              <p id="photo-help" className="text-sm text-muted-foreground">
+                JPG, PNG, or WebP, up to 5 MB. Photos are cropped to a square. Save your profile to
+                apply changes.
+              </p>
+              {preparingPhoto && <p role="status">Preparing photo...</p>}
+              {(photo || isProfilePhoto(avatar)) && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setPhoto(null);
+                    setAvatar(AVATARS[0]!);
+                  }}
+                >
+                  Remove photo
+                </Button>
+              )}
+            </div>
+            <ProfilePicker
+              nickname={nickname}
+              setNickname={setNickname}
+              avatar={photo ? "" : avatar}
+              setAvatar={(value) => {
+                setAvatar(value);
+                setPhoto(null);
+              }}
+            />
+            <Button className="mt-4" disabled={busy || preparingPhoto || !nickname.trim()}>
+              {busy ? "Saving..." : "Save profile"}
             </Button>
           </fieldset>
         </form>

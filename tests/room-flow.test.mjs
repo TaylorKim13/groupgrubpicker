@@ -19,7 +19,8 @@ async function sourceModule(path, imports = {}) {
 const zod = import.meta.resolve("zod");
 const restaurants = await sourceModule("lib/restaurants.ts");
 const settings = await sourceModule("lib/settings.ts", { zod, "./restaurants": restaurants });
-const access = await sourceModule("lib/room-access.ts", { zod });
+const avatars = await sourceModule("lib/profile-avatar.ts", { zod });
+const access = await sourceModule("lib/room-access.ts", { zod, "./profile-avatar": avatars });
 const transport = url(`export function createServerFn() {
   let validate;
   return { middleware() { return this; }, inputValidator(fn) { validate = fn; return this; },
@@ -30,7 +31,7 @@ const accountMiddleware = url(
   "export const optionalAccountAuth = {}; export const requireSupabaseAuth = {};",
 );
 const database = url(
-  "export const supabaseAdmin = { from: table => globalThis.__grubRoomFlowTest.from(table) };",
+  "export const supabaseAdmin = { from: table => globalThis.__grubRoomFlowTest.from(table), rpc: async (name,args) => { globalThis.__grubRoomFlowTest.activity.push({name,args}); return {error:null}; } };",
 );
 const server = await sourceModule("lib/room.server.ts", {
   "@/integrations/supabase/client.server": database,
@@ -38,6 +39,7 @@ const server = await sourceModule("lib/room.server.ts", {
 });
 const handlersUrl = await sourceModule("lib/room.functions.ts", {
   "./settings": settings,
+  "./creation-clicks": await sourceModule("lib/creation-clicks.ts", { zod }),
   "./restaurants": restaurants,
   "./room-access": access,
   "./room.server": server,
@@ -46,7 +48,14 @@ const handlersUrl = await sourceModule("lib/room.functions.ts", {
   "@tanstack/react-start": transport,
   zod,
 });
-const { createRoom, joinRoom, getRoomState } = await import(handlersUrl);
+const {
+  createRoom,
+  joinRoom,
+  getRoomState,
+  updateSettings,
+  recordSelectionActivity,
+  recordGroupCreationClicks,
+} = await import(handlersUrl);
 const { hashToken, newCode } = await import(server);
 const { RoomCodeSchema, roomJoinUrl } = await import(access);
 let store;
@@ -65,12 +74,24 @@ class Query {
     this.value = value;
     return this;
   }
+  update(value) {
+    this.operation = "update";
+    this.value = value;
+    return this;
+  }
   delete() {
     this.operation = "delete";
     return this;
   }
   eq(key, value) {
     this.filters.push((row) => row[key] === value);
+    return this;
+  }
+  is(key, value) {
+    return this.eq(key, value);
+  }
+  in(key, values) {
+    this.filters.push((row) => values.includes(row[key]));
     return this;
   }
   order() {
@@ -104,15 +125,34 @@ class Query {
       return { data: [row], error: null };
     }
     const matches = (row) => this.filters.every((filter) => filter(row));
+    if (this.operation === "update") {
+      if (store.updateError) return { data: null, error: { message: "Write failed" } };
+      if (store.startDuringSave)
+        rows.forEach((row) => {
+          row.status = "voting";
+        });
+      const matched = rows.filter(matches);
+      matched.forEach((row) => Object.assign(row, structuredClone(this.value)));
+      return { data: matched, error: null };
+    }
     if (this.operation === "delete") store.tables[this.table] = rows.filter((row) => !matches(row));
     return { data: rows.filter(matches), error: null };
   }
 }
 beforeEach(() => {
   store = {
-    tables: { rooms: [], members: [], nominations: [], votes: [], preset_filters: [] },
+    tables: {
+      rooms: [],
+      members: [],
+      nominations: [],
+      votes: [],
+      preset_filters: [],
+      profiles: [],
+      group_creation_usage: [],
+    },
     inserts: {},
     errors: {},
+    activity: [],
     from: (table) => new Query(table),
   };
   globalThis.__grubRoomFlowTest = store;
@@ -213,4 +253,63 @@ test("room codes and join URLs reject malformed input", () => {
   for (let i = 0; i < 100; i++) assert.ok(RoomCodeSchema.safeParse(newCode()).success);
   assert.equal(RoomCodeSchema.parse(" abc234 "), "ABC234");
   assert.throws(() => roomJoinUrl("https://groupgrub.example", "../account"));
+});
+
+test("only the host can report creation clicks, and accepted counts cannot be overwritten", async () => {
+  const host = await createRoom({ data: profile });
+  const guest = await joinRoom({ data: { ...profile, code: host.code } });
+  store.tables.group_creation_usage.push({
+    room_id: store.tables.rooms[0].id,
+    host_member_id: host.memberId,
+    click_count: null,
+  });
+  const measurement = { journeyId: randomUUID(), clicks: 3 };
+  await assert.rejects(
+    recordGroupCreationClicks({ data: { ...guest, ...measurement } }),
+    /Only the host/,
+  );
+  await assert.rejects(
+    recordGroupCreationClicks({ data: { ...host, ...measurement, clicks: -1 } }),
+  );
+  await recordGroupCreationClicks({ data: { ...host, ...measurement } });
+  await recordGroupCreationClicks({ data: { ...host, ...measurement, clicks: 1 } });
+  assert.equal(store.tables.group_creation_usage[0].click_count, 3);
+});
+
+test("stage activity verifies room passes and cannot claim successful selection", async () => {
+  const host = await createRoom({ data: profile });
+  await assert.rejects(
+    recordSelectionActivity({ data: { ...host, token: "invalid-room-pass", event: "enter" } }),
+    /Not a member/,
+  );
+  await assert.rejects(recordSelectionActivity({ data: { ...host, event: "selected" } }));
+  assert.equal(store.activity.length, 0);
+  await recordSelectionActivity({ data: { ...host, event: "enter" } });
+  assert.deepEqual(store.activity[0], {
+    name: "record_selection_activity",
+    args: { p_room_id: store.tables.rooms[0].id, p_member_id: host.memberId, p_event: "enter" },
+  });
+});
+
+test("filter saves report database errors and do not change settings after voting starts", async () => {
+  const host = await createRoom({ data: profile });
+  const original = store.tables.rooms[0].settings;
+  const changed = { ...original, priceMax: 2 };
+  store.updateError = true;
+  await assert.rejects(updateSettings({ data: { ...host, settings: changed } }), /Could not save/);
+  assert.deepEqual(store.tables.rooms[0].settings, original);
+  store.updateError = false;
+  store.startDuringSave = true;
+  await assert.rejects(updateSettings({ data: { ...host, settings: changed } }), /locked/);
+  assert.deepEqual(store.tables.rooms[0].settings, original);
+});
+
+test("linked room participants show their latest account photo without exposing account IDs", async () => {
+  const userId = randomUUID();
+  const host = await createRoom({ data: profile, context: { accountUserId: userId } });
+  const photo = `https://example.supabase.co/storage/v1/object/public/profile-photos/${userId}/${randomUUID()}.jpg`;
+  store.tables.profiles.push({ id: userId, avatar: photo });
+  const state = await getRoomState({ data: host });
+  assert.equal(state.members[0].avatar, photo);
+  assert.equal("user_id" in state.members[0], false);
 });

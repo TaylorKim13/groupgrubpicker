@@ -11,6 +11,7 @@ import { useEffect, type ReactNode } from "react";
 import { Toaster } from "sonner";
 import { DistanceProvider } from "@/components/DistanceProvider";
 import { AccountProvider } from "@/components/AccountProvider";
+import { CreationClickTracker } from "@/components/CreationClickTracker";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -130,6 +131,7 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <CreationClickTracker />
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <AccountProvider>
         <DistanceProvider>

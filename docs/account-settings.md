@@ -8,6 +8,18 @@ distance unit, an atomic preferences-save RPC, and a deletion trigger. The migra
 journal includes the new migration. Do not use schema push against the intentionally
 empty generated Drizzle schema.
 
+Also apply `0003_profile_photos.sql` before using photo uploads. It creates a public
+`profile-photos` Storage bucket with a 1 MB JPEG limit. Uploads, replacements, and
+deletions run through authenticated account server functions; browser write access
+to the bucket is not granted. Existing emoji avatars continue to work.
+
+In Account → Settings → Your profile, choose a JPG, PNG, or WebP up to 5 MB. The
+browser crops it to a 256 × 256 JPEG, previews it, and uploads only when Save profile
+is clicked. Replacing or removing a photo cleans up its previous storage object;
+account deletion removes the account's photo files before deleting the auth user.
+If the auth deletion then fails, the photo may already be removed; the account
+remains and its avatar falls back to an emoji until a new photo is saved.
+
 The application server needs `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and
 `SUPABASE_SERVICE_ROLE_KEY`. The service key stays on the server. Address lookup
 in room host controls uses the existing `LOVABLE_API_KEY` and `GOOGLE_MAPS_API_KEY` connector configuration. Locations are selected for each group and are never saved or applied as account preferences. Previously saved location keys are ignored.

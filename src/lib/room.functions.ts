@@ -1,6 +1,7 @@
 import { SettingsSchema, getHostingPreferences, applyHostingPreferences } from "./settings";
 import { optionalAccountAuth } from "./account-auth";
 import { RoomCodeSchema, RoomProfileSchema } from "./room-access";
+import { CreationClickSchema } from "./creation-clicks";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { authMember, db, getRoomByCode, hashToken, newCode, newToken } from "./room.server";
@@ -20,6 +21,35 @@ const Auth = z.object({
   token: z.string().min(10),
 });
 const Profile = RoomProfileSchema;
+
+export const recordGroupCreationClicks = createServerFn({ method: "POST" })
+  .inputValidator((input) => Auth.merge(CreationClickSchema).parse(input))
+  .handler(async ({ data }) => {
+    const { room, member } = await requireHost(data);
+    const { error } = await db()
+      .from("group_creation_usage")
+      .update({ journey_id: data.journeyId, click_count: data.clicks })
+      .eq("room_id", room.id)
+      .eq("host_member_id", member.id)
+      .is("click_count", null);
+    if (error) throw new Error("Could not record creation clicks");
+    return { ok: true };
+  });
+
+export const recordSelectionActivity = createServerFn({ method: "POST" })
+  .inputValidator((input) =>
+    Auth.extend({ event: z.enum(["enter", "heartbeat", "leave"]) }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const { room, member } = await authMember(data.code, data.memberId, data.token);
+    const { error } = await db().rpc("record_selection_activity", {
+      p_room_id: room.id,
+      p_member_id: member.id,
+      p_event: data.event,
+    });
+    if (error) throw new Error("Could not record selection activity");
+    return { ok: true };
+  });
 
 async function addMember(
   roomId: string,
@@ -131,6 +161,19 @@ export const getRoomState = createServerFn({ method: "POST" })
       db().from("votes").select("member_id, want_id, could_id").eq("room_id", room.id),
       loadNominations(room.id),
     ]);
+    const accountIds = [
+      ...new Set<string>(
+        (members ?? [])
+          .map((m: { user_id: string | null }) => m.user_id)
+          .filter((id: string | null): id is string => !!id),
+      ),
+    ];
+    const { data: profiles } = accountIds.length
+      ? await db().from("profiles").select("id, avatar").in("id", accountIds)
+      : { data: [] };
+    const avatars = new Map<string, string>(
+      (profiles ?? []).map((p: { id: string; avatar: string }) => [p.id, p.avatar]),
+    );
     const voted = new Set((votes ?? []).map((v: any) => v.member_id));
     const showVotes = !settings.anonymous;
     const my = (votes ?? []).find((v: any) => v.member_id === member.id);
@@ -142,7 +185,7 @@ export const getRoomState = createServerFn({ method: "POST" })
       members: (members ?? []).map((m: any) => ({
         id: m.id as string,
         nickname: m.nickname as string,
-        avatar: m.avatar as string,
+        avatar: avatars.get(m.user_id) ?? (m.avatar as string),
         isHost: m.is_host as boolean,
         hasAccount: !!m.user_id,
         voted: voted.has(m.id),
@@ -175,7 +218,15 @@ export const updateSettings = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { room } = await requireHost(data);
     if (room.status !== "lobby") throw new Error("Settings are locked once voting starts");
-    await db().from("rooms").update({ settings: data.settings }).eq("id", room.id);
+    const { data: saved, error } = await db()
+      .from("rooms")
+      .update({ settings: data.settings })
+      .eq("id", room.id)
+      .eq("status", "lobby")
+      .select("id")
+      .maybeSingle();
+    if (error) throw new Error("Could not save room settings");
+    if (!saved) throw new Error("Settings are locked once voting starts");
     return { ok: true };
   });
 
@@ -472,8 +523,15 @@ export const applyRoomPreferences = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error || !preset) throw new Error("No saved preferences yet");
     const settings = applyHostingPreferences(room.settings as RoomSettings, preset.settings);
-    const { error: saveError } = await db().from("rooms").update({ settings }).eq("id", room.id);
+    const { data: saved, error: saveError } = await db()
+      .from("rooms")
+      .update({ settings })
+      .eq("id", room.id)
+      .eq("status", "lobby")
+      .select("id")
+      .maybeSingle();
     if (saveError) throw new Error("Could not apply preferences");
+    if (!saved) throw new Error("Settings are locked once voting starts");
     return { ok: true };
   });
 

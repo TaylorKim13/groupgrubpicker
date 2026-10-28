@@ -1,4 +1,9 @@
 import { normalizeRoomCode, RoomCodeSchema } from "@/lib/room-access";
+import {
+  beginCreationClickTracking,
+  completeCreationClickTracking,
+  resetCreationClickTracking,
+} from "@/lib/creation-click-tracking";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
@@ -36,6 +41,9 @@ export const Route = createFileRoute("/")({
 });
 
 function Home() {
+  useEffect(() => {
+    beginCreationClickTracking();
+  }, []);
   const navigate = useNavigate();
   const user = useAccount();
   const accountFn = useServerFn(getAccount);
@@ -81,6 +89,8 @@ function Home() {
           ? await create({ data: { nickname, avatar } })
           : await join({ data: { nickname, avatar, code: normalizeRoomCode(joinCode ?? code) } });
       saveSession(s);
+      if (kind === "host") completeCreationClickTracking(s);
+      else resetCreationClickTracking();
       navigate({ to: "/room/$code", params: { code: s.code } });
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Something went wrong");
