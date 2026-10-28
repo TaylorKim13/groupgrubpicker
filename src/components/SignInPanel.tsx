@@ -14,7 +14,12 @@ export function SignInPanel() {
   async function social(provider: 'google' | 'microsoft') {
     setBusy(true);
     try {
-      const result = await lovable.auth.signInWithOAuth(provider, { redirect_uri: window.location.origin + '/account' });
+      const result = import.meta.env['VITE_AUTH_MODE'] === 'supabase'
+        ? await supabase.auth.signInWithOAuth({
+            provider: provider === 'microsoft' ? 'azure' : 'google',
+            options: { redirectTo: window.location.origin + '/account', scopes: 'email' },
+          })
+        : await lovable.auth.signInWithOAuth(provider, { redirect_uri: window.location.origin + '/account' });
       if (result.error) throw result.error;
     } catch {
       toast.error('Could not sign in. Please try again.');

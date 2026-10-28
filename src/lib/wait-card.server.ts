@@ -17,7 +17,8 @@ export async function renderWaitCard(name: string, minutes: number): Promise<Buf
   const key = JSON.stringify([name, minutes]);
   const existing = cache.get(key);
   if (existing) return existing;
-  fontReady ??= PImage.registerFont(resolve("public/fonts/groupgrub-bold.ttf"), "GroupGrub").load().then(() => undefined);
+  const fontPath = process.env["WAIT_CARD_FONT_PATH"] || resolve("public/fonts/groupgrub-bold.ttf");
+  fontReady ??= PImage.registerFont(fontPath, "GroupGrub").load().then(() => undefined);
   await fontReady;
   const image = PImage.make(1200, 630);
   const ctx = image.getContext("2d");

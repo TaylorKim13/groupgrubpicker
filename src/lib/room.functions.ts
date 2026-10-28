@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { mapsFetch as gmaps } from "./maps.server";
 import { z } from "zod";
 import { authMember, db, getRoomByCode, hashToken, newCode, newToken } from "./room.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -141,29 +142,7 @@ export const startVoting = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// ---------- Google Maps (through the connector gateway) ----------
-const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_maps";
-async function gmaps(path: string, init: RequestInit & { fieldMask?: string } = {}) {
-  const lk = process.env["LOVABLE_API_KEY"];
-  const gk = process.env["GOOGLE_MAPS_API_KEY"];
-  if (!lk || !gk) throw new Error("Google Maps is not connected");
-  const res = await fetch(`${GATEWAY_URL}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${lk}`,
-      "X-Connection-Api-Key": gk,
-      "Content-Type": "application/json",
-      ...(init.fieldMask ? { "X-Goog-FieldMask": init.fieldMask } : {}),
-    },
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    console.error(`Google Maps request failed [${res.status}]: ${body}`);
-    throw new Error(`Map search failed (${res.status})`);
-  }
-  return res.json();
-}
-
+// ---------- Google Maps ----------
 export const geocodeCenter = createServerFn({ method: "POST" })
   .inputValidator((d) => Auth.extend({ address: z.string().trim().min(2).max(200) }).parse(d))
   .handler(async ({ data }) => {
