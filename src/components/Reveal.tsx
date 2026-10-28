@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Result } from "@/lib/room.functions";
 import { priceLabel } from "@/lib/restaurants";
+import { ShareWaitButton } from "@/components/ShareWaitButton";
 
 function CoinFlip({ result, onDone }: { result: Result; onDone: () => void }) {
   const a = result.tie!.candidates[0]!;
@@ -106,6 +107,7 @@ export function Reveal({ result }: { result: Result }) {
           {w.address ? ` · ${w.address}` : ""}
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-3">
+          <ShareWaitButton restaurant={w} />
           <a href={directions} target="_blank" rel="noreferrer" className="rounded-xl bg-primary px-5 py-3 font-bold text-primary-foreground chunky">
             Get directions
           </a>

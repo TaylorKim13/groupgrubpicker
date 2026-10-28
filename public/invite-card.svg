@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+<rect width="1200" height="630" fill="#fff7df"/>
+<circle cx="1090" cy="80" r="190" fill="#ffcc38"/>
+<circle cx="1090" cy="80" r="135" fill="none" stroke="#241a14" stroke-width="9"/>
+<circle cx="1090" cy="80" r="95" fill="none" stroke="#241a14" stroke-width="4"/>
+<rect x="64" y="64" width="335" height="43" rx="21" fill="#ffcc38"/>
+<text x="85" y="94" fill="#241a14" font-family="DejaVu Sans,sans-serif" font-weight="700" font-size="21">YOU'RE INVITED TO EAT</text>
+<text x="64" y="198" fill="#241a14" font-family="DejaVu Sans,sans-serif" font-weight="900" font-size="72">GROUP <tspan fill="#db3329">GRUB</tspan></text>
+<text x="64" y="302" fill="#241a14" font-family="DejaVu Sans,sans-serif" font-weight="900" font-size="68">Where are we eating?</text>
+<text x="68" y="366" fill="#68584c" font-family="DejaVu Sans,sans-serif" font-size="31">Pick your favorites. Let the group decide.</text>
+<rect x="72" y="436" width="483" height="104" rx="22" fill="#241a14"/>
+<rect x="64" y="426" width="483" height="104" rx="22" fill="#db3329" stroke="#241a14" stroke-width="5"/>
+<text x="124" y="491" fill="#ffffff" font-family="DejaVu Sans,sans-serif" font-weight="700" font-size="36">JOIN THE TABLE →</text>
+<text x="655" y="493" fill="#68584c" font-family="DejaVu Sans,sans-serif" font-size="25">Good food. Group decision.</text>
+</svg>

@@ -8,6 +8,8 @@ import { Switch } from "@/components/ui/switch";
 import { ProfilePicker } from "@/components/ProfilePicker";
 import { RestaurantMap } from "@/components/RestaurantMap";
 import { Reveal } from "@/components/Reveal";
+import { ShareWaitButton } from "@/components/ShareWaitButton";
+import { ShareInviteButton } from "@/components/ShareInviteButton";
 import type { Result } from "@/lib/room.functions";
 import {
   castVote,
@@ -63,6 +65,9 @@ function JoinGate({ code, onJoined }: { code: string; onJoined: (s: Session) => 
       <div className="mt-6 rounded-2xl bg-card p-6 chunky">
         <p className="text-sm uppercase tracking-wide text-muted-foreground">You're invited to room</p>
         <p className="mb-5 font-display text-4xl tracking-[0.25em]">{code.toUpperCase()}</p>
+        <div className="mb-5">
+          <ShareInviteButton code={code} />
+        </div>
         <ProfilePicker {...{ nickname, setNickname, avatar, setAvatar }} />
         <button
           disabled={busy || !nickname.trim()}
@@ -159,7 +164,7 @@ function TopBar({ s, onLeave }: { s: State; onLeave: () => void }) {
         </Link>
         <span className="rounded-full bg-secondary px-3 py-1 text-xs font-bold uppercase">{phase}</span>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={onLeave}
           className="rounded-lg border-2 bg-background px-3 py-2 text-sm font-bold"
@@ -176,6 +181,7 @@ function TopBar({ s, onLeave }: { s: State; onLeave: () => void }) {
         >
           Copy invite link
         </button>
+        <ShareInviteButton code={s.code} />
       </div>
     </header>
   );
@@ -588,6 +594,9 @@ function RestaurantCard({
           {tally.could.length > 0 && <>· Could: {tally.could.join(" ")}</>}
         </p>
       )}
+      <div className="mt-3">
+        <ShareWaitButton restaurant={r} />
+      </div>
       {voting && (
         <div className="mt-3 grid grid-cols-2 gap-2">
           <button onClick={() => onPick("want")} className={`rounded-lg border-2 py-1.5 text-sm font-bold ${want ? "bg-primary text-primary-foreground" : "bg-background"}`}>
