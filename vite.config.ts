@@ -8,8 +8,8 @@ import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 // Public (publishable) backend settings used only when the build has no .env,
 // so the published site can always reach the backend.
-const FALLBACK_URL = "https://iiuuvojznpiteowwhcch.supabase.co";
-const FALLBACK_KEY = "sb_publishable_4NUKvuAlWTJU33zujaUK3g_VuOgJ9Rh";
+const FALLBACK_URL = "https://gcowxljjzmxwavhklyfu.supabase.co";
+const FALLBACK_KEY = "sb_publishable_GyylmSi6LnrGH5-q5jDUaA_hABYLMYg";
 const define: Record<string, string> = {};
 if (!process.env['VITE_SUPABASE_URL']) define["import.meta.env.VITE_SUPABASE_URL"] = JSON.stringify(FALLBACK_URL);
 if (!process.env['VITE_SUPABASE_PUBLISHABLE_KEY']) define["import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY"] = JSON.stringify(FALLBACK_KEY);
