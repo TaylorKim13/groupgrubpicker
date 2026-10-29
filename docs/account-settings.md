@@ -22,20 +22,20 @@ remains and its avatar falls back to an emoji until a new photo is saved.
 
 The application server needs `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and
 `SUPABASE_SERVICE_ROLE_KEY`. The service key stays on the server. Address lookup
-in room host controls uses the existing `LOVABLE_API_KEY` and `GOOGLE_MAPS_API_KEY` connector configuration. Locations are selected for each group and are never saved or applied as account preferences. Previously saved location keys are ignored.
+in room host controls uses direct Google APIs; see [Google Maps setup](google-maps.md).
+Locations are selected for each group and are never saved or applied as account preferences. Previously saved location keys are ignored.
 
 ## Authentication
 
 In Supabase Authentication URL Configuration, allow the production origin's
 `/account` and `/reset-password` URLs, plus the corresponding development URLs
 when testing locally. Keep the Site URL set to the deployed application origin.
-Retain secure email-change confirmation; the UI tells users to check their inboxes.
+Email addresses are read-only in account settings. To use another email, create a new account.
 Password changes require the current password for email/password accounts.
 Social-only accounts manage passwords through their sign-in provider.
 
 Remote auth configuration and email delivery cannot be verified from this workspace
-without backend access. Test a real recovery email, an expired link, and confirmation
-of an email change on the deployed origin before release.
+without backend access. Test a real recovery email and an expired link on the deployed origin before release.
 
 ## Verification
 
@@ -51,7 +51,7 @@ of an email change on the deployed origin before release.
 
 With disposable test accounts, verify saved defaults on new hosted rooms, unchanged
 existing rooms, room-to-account preference saving, both distance units, profile edits,
-email/password changes, and deletion. Deletion must preserve group votes and scores,
+password changes, read-only email details, and deletion. Deletion must preserve group votes and scores,
 anonymize attribution, invalidate previous room passes, and remove social links.
 
 Guests default to miles. Country-based unit detection is deferred. Legacy nomination

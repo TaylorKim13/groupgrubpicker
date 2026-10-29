@@ -8,12 +8,14 @@ export function ProfilePicker({
   setNickname,
   avatar,
   setAvatar,
+  profilePhoto,
   autoFocus = false,
 }: {
   nickname: string;
   setNickname: (s: string) => void;
   avatar: string;
   setAvatar: (s: string) => void;
+  profilePhoto?: string | undefined;
   autoFocus?: boolean;
 }) {
   return (
@@ -39,6 +41,25 @@ export function ProfilePicker({
         </div>
       )}
       <div className="flex flex-wrap gap-2">
+        {profilePhoto && isProfilePhoto(profilePhoto) && (
+          <Button
+            variant="ghost"
+            type="button"
+            onClick={() => setAvatar(profilePhoto)}
+            aria-label="Use your profile photo"
+            title="Use your profile photo"
+            aria-pressed={avatar === profilePhoto}
+            className={`h-11 w-11 rounded-full border-2 p-0 ${
+              avatar === profilePhoto ? "bg-secondary scale-110 chunky" : "bg-card"
+            }`}
+          >
+            <ProfileAvatar
+              avatar={profilePhoto}
+              name={nickname || "Your"}
+              className="h-full w-full"
+            />
+          </Button>
+        )}
         {AVATARS.map((a) => (
           <Button
             variant="ghost"
@@ -46,6 +67,7 @@ export function ProfilePicker({
             type="button"
             onClick={() => setAvatar(a)}
             aria-label={`Avatar ${a}`}
+            aria-pressed={avatar === a}
             className={`grid h-11 w-11 place-items-center rounded-full border-2 text-xl transition ${
               avatar === a ? "bg-secondary scale-110 chunky" : "bg-card"
             }`}

@@ -34,7 +34,6 @@ export function AccountSettings({
   const [avatar, setAvatar] = useState(profile.avatar);
   const [photo, setPhoto] = useState<string | null>(null);
   const [preparingPhoto, setPreparingPhoto] = useState(false);
-  const [email, setEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -156,38 +155,9 @@ export function AccountSettings({
             )
             .join(", ")}
         </p>
-        <form
-          className="mt-4 space-y-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void act(async () => {
-              const { error } = await supabase.auth.updateUser(
-                { email },
-                { emailRedirectTo: window.location.origin + "/account" },
-              );
-              if (error) throw error;
-              toast.success(
-                "Check your inboxes to confirm your email change. Your current email remains active until confirmed.",
-              );
-              setEmail("");
-            });
-          }}
-        >
-          <label className="block font-bold">
-            New email
-            <input
-              className={input}
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-            />
-          </label>
-          <Button variant="outline" disabled={busy || email === user.email}>
-            Change email
-          </Button>
-        </form>
+        <p className="mt-3 text-sm text-muted-foreground">
+          To use a different email, create a new account.
+        </p>
       </section>
       <section className="py-6">
         <h2 className="text-2xl font-bold">Password</h2>

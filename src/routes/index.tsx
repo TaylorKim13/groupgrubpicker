@@ -13,6 +13,7 @@ import { createRoom, joinRoom, listPublicRooms } from "@/lib/room.functions";
 import { saveSession } from "@/lib/session";
 import { AVATARS } from "@/lib/restaurants";
 import { ProfilePicker } from "@/components/ProfilePicker";
+import { ThemeControl } from "@/components/ThemeControl";
 import { Button } from "@/components/ui/button";
 import { Onboarding } from "@/components/Onboarding";
 import { useAccount } from "@/components/AccountProvider";
@@ -94,6 +95,7 @@ function Home() {
       navigate({ to: "/room/$code", params: { code: s.code } });
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Something went wrong");
+      if (kind === "join") void rooms.refetch();
     } finally {
       setBusy(false);
     }
@@ -101,17 +103,20 @@ function Home() {
 
   return (
     <main className="mx-auto max-w-2xl px-5 py-8">
-      <header className="flex items-center justify-between gap-3 border-b-2 pb-5">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b-2 pb-5">
         <Link to="/" className="font-display text-2xl font-extrabold">
           GROUP<span className="text-primary"> GRUB</span>{" "}
           <span className="text-xs text-muted-foreground">v1</span>
         </Link>
-        <Button variant="ghost" asChild>
-          <Link to="/account">
-            <UserRound />
-            {user ? "Your table" : "Sign in"}
-          </Link>
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <ThemeControl />
+          <Button variant="ghost" asChild>
+            <Link to="/account">
+              <UserRound />
+              {user ? "Your table" : "Sign in"}
+            </Link>
+          </Button>
+        </div>
       </header>
       <div className="pt-12 pb-8">
         <p className="text-sm font-bold uppercase text-primary">Good food. Group decision.</p>
@@ -160,7 +165,11 @@ function Home() {
             }}
           >
             <fieldset disabled={busy}>
-              <ProfilePicker autoFocus {...{ nickname, setNickname, avatar, setAvatar }} />
+              <ProfilePicker
+                autoFocus
+                profilePhoto={user ? account.data?.profile.avatar : undefined}
+                {...{ nickname, setNickname, avatar, setAvatar }}
+              />
               {mode === "join" && (
                 <div className="mt-6">
                   <label htmlFor="room-code" className="text-sm font-bold">
@@ -204,9 +213,20 @@ function Home() {
                   </div>
                   <Button
                     variant="secondary"
+                    disabled={busy}
                     onClick={() => {
+                      if (nickname.trim()) {
+                        void go("join", r.code);
+                        return;
+                      }
                       setMode("join");
                       setCode(r.code);
+                      requestAnimationFrame(() => {
+                        const input = document.getElementById("nickname");
+                        input?.scrollIntoView({ behavior: "smooth", block: "center" });
+                        input?.focus({ preventScroll: true });
+                      });
+                      toast.info("Enter a nickname, then choose Join the table.");
                     }}
                   >
                     Join

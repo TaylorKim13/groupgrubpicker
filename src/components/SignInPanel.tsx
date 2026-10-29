@@ -9,6 +9,7 @@ export function SignInPanel() {
   const [mode, setMode] = useState<"in" | "up">("in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [sent, setSent] = useState(false);
 
   async function social(provider: "google" | "microsoft") {
@@ -30,15 +31,19 @@ export function SignInPanel() {
     setBusy(true);
     try {
       if (mode === "up") {
-        const { error } = await supabase.auth.signUp({
-          email,
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(),
           password,
           options: { emailRedirectTo: window.location.origin + "/account" },
         });
         if (error) throw error;
-        setSent(true);
+        if (data.session) {
+          toast.success("Account created. You're signed in!");
+        } else {
+          setSent(true);
+        }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
         if (error) throw error;
       }
     } catch (err: any) {
@@ -84,15 +89,25 @@ export function SignInPanel() {
           className="w-full rounded-lg border-2 bg-card px-4 py-3"
         />
         <input
-          type="password"
+          type={showPassword ? "text" : "password"}
           required
           minLength={6}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Password"
           aria-label="Password"
+          autoComplete={mode === "in" ? "current-password" : "new-password"}
           className="w-full rounded-lg border-2 bg-card px-4 py-3"
         />
+        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+          <input
+            type="checkbox"
+            checked={showPassword}
+            onChange={(e) => setShowPassword(e.target.checked)}
+            className="h-4 w-4 accent-primary"
+          />
+          Show password
+        </label>
         <Button type="submit" variant="outline" className="w-full" disabled={busy}>
           {mode === "in" ? "Sign in with email" : "Create account"}
         </Button>
@@ -121,7 +136,10 @@ export function SignInPanel() {
       )}
       <button
         className="text-sm font-bold underline"
-        onClick={() => setMode(mode === "in" ? "up" : "in")}
+        onClick={() => {
+          setMode(mode === "in" ? "up" : "in");
+          setShowPassword(false);
+        }}
       >
         {mode === "in" ? "New here? Create an account" : "Already have an account? Sign in"}
       </button>

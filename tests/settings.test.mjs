@@ -37,7 +37,7 @@ test("10 miles retains the same radius through repeated unit conversions", () =>
   assert.equal(formatDistance(radius, "km"), "16.1 km");
 });
 test("existing supported boundary values remain valid", () => {
-  for (const radiusKm of [0.5, 5, 40])
+  for (const radiusKm of [0.5, 5, 40, 100, toKm(100, "mi")])
     for (const maxWait of [5, 60, 180]) {
       assert.ok(
         SettingsSchema.safeParse({ ...restaurants.DEFAULT_SETTINGS, radiusKm, maxWait }).success,
@@ -48,7 +48,7 @@ test("rejects invalid ranges, non-finite distances, and unknown diets", () => {
   for (const patch of [
     { priceMin: 4, priceMax: 1 },
     { radiusKm: NaN },
-    { radiusKm: 41 },
+    { radiusKm: toKm(100.01, "mi") },
     { maxWait: 181 },
     { maxWait: 1.5 },
     { diets: ["unknown"] },

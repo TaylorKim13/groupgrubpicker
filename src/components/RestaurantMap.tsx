@@ -14,12 +14,13 @@ let loader: Promise<void> | null = null;
 function loadMaps() {
   if (typeof window === "undefined") return Promise.reject();
   if (window.google?.maps?.Map) return Promise.resolve();
+  const key = import.meta.env["VITE_GOOGLE_MAPS_BROWSER_KEY"];
+  if (!key) return Promise.reject(new Error("Map display is not configured"));
   if (!loader) {
     loader = new Promise((resolve, reject) => {
       window.__ggMapsReady = () => resolve();
-      const env = import.meta.env as Record<string, string>;
       const s = document.createElement("script");
-      s.src = `https://maps.googleapis.com/maps/api/js?key=${env["VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY"]}&loading=async&callback=__ggMapsReady&channel=${env["VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_TRACKING_ID"]}`;
+      s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&loading=async&callback=__ggMapsReady`;
       s.async = true;
       s.onerror = () => reject(new Error("Map failed to load"));
       document.head.appendChild(s);
@@ -109,7 +110,12 @@ export function RestaurantMap({
         map: m,
         position: { lat: r.lat, lng: r.lng },
         title: r.name,
-        label: { text: priceLabel(r.price), color: "#fff", fontSize: "10px", fontWeight: "700" },
+        label: {
+          text: r.priceUnknown ? "?" : priceLabel(r.price),
+          color: "#fff",
+          fontSize: "10px",
+          fontWeight: "700",
+        },
         icon: {
           path: g.SymbolPath.CIRCLE,
           scale: hot ? 18 : 14,
@@ -122,11 +128,11 @@ export function RestaurantMap({
       mk.addListener("click", () => {
         const d = formatDistance(distanceKm(center, r), unit);
         const div = document.createElement("div");
-        div.style.cssText = "font-family:Figtree,sans-serif;min-width:160px";
+        div.style.cssText = "font-family:Figtree,sans-serif;min-width:160px;color:#222";
         const h = document.createElement("strong");
         h.textContent = r.name;
         const p = document.createElement("div");
-        p.textContent = `${r.cuisine} · ${priceLabel(r.price)} · ${d} · ~${r.wait} min wait`;
+        p.textContent = `${r.cuisine} · ${r.priceUnknown ? "Price unknown" : priceLabel(r.price)} · ${d} · ${r.google ? "Wait unknown" : `~${r.wait} min wait`}`;
         div.append(h, p);
         info.current.setContent(div);
         info.current.open({ map: m, anchor: mk });

@@ -11,6 +11,9 @@ import { AccountSettings } from "@/components/AccountSettings";
 import { supabase } from "@/integrations/supabase/client";
 import { getAccount } from "@/lib/account.functions";
 import { getGroupHistory } from "@/lib/room.functions";
+import { getAdminAccess } from "@/lib/metrics.functions";
+import { MetricsDashboard } from "@/components/MetricsDashboard";
+import { ThemeControl } from "@/components/ThemeControl";
 
 export const Route = createFileRoute("/account")({
   head: () => ({
@@ -26,6 +29,14 @@ export const Route = createFileRoute("/account")({
 });
 function AccountPage() {
   const user = useAccount();
+  const fetchAdminAccess = useServerFn(getAdminAccess);
+  const adminAccess = useQuery({
+    queryKey: ["admin-access", user?.id],
+    queryFn: () => fetchAdminAccess(),
+    enabled: !!user,
+    refetchInterval: 30000,
+  });
+  const isAdmin = adminAccess.data?.administrator === true;
   const fetchAccount = useServerFn(getAccount);
   const fetchHistory = useServerFn(getGroupHistory);
   const qc = useQueryClient();
@@ -52,9 +63,12 @@ function AccountPage() {
   }
   return (
     <main className="mx-auto max-w-2xl px-5 py-8">
-      <Button asChild variant="ghost">
-        <Link to="/">Home</Link>
-      </Button>
+      <div className="flex items-center justify-between gap-3">
+        <Button asChild variant="ghost">
+          <Link to="/">Home</Link>
+        </Button>
+        <ThemeControl />
+      </div>
       <h1 className="my-6 text-4xl font-extrabold">Your table</h1>
       {!user ? (
         <section className="border-y-2 py-8">
@@ -67,11 +81,17 @@ function AccountPage() {
         </section>
       ) : (
         <Tabs defaultValue="overview">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className={`grid w-full ${isAdmin ? "grid-cols-4" : "grid-cols-3"}`}>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="preferences">Preferences</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
+            {isAdmin && <TabsTrigger value="metrics">Metrics</TabsTrigger>}
           </TabsList>
+          {isAdmin && (
+            <TabsContent value="metrics">
+              <MetricsDashboard userId={user.id} />
+            </TabsContent>
+          )}
           <TabsContent value="overview">
             <SocialPanel userId={user.id} />
             <section className="py-6">

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Snack Dash &middot; GROUP GRUB</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, sans-serif;
+        background: #faf5e8;
+        color: #241e18;
+      }
+      body {
+        margin: 0;
+        padding: 20px;
+      }
+      main {
+        max-width: 420px;
+        margin: auto;
+        text-align: center;
+      }
+      h1 {
+        margin: 8px 0;
+      }
+      p {
+        line-height: 1.5;
+      }
+      button,
+      a {
+        font: inherit;
+      }
+      button {
+        cursor: pointer;
+        border: 2px solid currentColor;
+        border-radius: 14px;
+        padding: 12px;
+        background: #f7cc58;
+        color: #241e18;
+        font-weight: 700;
+      }
+      button:disabled {
+        cursor: default;
+        opacity: 0.6;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        margin: 18px 0;
+      }
+      .grid button {
+        min-height: 75px;
+        background: #fffaf0;
+        font-size: 32px;
+        touch-action: manipulation;
+      }
+      .stats {
+        display: flex;
+        justify-content: space-around;
+        font-weight: 700;
+      }
+      a {
+        display: inline-block;
+        margin: 16px;
+        color: inherit;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          background: #171717;
+          color: #fafafa;
+        }
+        .grid button {
+          background: #292929;
+          color: #fafafa;
+        }
+      }
+    </style>
+    <script src="/offline-game.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <p>GROUP GRUB &middot; Offline snack break</p>
+      <h1>Snack Dash</h1>
+      <p>
+        Tap the food before it moves. Skip the burnt pans!<br />Food +1 &middot; Burnt pan &minus;2 &middot; 30 seconds
+      </p>
+      <div class="stats"><span id="score">Score: 0</span><span id="time">Time: 30s</span></div>
+      <div class="grid" id="board" aria-label="Food game"></div>
+      <p id="status" role="status">Ready for a snack?</p>
+      <button id="start">Start game</button><br /><a href="/" target="_top"
+        >Try returning to GROUP GRUB</a
+      >
+    </main>
+  </body>
+</html>

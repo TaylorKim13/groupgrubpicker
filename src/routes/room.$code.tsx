@@ -1,4 +1,5 @@
 import { ProfileAvatar } from "@/components/ProfileAvatar";
+import { ThemeControl } from "@/components/ThemeControl";
 import { useSelectionTracking } from "@/components/useSelectionTracking";
 import { RoomInvite } from "@/components/RoomInvite";
 import { RoomCodeSchema, normalizeRoomCode } from "@/lib/room-access";
@@ -17,6 +18,7 @@ import { Reveal } from "@/components/Reveal";
 import type { Result } from "@/lib/room.functions";
 import {
   castVote,
+  kickMember,
   closeVoting,
   geocodeCenter,
   getRoomState,
@@ -158,10 +160,14 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
   });
   const refresh = () => qc.invalidateQueries({ queryKey: key });
 
-  if (q.error && !q.data)
+  if (q.error && (!q.data || q.error.message === "Not a member of this room"))
     return (
       <main className="mx-auto max-w-md px-5 py-20 text-center">
-        <p className="text-lg">{(q.error as Error).message}</p>
+        <p className="text-lg">
+          {q.error.message === "Not a member of this room"
+            ? "You no longer have access to this table. The host may have removed you."
+            : q.error.message}
+        </p>
         <button
           onClick={onLeave}
           className="mt-4 rounded-xl bg-secondary px-4 py-2 font-bold chunky"
@@ -217,6 +223,7 @@ function TopBar({ s, onLeave }: { s: State; onLeave: () => void }) {
         </span>
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-3">
+        <ThemeControl />
         <button
           onClick={onLeave}
           className="rounded-lg border-2 bg-background px-3 py-2 text-sm font-bold"
@@ -230,6 +237,8 @@ function TopBar({ s, onLeave }: { s: State; onLeave: () => void }) {
 }
 
 function Members({ s, session, refresh }: { s: State; session: Session; refresh: () => void }) {
+  const kick = useServerFn(kickMember);
+  const [removing, setRemoving] = useState<string | null>(null);
   const start = useServerFn(startVoting);
   const close = useServerFn(closeVoting);
   const votedCount = s.members.filter((m) => m.voted).length;
@@ -292,6 +301,36 @@ function Members({ s, session, refresh }: { s: State; session: Session; refresh:
                 className="rounded-md border-2 px-2 py-0.5 text-xs font-bold disabled:opacity-50"
               >
                 {asked.has(m.id) ? "Sent" : "+ Friend"}
+              </button>
+            )}
+            {s.me.isHost && !m.isHost && m.id !== s.me.id && s.status !== "closed" && (
+              <button
+                type="button"
+                disabled={removing !== null}
+                aria-label={`Remove ${m.nickname} from the table`}
+                className="rounded-md border-2 px-2 py-0.5 text-xs font-bold text-destructive disabled:opacity-50"
+                onClick={async () => {
+                  if (
+                    !window.confirm(
+                      `Remove ${m.nickname} from this table? Their vote and nomination will be removed too.`,
+                    )
+                  )
+                    return;
+                  setRemoving(m.id);
+                  try {
+                    await kick({ data: { ...session, targetMemberId: m.id } });
+                    toast.success(`${m.nickname} removed from the table`);
+                    refresh();
+                  } catch (error) {
+                    toast.error(
+                      error instanceof Error ? error.message : "Could not remove participant",
+                    );
+                  } finally {
+                    setRemoving(null);
+                  }
+                }}
+              >
+                {removing === m.id ? "Removing..." : "Remove"}
               </button>
             )}
             {s.status === "voting" && (
@@ -605,6 +644,13 @@ function Pool({ s, session, refresh }: { s: State; session: Session; refresh: ()
           The pool{" "}
           <span className="text-base font-normal text-muted-foreground">({pool.length} spots)</span>
         </h2>
+        {pool.some((r) => r.google) && (
+          <p className="mb-3 text-sm text-muted-foreground">
+            Restaurants from Google Maps. Distance and known prices are filtered. Wait times and
+            dietary or allergy suitability are not verified; confirm with the restaurant. Places
+            without price data are included and marked.
+          </p>
+        )}
         {pool.length === 0 && (
           <p className="rounded-xl border-2 border-dashed p-6 text-center text-muted-foreground">
             Nothing matches these filters. Widen the radius, price, or wait time — or nominate a
@@ -663,8 +709,9 @@ function RestaurantCard({
         <div>
           <h3 className="text-lg font-extrabold leading-tight">{r.name}</h3>
           <p className="text-sm text-muted-foreground">
-            {r.cuisine} · {priceLabel(r.price)} · {formatDistance(distanceKm(center, r), unit)} · ~
-            {r.wait} min
+            {r.cuisine} · {r.priceUnknown ? "Price unknown" : priceLabel(r.price)} ·{" "}
+            {formatDistance(distanceKm(center, r), unit)} ·{" "}
+            {r.google ? "Wait unknown" : `~${r.wait} min`}
           </p>
         </div>
         {r.custom && (

@@ -49,6 +49,7 @@ const handlersUrl = await sourceModule("lib/room.functions.ts", {
   zod,
 });
 const {
+  kickMember,
   createRoom,
   joinRoom,
   getRoomState,
@@ -312,4 +313,34 @@ test("linked room participants show their latest account photo without exposing 
   const state = await getRoomState({ data: host });
   assert.equal(state.members[0].avatar, photo);
   assert.equal("user_id" in state.members[0], false);
+});
+
+test("only the host can remove another participant from their own active room", async () => {
+  const host = await createRoom({ data: profile });
+  const guest = await joinRoom({ data: { ...profile, code: host.code } });
+  const otherHost = await createRoom({ data: profile });
+  const otherGuest = await joinRoom({ data: { ...profile, code: otherHost.code } });
+  await assert.rejects(
+    kickMember({ data: { ...guest, targetMemberId: host.memberId } }),
+    /Only the host/,
+  );
+  await assert.rejects(
+    kickMember({ data: { ...host, token: "invalid-token", targetMemberId: guest.memberId } }),
+    /Not a member/,
+  );
+  await assert.rejects(
+    kickMember({ data: { ...host, targetMemberId: host.memberId } }),
+    /cannot remove themselves/,
+  );
+  await kickMember({ data: { ...host, targetMemberId: otherGuest.memberId } });
+  assert.ok(store.tables.members.some((m) => m.id === otherGuest.memberId));
+  await kickMember({ data: { ...host, targetMemberId: guest.memberId } });
+  await assert.rejects(getRoomState({ data: guest }), /Not a member/);
+  assert.equal((await getRoomState({ data: host })).members.length, 1);
+  await kickMember({ data: { ...host, targetMemberId: guest.memberId } });
+  store.tables.rooms.find((r) => r.code === host.code).status = "closed";
+  await assert.rejects(
+    kickMember({ data: { ...host, targetMemberId: guest.memberId } }),
+    /already finished/,
+  );
 });

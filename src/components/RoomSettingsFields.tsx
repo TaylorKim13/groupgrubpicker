@@ -98,20 +98,16 @@ export function RoomSettingsFields({
           required
           className={input}
           min={Number(fromKm(0.5, unit).toFixed(6))}
-          max={Number(fromKm(40, unit).toFixed(6))}
+          max={100}
           step="any"
-          value={Number(fromKm(value.radiusKm, unit).toFixed(6))}
+          value={
+            Number.isFinite(value.radiusKm) ? Number(fromKm(value.radiusKm, unit).toFixed(6)) : ""
+          }
           onChange={(e) => {
             const n = e.target.valueAsNumber;
-            if (Number.isFinite(n)) {
-              const radiusKm =
-                n === Number(fromKm(40, unit).toFixed(6))
-                  ? 40
-                  : n === Number(fromKm(0.5, unit).toFixed(6))
-                    ? 0.5
-                    : toKm(n, unit);
-              onChange({ radiusKm });
-            }
+            if (n > 100) return;
+            const radiusKm = n === Number(fromKm(0.5, unit).toFixed(6)) ? 0.5 : toKm(n, unit);
+            onChange({ radiusKm });
           }}
         />
       </label>
@@ -164,10 +160,9 @@ export function RoomSettingsFields({
           min={5}
           max={180}
           step={1}
-          value={value.maxWait}
+          value={Number.isFinite(value.maxWait) ? value.maxWait : ""}
           onChange={(e) => {
-            if (Number.isFinite(e.target.valueAsNumber))
-              onChange({ maxWait: e.target.valueAsNumber });
+            onChange({ maxWait: e.target.valueAsNumber });
           }}
         />
       </label>

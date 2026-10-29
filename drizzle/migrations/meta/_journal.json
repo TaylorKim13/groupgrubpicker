@@ -50,6 +50,20 @@
       "when": 1793131200000,
       "tag": "0006_group_creation_clicks",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793134800000,
+      "tag": "0007_dashboard_administrators",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793138400000,
+      "tag": "0008_voting_duration",
+      "breakpoints": true
     }
   ]
 }

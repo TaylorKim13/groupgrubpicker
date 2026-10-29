@@ -13,7 +13,7 @@ const SettingsFields = z.object({
     lng: z.number().min(-180).max(180),
     label: z.string().min(1).max(200),
   }),
-  radiusKm: z.number().min(0.5).max(40),
+  radiusKm: z.number().min(0.5).max(toKm(100, "mi")),
   priceMin: z.number().int().min(1).max(4),
   priceMax: z.number().int().min(1).max(4),
   diets: z.array(z.enum(DIETS as [(typeof DIETS)[number], ...(typeof DIETS)[number][]])),

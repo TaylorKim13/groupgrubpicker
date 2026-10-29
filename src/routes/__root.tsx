@@ -8,10 +8,11 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
-import { Toaster } from "sonner";
+import { ThemeProvider, themeInitScript } from "@/components/ThemeControl";
 import { DistanceProvider } from "@/components/DistanceProvider";
 import { AccountProvider } from "@/components/AccountProvider";
 import { CreationClickTracker } from "@/components/CreationClickTracker";
+import { OfflineGame } from "@/components/OfflineGame";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -114,9 +115,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body>
         {children}
@@ -131,14 +133,16 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <CreationClickTracker />
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <AccountProvider>
-        <DistanceProvider>
-          <Outlet />
-        </DistanceProvider>
-      </AccountProvider>
-      <Toaster position="top-center" richColors />
+      <ThemeProvider>
+        <OfflineGame />
+        <CreationClickTracker />
+        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+        <AccountProvider>
+          <DistanceProvider>
+            <Outlet />
+          </DistanceProvider>
+        </AccountProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }
