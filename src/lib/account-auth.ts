@@ -6,10 +6,14 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 export const optionalAccountAuth = createMiddleware({ type: "function" }).server(
   async ({ next }) => {
     const header = getRequest().headers.get("authorization");
-    if (header === null) return next({ context: { accountUserId: null as string | null } });
-    if (!header.startsWith("Bearer ")) throw new Error("Invalid authorization");
+    const guestContext = { accountUserId: null as string | null };
+    if (header === null || !header.startsWith("Bearer ")) {
+      return next({ context: guestContext });
+    }
     const { data, error } = await supabaseAdmin.auth.getUser(header.slice(7));
-    if (error || !data.user) throw new Error("Please sign in again");
+    // Account linking is optional for room creation. If a saved browser token
+    // has expired, continue as a guest instead of blocking table creation.
+    if (error || !data.user) return next({ context: guestContext });
     return next({ context: { accountUserId: data.user.id as string | null } });
   },
 );

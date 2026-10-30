@@ -3,7 +3,7 @@ import { optionalAccountAuth } from "./account-auth";
 import { RoomCodeSchema, RoomProfileSchema } from "./room-access";
 import { CreationClickSchema } from "./creation-clicks";
 import { createServerFn } from "@tanstack/react-start";
-import { mapsFetch as gmaps } from "./maps.server";
+// import { mapsFetch as gmaps } from "./maps.server";
 import { z } from "zod";
 import { authMember, db, getRoomByCode, hashToken, newCode, newToken } from "./room.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -114,6 +114,15 @@ export const createRoom = createServerFn({ method: "POST" })
         .single();
       if (error) {
         if (error.code === "23505") continue;
+        console.error("[createRoom] Room insert failed", {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        });
+        if (import.meta.env.DEV) {
+          throw new Error(`Could not create your group (${error.code ?? "database error"}): ${error.message}`);
+        }
         throw new Error("Could not create your group. Please try again.");
       }
       try {

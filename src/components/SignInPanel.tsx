@@ -64,8 +64,7 @@ if (mode === "up") {
 
   if (error) throw error;
 }
-        if (error) throw error;
-      }
+
     } catch (err: any) {
       toast.error(err?.message ?? "Could not sign in");
     } finally {
