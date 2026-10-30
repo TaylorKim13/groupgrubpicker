@@ -233,6 +233,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          distance_unit: "mi" | "km"
           avatar: string
           created_at: string
           display_name: string
@@ -240,6 +241,7 @@ export type Database = {
           id: string
         }
         Insert: {
+          distance_unit?: "mi" | "km"
           avatar?: string
           created_at?: string
           display_name?: string
@@ -247,6 +249,7 @@ export type Database = {
           id: string
         }
         Update: {
+          distance_unit?: "mi" | "km"
           avatar?: string
           created_at?: string
           display_name?: string
@@ -416,7 +419,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      save_grub_preferences: {
+        Args: { new_settings: Json; new_unit: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

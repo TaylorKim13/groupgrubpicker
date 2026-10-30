@@ -10,6 +10,20 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
+    "test": "node --test tests/*.test.mjs",
+    "test:migration": "node tests/account-migration.mjs",
+    "test:metrics": "node tests/filter-usage-migration.mjs",
+    "test:abandonment": "node tests/selection-abandonment-migration.mjs",
+    "test:creation-clicks": "node tests/group-creation-clicks-migration.mjs"
+    "build:render": "node scripts/build-render.mjs",
+    "start": "node scripts/start-render.mjs"
+    
+    //    "format": "prettier --write .",
+    "test": "node --test tests/*.test.mjs",
+    "test:migration": "node tests/account-migration.mjs",
+    "test:metrics": "node tests/filter-usage-migration.mjs",
+    "test:abandonment": "node tests/selection-abandonment-migration.mjs",
+    "test:creation-clicks": "node tests/group-creation-clicks-migration.mjs",
     "build:render": "node scripts/build-render.mjs",
     "start": "node scripts/start-render.mjs"
   },
