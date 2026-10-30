@@ -3,9 +3,9 @@ import { ArrowRight, Utensils, Users, Star, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const steps = [
-  { title: 'A table for everyone', text: 'Start a room and invite your friends. A nickname is all anyone needs.', icon: Users },
+  { title: 'A table for everyone', text: 'Start a group and invite your friends. A nickname is all anyone needs.', icon: Users },
   { title: 'Find your kind of food', text: 'The host sets the area and budget. Everyone can suggest one extra restaurant.', icon: Utensils },
-  { title: 'Two picks. One winner.', text: 'Choose a Want for 2 points and a different Could for 1 point. The host reveals the result.', icon: Star },
+  { title: 'Two picks. One winner.', text: 'You get two votes for different restaurants: your top pick is worth 2 points, and your second choice is worth 1 point. The host reveals the result.', icon: Star },
 ];
 export function Onboarding() {
   const [open, setOpen] = useState(false);
