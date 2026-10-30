@@ -15,6 +15,8 @@ import { toast } from "sonner";
 import { ProfilePicker } from "@/components/ProfilePicker";
 import { RestaurantMap } from "@/components/RestaurantMap";
 import { Reveal } from "@/components/Reveal";
+import { ShareWaitButton } from "@/components/ShareWaitButton";
+import { ShareInviteButton } from "@/components/ShareInviteButton";
 import type { Result } from "@/lib/room.functions";
 import {
   castVote,
@@ -90,13 +92,22 @@ function JoinGate({ code, onJoined }: { code: string; onJoined: (s: Session) => 
             This invite link needs a 6-character room code. Ask your friend for a new link.
           </p>
         )}
+
+        {validCode && (
+          <div className="mb-5">
+            <ShareInviteButton code={code} />
+          </div>
+        )}
+
         <p className="mb-4 text-sm text-muted-foreground">
           No account needed. Choose a nickname and join.
         </p>
+
         <form
           onSubmit={async (e) => {
             e.preventDefault();
             if (busy || !validCode || !nickname.trim()) return;
+
             setBusy(true);
             try {
               const seat = await join({
@@ -222,8 +233,7 @@ function TopBar({ s, onLeave }: { s: State; onLeave: () => void }) {
           {phase}
         </span>
       </div>
-      <div className="flex min-w-0 flex-wrap items-center gap-3">
-        <ThemeControl />
+      <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={onLeave}
           className="rounded-lg border-2 bg-background px-3 py-2 text-sm font-bold"
@@ -231,6 +241,17 @@ function TopBar({ s, onLeave }: { s: State; onLeave: () => void }) {
           ← Back
         </button>
         <RoomInvite code={s.code} />
+        <span className="font-display text-3xl tracking-[0.25em]">{s.code}</span>
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(link);
+            toast.success("Invite link copied");
+          }}
+          className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground chunky"
+        >
+          Copy invite link
+        </button>
+        <ShareInviteButton code={s.code} />
       </div>
     </header>
   );
@@ -477,10 +498,14 @@ function HostSettings({
   const [st, setSt] = useState<RoomSettings>(s.settings);
   const [dirty, setDirty] = useState(false);
   const unit = useDistanceUnit();
+  const [step, setStep] = useState(0);
+  const steps = ["Where", "Price & food", "Table rules"];
+
   const set = (p: Partial<RoomSettings>) => {
     setSt((current) => ({ ...current, ...p }));
     setDirty(true);
   };
+
   useEffect(() => {
     if (!dirty) setSt(s.settings);
   }, [s.settings, dirty]);
@@ -515,12 +540,234 @@ function HostSettings({
   return (
     <div className="space-y-5 rounded-2xl bg-card p-5 chunky">
       <h2 className="text-xl font-extrabold">Host controls</h2>
-      <RoomSettingsFields
-        value={st}
-        onChange={set}
-        unit={unit}
-        geocode={(address) => geo({ data: { ...session, address } })}
-      />
+      <div className="flex flex-wrap gap-1.5 text-xs font-bold">
+        <span className="rounded-full border-2 bg-background px-2.5 py-0.5">
+          📍 {st.center.label.split(",")[0]} · {st.radiusKm} km
+        </span>
+        <span className="rounded-full border-2 bg-background px-2.5 py-0.5">
+          {priceLabel(st.priceMin)}–{priceLabel(st.priceMax)} · ≤{st.maxWait} min
+        </span>
+        {st.diets.length > 0 && (
+          <span className="rounded-full border-2 bg-background px-2.5 py-0.5">
+            {st.diets.join(", ")}
+          </span>
+        )}
+        <span className="rounded-full border-2 bg-background px-2.5 py-0.5">
+          {st.visibility === "public" ? "Public" : "Private"} ·{" "}
+          {st.anonymous ? "Secret votes" : "Open votes"}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-3 gap-1" role="tablist">
+        {steps.map((t, i) => (
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            aria-selected={step === i}
+            onClick={() => setStep(i)}
+            className={`rounded-lg border-2 px-1 py-2 text-xs font-extrabold ${
+              step === i ? "bg-primary text-primary-foreground" : "bg-background"
+            }`}
+          >
+            {i + 1}. {t}
+          </button>
+        ))}
+      </div>
+
+      {step === 0 && (
+        <>
+          <div>
+            <label className="text-xs font-bold uppercase">Search center</label>
+            <p className="text-sm text-muted-foreground">{st.center.label}</p>
+            <form
+              className="mt-2 flex gap-2"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                try {
+                  set({ center: await geo({ data: { ...session, address: addr } }) });
+                  setAddr("");
+                } catch (err: any) {
+                  toast.error(err.message);
+                }
+              }}
+            >
+              <input
+                value={addr}
+                onChange={(e) => setAddr(e.target.value)}
+                placeholder="Address or neighborhood"
+                className="min-w-0 flex-1 rounded-lg border-2 bg-background px-3 py-2 text-sm"
+              />
+              <button
+                disabled={addr.trim().length < 2}
+                className="rounded-lg bg-secondary px-3 text-sm font-bold disabled:opacity-50"
+              >
+                Set
+              </button>
+            </form>
+            <button
+              type="button"
+              className="mt-1 text-xs underline"
+              onClick={() =>
+                navigator.geolocation?.getCurrentPosition(
+                  (p) =>
+                    set({
+                      center: {
+                        lat: p.coords.latitude,
+                        lng: p.coords.longitude,
+                        label: "My location",
+                      },
+                    }),
+                  () => toast.error("Couldn't get your location"),
+                )
+              }
+            >
+              Use my location
+            </button>
+          </div>
+
+          <div>
+            <label className="text-xs font-bold uppercase">
+              Radius: {st.radiusKm} km
+            </label>
+            <Slider
+              className="mt-3"
+              min={0.5}
+              max={20}
+              step={0.5}
+              value={[st.radiusKm]}
+              onValueChange={([v]) => set({ radiusKm: v ?? 5 })}
+            />
+          </div>
+        </>
+      )}
+
+      {step === 1 && (
+        <>
+          <div>
+            <label className="text-xs font-bold uppercase">Price range</label>
+            <div className="mt-2 grid grid-cols-4 gap-1">
+              {[1, 2, 3, 4].map((p) => {
+                const on = p >= st.priceMin && p <= st.priceMax;
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => {
+                      if (p < st.priceMin) set({ priceMin: p });
+                      else if (p > st.priceMax) set({ priceMax: p });
+                      else if (p === st.priceMin && p < st.priceMax)
+                        set({ priceMin: p + 1 });
+                      else if (p === st.priceMax && p > st.priceMin)
+                        set({ priceMax: p - 1 });
+                    }}
+                    className={`rounded-md border-2 py-1.5 text-sm font-bold ${
+                      on ? "bg-primary text-primary-foreground" : "bg-background"
+                    }`}
+                  >
+                    {priceLabel(p)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-bold uppercase">
+              Dietary / allergy needs
+            </label>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {DIETS.map((d) => {
+                const on = st.diets.includes(d);
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() =>
+                      set({
+                        diets: on
+                          ? st.diets.filter((x) => x !== d)
+                          : [...st.diets, d],
+                      })
+                    }
+                    className={`rounded-full border-2 px-2.5 py-0.5 text-xs font-bold ${
+                      on ? "bg-secondary" : "bg-background"
+                    }`}
+                  >
+                    {d}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-bold uppercase">
+              Max wait: {st.maxWait} min
+            </label>
+            <Slider
+              className="mt-3"
+              min={5}
+              max={120}
+              step={5}
+              value={[st.maxWait]}
+              onValueChange={([v]) => set({ maxWait: v ?? 60 })}
+            />
+          </div>
+        </>
+      )}
+
+      {step === 2 && (
+        <>
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-bold">
+              Public lobby
+              <span className="block text-xs font-normal text-muted-foreground">
+                Anyone can find and join from the start screen
+              </span>
+            </span>
+            <Switch
+              checked={st.visibility === "public"}
+              onCheckedChange={(c) =>
+                set({ visibility: c ? "public" : "private" })
+              }
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-bold">Anonymous voting</span>
+            <Switch
+              checked={st.anonymous}
+              onCheckedChange={(c) => set({ anonymous: c })}
+            />
+          </div>
+        </>
+      )}
+
+      <div className="flex justify-between">
+        <button
+          type="button"
+          disabled={step === 0}
+          onClick={() => setStep(step - 1)}
+          className="text-sm font-bold underline disabled:opacity-30"
+        >
+          ← Back
+        </button>
+        {step < 2 ? (
+          <button
+            type="button"
+            onClick={() => setStep(step + 1)}
+            className="rounded-lg bg-secondary px-4 py-1.5 text-sm font-extrabold chunky"
+          >
+            Next →
+          </button>
+        ) : (
+          <span className="text-sm font-bold">
+            All set — open voting when ready
+          </span>
+        )}
+      </div>
+
       {saveError ? (
         <p role="alert" className="text-sm text-destructive">
           {saveError}
@@ -528,6 +775,7 @@ function HostSettings({
       ) : (
         dirty && <p className="text-xs text-muted-foreground">Saving...</p>
       )}
+
       {user && (
         <div className="flex flex-wrap gap-2">
           <Button
@@ -540,7 +788,9 @@ function HostSettings({
                 await qc.invalidateQueries({ queryKey: ["account", user.id] });
                 toast.success("Hosting preferences saved");
               } catch (e) {
-                toast.error(e instanceof Error ? e.message : "Could not save preferences");
+                toast.error(
+                  e instanceof Error ? e.message : "Could not save preferences",
+                );
               } finally {
                 setPresetBusy(false);
               }
@@ -548,6 +798,7 @@ function HostSettings({
           >
             Save as my defaults
           </Button>
+
           <Button
             variant="outline"
             disabled={dirty || presetBusy}
@@ -558,7 +809,9 @@ function HostSettings({
                 refresh();
                 toast.success("Saved defaults applied");
               } catch (e) {
-                toast.error(e instanceof Error ? e.message : "Could not apply preferences");
+                toast.error(
+                  e instanceof Error ? e.message : "Could not apply preferences",
+                );
               } finally {
                 setPresetBusy(false);
               }
@@ -735,6 +988,9 @@ function RestaurantCard({
           {tally.could.length > 0 && <>· Could: {tally.could.join(" ")}</>}
         </p>
       )}
+      <div className="mt-3">
+        <ShareWaitButton restaurant={r} />
+      </div>
       {voting && (
         <div className="mt-3 grid grid-cols-2 gap-2">
           <button

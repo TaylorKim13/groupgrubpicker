@@ -9,16 +9,20 @@ import { loadEnv, type ConfigEnv } from "vite";
 
 // Public (publishable) backend settings used only when the build has no .env,
 // so the published site can always reach the backend.
-const FALLBACK_URL = "https://iiuuvojznpiteowwhcch.supabase.co";
-const FALLBACK_KEY = "sb_publishable_4NUKvuAlWTJU33zujaUK3g_VuOgJ9Rh";
+const FALLBACK_URL = "https://gcowxljjzmxwavhklyfu.supabase.co";
+const FALLBACK_KEY = "sb_publishable_GyylmSi6LnrGH5-q5jDUaA_hABYLMYg";
+
 export default (configEnv: ConfigEnv) => {
   const env = loadEnv(configEnv.mode, process.cwd(), "VITE_");
   const define: Record<string, string> = {};
-  if (!env["VITE_SUPABASE_URL"])
-    define["import.meta.env.VITE_SUPABASE_URL"] = JSON.stringify(FALLBACK_URL);
-  if (!env["VITE_SUPABASE_PUBLISHABLE_KEY"])
-    define["import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY"] = JSON.stringify(FALLBACK_KEY);
 
+  if (!env["VITE_SUPABASE_URL"]) {
+    define["import.meta.env.VITE_SUPABASE_URL"] = JSON.stringify(FALLBACK_URL);
+  }
+  if (!env["VITE_SUPABASE_PUBLISHABLE_KEY"]) {
+    define["import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY"] =
+      JSON.stringify(FALLBACK_KEY);
+  }
   return defineConfig({
     tanstackStart: {
       // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).

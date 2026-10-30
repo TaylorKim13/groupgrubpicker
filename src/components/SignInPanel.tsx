@@ -1,23 +1,27 @@
-import { useState } from "react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { lovable } from "@/integrations/lovable";
-import { supabase } from "@/integrations/supabase/client";
+import { useState } from 'react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { lovable } from '@/integrations/lovable';
+import { supabase } from '@/integrations/supabase/client';
+import { Eye, EyeOff } from 'lucide-react';
 
 export function SignInPanel() {
   const [busy, setBusy] = useState(false);
-  const [mode, setMode] = useState<"in" | "up">("in");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [mode, setMode] = useState<'in' | 'up'>('in');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [sent, setSent] = useState(false);
 
   async function social(provider: "google" | "microsoft") {
     setBusy(true);
     try {
-      const result = await lovable.auth.signInWithOAuth(provider, {
-        redirect_uri: window.location.origin + "/account",
-      });
+      const result = import.meta.env['VITE_AUTH_MODE'] === 'supabase'
+        ? await supabase.auth.signInWithOAuth({
+            provider: provider === 'microsoft' ? 'azure' : 'google',
+            options: { redirectTo: window.location.origin + '/account', scopes: 'email' },
+          })
+        : await lovable.auth.signInWithOAuth(provider, { redirect_uri: window.location.origin + '/account' });
       if (result.error) throw result.error;
     } catch {
       toast.error("Could not sign in. Please try again.");
@@ -29,21 +33,37 @@ export function SignInPanel() {
   async function withEmail(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
+    const normalizedEmail = email.trim().toLowerCase();
     try {
-      if (mode === "up") {
-        const { data, error } = await supabase.auth.signUp({
-          email: email.trim(),
-          password,
-          options: { emailRedirectTo: window.location.origin + "/account" },
-        });
-        if (error) throw error;
-        if (data.session) {
-          toast.success("Account created. You're signed in!");
-        } else {
-          setSent(true);
-        }
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+if (mode === "up") {
+  const { data, error } = await supabase.auth.signUp({
+    email: normalizedEmail,
+    password,
+    options: {
+      emailRedirectTo: window.location.origin + "/account",
+    },
+  });
+
+  if (error) throw error;
+
+  if (data.user && data.user.identities?.length === 0) {
+    toast.error("An account with this email already exists. Try signing in.");
+    return;
+  }
+
+  if (data.session) {
+    toast.success("Account created. You're signed in!");
+  } else {
+    setSent(true);
+  }
+} else {
+  const { error } = await supabase.auth.signInWithPassword({
+    email: normalizedEmail,
+    password,
+  });
+
+  if (error) throw error;
+}
         if (error) throw error;
       }
     } catch (err: any) {
@@ -88,26 +108,30 @@ export function SignInPanel() {
           aria-label="Email"
           className="w-full rounded-lg border-2 bg-card px-4 py-3"
         />
-        <input
-          type={showPassword ? "text" : "password"}
-          required
-          minLength={6}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Password"
-          aria-label="Password"
-          autoComplete={mode === "in" ? "current-password" : "new-password"}
-          className="w-full rounded-lg border-2 bg-card px-4 py-3"
-        />
-        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+
+        <div className="relative">
           <input
-            type="checkbox"
-            checked={showPassword}
-            onChange={(e) => setShowPassword(e.target.checked)}
-            className="h-4 w-4 accent-primary"
+            type={showPassword ? "text" : "password"}
+            required
+            minLength={6}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            aria-label="Password"
+            autoComplete={mode === "in" ? "current-password" : "new-password"}
+            className="w-full rounded-lg border-2 bg-card px-4 py-3 pr-12"
           />
-          Show password
-        </label>
+          <button
+            type="button"
+            onClick={() => setShowPassword((visible) => !visible)}
+            aria-label={showPassword ? "Hide password" : "Show password"}
+            aria-pressed={showPassword}
+            className="absolute inset-y-0 right-0 flex items-center px-4 text-muted-foreground hover:text-foreground"
+          >
+            {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
+          </button>
+        </div>
+
         <Button type="submit" variant="outline" className="w-full" disabled={busy}>
           {mode === "in" ? "Sign in with email" : "Create account"}
         </Button>

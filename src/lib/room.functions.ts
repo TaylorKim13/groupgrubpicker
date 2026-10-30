@@ -3,6 +3,7 @@ import { optionalAccountAuth } from "./account-auth";
 import { RoomCodeSchema, RoomProfileSchema } from "./room-access";
 import { CreationClickSchema } from "./creation-clicks";
 import { createServerFn } from "@tanstack/react-start";
+import { mapsFetch as gmaps } from "./maps.server";
 import { z } from "zod";
 import { authMember, db, getRoomByCode, hashToken, newCode, newToken } from "./room.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -317,6 +318,7 @@ export async function gmaps(path: string, init: RequestInit & { fieldMask?: stri
   return result;
 }
 
+// ---------- Google Maps ----------
 export const geocodeCenter = createServerFn({ method: "POST" })
   .inputValidator((d) => Auth.extend({ address: z.string().trim().min(2).max(200) }).parse(d))
   .handler(async ({ data }) => {
