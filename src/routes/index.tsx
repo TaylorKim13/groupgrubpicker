@@ -71,7 +71,7 @@ function Home() {
       </header>
       <div className="pt-12 pb-8"><p className="text-sm font-bold uppercase text-primary">Good food. Group decision.</p><h1 className="mt-3 text-4xl font-extrabold leading-tight">{mode ? 'Who’s coming to the table?' : 'Where are we eating?'}</h1></div>
       {!mode ? <section className="space-y-4">
-        <Button className="h-auto w-full justify-between whitespace-normal rounded-lg px-6 py-6 text-left text-xl font-bold chunky" onClick={() => setMode('host')}><span className="flex items-center gap-3"><Plus />Start a new table</span><ArrowRight /></Button>
+        <Button className="h-auto w-full justify-between whitespace-normal rounded-lg px-6 py-6 text-left text-xl font-bold chunky" onClick={() => setMode('host')}><span className="flex items-center gap-3"><Plus />Start a new group</span><ArrowRight /></Button>
         <Button variant="secondary" className="h-auto w-full justify-between whitespace-normal rounded-lg px-6 py-6 text-left text-xl font-bold chunky" onClick={() => setMode('join')}><span className="flex items-center gap-3"><Users />Join friends</span><ArrowRight /></Button>
       </section> : <section>
         <Button variant="ghost" className="mb-4" onClick={() => setMode(null)}><ArrowLeft />Back</Button>
