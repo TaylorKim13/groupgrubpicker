@@ -170,6 +170,7 @@ function AccountPage() {
                 <AccountSettings
                   user={user}
                   profile={account.data.profile}
+                  usernameAvailable={account.data.usernameAvailable}
                   refresh={() => account.refetch()}
                   leave={leave}
                 />

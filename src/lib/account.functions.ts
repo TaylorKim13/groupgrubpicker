@@ -16,12 +16,25 @@ import {
 export const getAccount = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data: profile, error } = await context.supabase
+    let { data: profile, error } = await context.supabase
       .from("profiles")
       .select("display_name, avatar, distance_unit, username")
       .eq("id", context.userId)
       .single();
-    if (error) throw new Error("Could not load your profile");
+    let usernameAvailable = true;
+    // Deployments may receive the app update before the recovery migration.
+    // Keep existing account features working without the optional new column.
+    if (error?.code === "42703" && error.message.includes("username")) {
+      const legacy = await context.supabase
+        .from("profiles")
+        .select("display_name, avatar, distance_unit")
+        .eq("id", context.userId)
+        .single();
+      profile = legacy.data ? { ...legacy.data, username: null } : null;
+      error = legacy.error;
+      usernameAvailable = false;
+    }
+    if (error || !profile) throw new Error("Could not load your profile");
     const { data: preset, error: presetError } = await context.supabase
       .from("preset_filters")
       .select("settings")
@@ -30,6 +43,7 @@ export const getAccount = createServerFn({ method: "GET" })
     if (presetError) throw new Error("Could not load your preferences");
     return {
       profile,
+      usernameAvailable,
       distanceUnit: profile.distance_unit,
       settings: preset ? getHostingPreferences(preset.settings) : null,
     };

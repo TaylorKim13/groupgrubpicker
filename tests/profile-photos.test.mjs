@@ -35,7 +35,7 @@ const account = await load("account.functions.ts", {
   "@/integrations/supabase/auth-middleware": middleware,
   "@/integrations/supabase/client.server": admin,
 });
-const { saveAccount, deleteAccount } = await import(account);
+const { getAccount, saveAccount, deleteAccount } = await import(account);
 const userId = "11111111-1111-4111-8111-111111111111";
 const otherId = "22222222-2222-4222-8222-222222222222";
 const base = "https://example.supabase.co/storage/v1/object/public/profile-photos/";
@@ -96,6 +96,73 @@ function context() {
 }
 const save = (data) =>
   saveAccount({ data: { display_name: "Aaron", avatar: "🍕", ...data }, context: context() });
+
+function accountContext(profileResults, presetError = null) {
+  const selections = [];
+  return {
+    selections,
+    context: {
+      userId,
+      supabase: {
+        from: (table) => ({
+          select: (columns) => ({
+            eq: (column, value) => {
+              assert.equal(value, userId);
+              selections.push({ table, columns, column });
+              return {
+                single: async () => profileResults.shift(),
+                maybeSingle: async () => ({ data: null, error: presetError }),
+              };
+            },
+          }),
+        }),
+      },
+    },
+  };
+}
+
+test("account loads existing preferences and settings before the username migration", async () => {
+  const legacy = { display_name: "Aaron", avatar: "🍕", distance_unit: "mi" };
+  const fixture = accountContext([
+    { data: null, error: { code: "42703", message: "column profiles.username does not exist" } },
+    { data: legacy, error: null },
+  ]);
+  const loaded = await getAccount({ context: fixture.context });
+  assert.deepEqual(loaded.profile, { ...legacy, username: null });
+  assert.equal(loaded.usernameAvailable, false);
+  assert.equal(loaded.distanceUnit, "mi");
+  assert.equal(loaded.settings, null);
+  assert.equal(fixture.selections[1].columns, "display_name, avatar, distance_unit");
+});
+
+test("migrated account retains its username without a fallback query", async () => {
+  const profile = { display_name: "Aaron", avatar: "🍕", distance_unit: "km", username: "aaron" };
+  const fixture = accountContext([{ data: profile, error: null }]);
+  const loaded = await getAccount({ context: fixture.context });
+  assert.deepEqual(loaded.profile, profile);
+  assert.equal(loaded.usernameAvailable, true);
+  assert.equal(fixture.selections.length, 2);
+});
+
+test("account fallback does not mask permission failures, unrelated missing columns, or missing profiles", async () => {
+  for (const error of [
+    { code: "42501", message: "permission denied" },
+    { code: "42703", message: "column profiles.distance_unit does not exist" },
+    { code: "PGRST116", message: "no rows" },
+  ]) {
+    const fixture = accountContext([{ data: null, error }]);
+    await assert.rejects(getAccount({ context: fixture.context }), /Could not load your profile/);
+    assert.equal(fixture.selections.length, 1);
+  }
+  const failedLegacy = accountContext([
+    { data: null, error: { code: "42703", message: "column profiles.username does not exist" } },
+    { data: null, error: { code: "PGRST116", message: "no rows" } },
+  ]);
+  await assert.rejects(
+    getAccount({ context: failedLegacy.context }),
+    /Could not load your profile/,
+  );
+});
 
 test("upload saves a photo URL and changing back to emoji removes the photo", async () => {
   const result = await save({ photo: jpeg });
