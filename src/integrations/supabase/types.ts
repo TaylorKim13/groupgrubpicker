@@ -233,6 +233,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          username: string | null
           distance_unit: "mi" | "km"
           avatar: string
           created_at: string
@@ -241,6 +242,7 @@ export type Database = {
           id: string
         }
         Insert: {
+          username?: string | null
           distance_unit?: "mi" | "km"
           avatar?: string
           created_at?: string
@@ -249,6 +251,7 @@ export type Database = {
           id: string
         }
         Update: {
+          username?: string | null
           distance_unit?: "mi" | "km"
           avatar?: string
           created_at?: string
@@ -419,6 +422,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      resolve_grub_recovery: {
+        Args: { p_kind: string; p_identifier: string; p_requester: string }
+        Returns: string | null
+      }
       save_grub_preferences: {
         Args: { new_settings: Json; new_unit: string }
         Returns: undefined
