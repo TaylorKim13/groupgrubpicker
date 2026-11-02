@@ -18,6 +18,8 @@ import { Reveal } from "@/components/Reveal";
 import { ShareWaitButton } from "@/components/ShareWaitButton";
 import { ShareInviteButton } from "@/components/ShareInviteButton";
 import type { Result } from "@/lib/room.functions";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import {
   castVote,
   kickMember,
@@ -495,6 +497,7 @@ function HostSettings({
   const [presetBusy, setPresetBusy] = useState(false);
   const [saveError, setSaveError] = useState("");
   const geo = useServerFn(geocodeCenter);
+  
   const [addr, setAddr] = useState("");
   const [st, setSt] = useState<RoomSettings>(s.settings);
   const [dirty, setDirty] = useState(false);
