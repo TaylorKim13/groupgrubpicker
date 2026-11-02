@@ -22,11 +22,13 @@ import {
 export function AccountSettings({
   user,
   profile,
+  usernameAvailable = true,
   refresh,
   leave,
 }: {
   user: User;
   profile: { display_name: string; avatar: string; username?: string | null };
+  usernameAvailable?: boolean;
   refresh: () => Promise<unknown>;
   leave: (deleted?: boolean) => Promise<void>;
 }) {
@@ -69,7 +71,7 @@ export function AccountSettings({
                   display_name: nickname,
                   avatar,
                   ...(photo ? { photo } : {}),
-                  ...(username.trim() ? { username } : {}),
+                  ...(usernameAvailable && username.trim() ? { username } : {}),
                 },
               });
               setAvatar(saved.avatar);
@@ -80,25 +82,27 @@ export function AccountSettings({
           }}
         >
           <fieldset disabled={busy || preparingPhoto}>
-            <label className="mb-5 block font-bold">
-              Recovery username
-              <input
-                className={input}
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required={!!profile.username}
-                minLength={3}
-                maxLength={24}
-                pattern="[A-Za-z0-9_]{3,24}"
-                autoComplete="username"
-                autoCapitalize="none"
-                spellCheck={false}
-              />
-              <span className="mt-1 block text-sm font-normal text-muted-foreground">
-                A unique username with 3–24 letters, numbers, or underscores. If you forget your
-                email, use this to request a reset email.
-              </span>
-            </label>
+            {usernameAvailable && (
+              <label className="mb-5 block font-bold">
+                Recovery username
+                <input
+                  className={input}
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  required={!!profile.username}
+                  minLength={3}
+                  maxLength={24}
+                  pattern="[A-Za-z0-9_]{3,24}"
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                />
+                <span className="mt-1 block text-sm font-normal text-muted-foreground">
+                  A unique username with 3–24 letters, numbers, or underscores. If you forget your
+                  email, use this to request a reset email.
+                </span>
+              </label>
+            )}
             <div className="mb-5 space-y-3">
               <h3 className="font-bold">Profile photo</h3>
               <ProfileAvatar
