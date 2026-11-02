@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { RecoveryPanel } from "@/components/RecoveryPanel";
 
 export const Route = createFileRoute("/reset-password")({ component: ResetPassword });
 function ResetPassword() {
@@ -14,9 +15,13 @@ function ResetPassword() {
   const [done, setDone] = useState(false);
   useEffect(() => {
     let active = true;
-    const { data } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY" && active) {
-        sessionStorage.setItem("grub-recovery", "yes");
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT" && active) {
+        sessionStorage.removeItem("grub-recovery");
+        setReady(false);
+      }
+      if (event === "PASSWORD_RECOVERY" && session && active) {
+        sessionStorage.setItem("grub-recovery", session.user.id);
         setReady(true);
         setChecking(false);
       }
@@ -34,7 +39,9 @@ function ResetPassword() {
       const { data: session, error: sessionError } = await supabase.auth.getSession();
       if (active) {
         setReady(
-          !sessionError && !!session.session && sessionStorage.getItem("grub-recovery") === "yes",
+          !sessionError &&
+            !!session.session &&
+            sessionStorage.getItem("grub-recovery") === session.session.user.id,
         );
         setChecking(false);
       }
@@ -62,9 +69,11 @@ function ResetPassword() {
           <p role="alert">
             {error || "This reset link is invalid or expired. Request a new link from sign-in."}
           </p>
-          <Button asChild>
-            <Link to="/account">Back to sign-in</Link>
-          </Button>
+          <RecoveryPanel
+            onBack={() => {
+              window.location.assign("/account");
+            }}
+          />
         </>
       ) : (
         <form

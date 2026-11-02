@@ -28,6 +28,7 @@ const admin = moduleUrl(
 );
 const account = await load("account.functions.ts", {
   zod,
+  "./recovery": await load("recovery.ts", { zod }),
   "./settings": settings,
   "./profile-avatar": avatarsUrl,
   "@tanstack/react-start": rpc,

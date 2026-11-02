@@ -46,6 +46,7 @@ const server = await source("room.server.ts", {
 });
 const shared = {
   zod,
+  "./recovery": await source("recovery.ts", { zod }),
   "@tanstack/react-start": transport,
   "@/integrations/supabase/auth-middleware": middleware,
   "@/integrations/supabase/client.server": database,

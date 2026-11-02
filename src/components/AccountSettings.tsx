@@ -26,11 +26,12 @@ export function AccountSettings({
   leave,
 }: {
   user: User;
-  profile: { display_name: string; avatar: string };
+  profile: { display_name: string; avatar: string; username?: string | null };
   refresh: () => Promise<unknown>;
   leave: (deleted?: boolean) => Promise<void>;
 }) {
   const [nickname, setNickname] = useState(profile.display_name);
+  const [username, setUsername] = useState(profile.username ?? "");
   const [avatar, setAvatar] = useState(profile.avatar);
   const [photo, setPhoto] = useState<string | null>(null);
   const [preparingPhoto, setPreparingPhoto] = useState(false);
@@ -64,7 +65,12 @@ export function AccountSettings({
             e.preventDefault();
             void act(async () => {
               const saved = await save({
-                data: { display_name: nickname, avatar, ...(photo ? { photo } : {}) },
+                data: {
+                  display_name: nickname,
+                  avatar,
+                  ...(photo ? { photo } : {}),
+                  ...(username.trim() ? { username } : {}),
+                },
               });
               setAvatar(saved.avatar);
               setPhoto(null);
@@ -74,6 +80,25 @@ export function AccountSettings({
           }}
         >
           <fieldset disabled={busy || preparingPhoto}>
+            <label className="mb-5 block font-bold">
+              Recovery username
+              <input
+                className={input}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required={!!profile.username}
+                minLength={3}
+                maxLength={24}
+                pattern="[A-Za-z0-9_]{3,24}"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+              />
+              <span className="mt-1 block text-sm font-normal text-muted-foreground">
+                A unique username with 3–24 letters, numbers, or underscores. If you forget your
+                email, use this to request a reset email.
+              </span>
+            </label>
             <div className="mb-5 space-y-3">
               <h3 className="font-bold">Profile photo</h3>
               <ProfileAvatar

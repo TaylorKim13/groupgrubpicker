@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { UsernameSchema } from "./recovery";
 import { Buffer } from "node:buffer";
 import {
   AvatarSchema,
@@ -17,7 +18,7 @@ export const getAccount = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data: profile, error } = await context.supabase
       .from("profiles")
-      .select("display_name, avatar, distance_unit")
+      .select("display_name, avatar, distance_unit, username")
       .eq("id", context.userId)
       .single();
     if (error) throw new Error("Could not load your profile");
@@ -42,6 +43,7 @@ export const saveAccount = createServerFn({ method: "POST" })
         display_name: z.string().trim().min(1).max(24),
         avatar: AvatarSchema,
         photo: PhotoUploadSchema.optional(),
+        username: UsernameSchema.optional(),
       })
       .parse(input),
   )
@@ -85,11 +87,19 @@ export const saveAccount = createServerFn({ method: "POST" })
     }
     const { error } = await context.supabase
       .from("profiles")
-      .update({ display_name: data.display_name, avatar })
+      .update({
+        display_name: data.display_name,
+        avatar,
+        ...(data.username ? { username: data.username } : {}),
+      })
       .eq("id", context.userId);
     if (error) {
       if (uploaded) await photos.remove([uploaded]);
-      throw new Error("Could not save your profile");
+      throw new Error(
+        error.code === "23505"
+          ? "That username is already in use. Choose another."
+          : "Could not save your profile",
+      );
     }
     const oldPath = profilePhotoPath(previous.avatar, context.userId);
     if (oldPath && previous.avatar !== avatar) {

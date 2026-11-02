@@ -14,7 +14,8 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     void supabase.auth.getUser().then(({ data }) => setUser(data.user));
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (!["SIGNED_IN", "SIGNED_OUT", "USER_UPDATED", "PASSWORD_RECOVERY"].includes(event)) return;
-      if (event === "PASSWORD_RECOVERY") sessionStorage.setItem("grub-recovery", "yes");
+      if (event === "PASSWORD_RECOVERY" && session)
+        sessionStorage.setItem("grub-recovery", session.user.id);
       if (event === "SIGNED_OUT") sessionStorage.removeItem("grub-recovery");
       setUser(session?.user ?? null);
       void router.invalidate();
