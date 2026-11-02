@@ -495,6 +495,7 @@ function HostSettings({
   const [presetBusy, setPresetBusy] = useState(false);
   const [saveError, setSaveError] = useState("");
   const geo = useServerFn(geocodeCenter);
+  const [addr, setAddr] = useState("");
   const [st, setSt] = useState<RoomSettings>(s.settings);
   const [dirty, setDirty] = useState(false);
   const unit = useDistanceUnit();
