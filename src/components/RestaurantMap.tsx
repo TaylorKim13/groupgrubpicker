@@ -1,3 +1,5 @@
+import { useDistanceUnit } from "@/lib/distance-context";
+import { formatDistance } from "@/lib/settings";
 import { useEffect, useRef, useState } from "react";
 import { distanceKm, kmToMiles, priceLabel, type Center, type Restaurant } from "@/lib/restaurants";
 
@@ -61,6 +63,7 @@ export function RestaurantMap({
   highlight?: string | null;
   onSelect?: (r: Restaurant) => void;
 }) {
+  const unit = useDistanceUnit();
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<any>(null);
   const overlays = useRef<any[]>([]);
@@ -102,7 +105,14 @@ export function RestaurantMap({
         map: m,
         position: center,
         title: "Search center",
-        icon: { path: g.SymbolPath.CIRCLE, scale: 9, fillColor: "#222", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 3 },
+        icon: {
+          path: g.SymbolPath.CIRCLE,
+          scale: 9,
+          fillColor: "#222",
+          fillOpacity: 1,
+          strokeColor: "#fff",
+          strokeWeight: 3,
+        },
         zIndex: 999,
       }),
       new g.Circle({
@@ -148,14 +158,13 @@ export function RestaurantMap({
       restaurantMarkers.current.set(r.id, mk);
       restaurantIcons.current.set(r.id, { normal: iconFor(false), selected: iconFor(true) });
       mk.addListener("click", () => {
-        const d = distanceKm(center, r).toFixed(1);
+        const d = formatDistance(distanceKm(center, r), unit);
         const div = document.createElement("div");
-        div.style.cssText = "font-family:Figtree,sans-serif;min-width:160px";
+        div.style.cssText = "font-family:Figtree,sans-serif;min-width:160px;color:#222";
         const h = document.createElement("strong");
         h.textContent = r.name;
         const p = document.createElement("div");
-        const price = r.priceUnknown ? "Price unknown" : priceLabel(r.price);
-        p.textContent = `${r.cuisine} · ${price} · ${kmToMiles(Number(d)).toFixed(1)} mi`;
+        p.textContent = `${r.cuisine} · ${r.priceUnknown ? "Price unknown" : priceLabel(r.price)} · ${d} · ${r.google ? "Wait unknown" : `~${r.wait} min wait`}`;
         div.append(h, p);
         if (r.websiteUri) {
           const website = document.createElement("a");
@@ -194,6 +203,9 @@ export function RestaurantMap({
     });
   }, [ready, highlight, pool]);
 
-  if (err) return <div className="grid h-full place-items-center p-6 text-sm text-muted-foreground">{err}</div>;
+  if (err)
+    return (
+      <div className="grid h-full place-items-center p-6 text-sm text-muted-foreground">{err}</div>
+    );
   return <div ref={el} className="h-full w-full" />;
 }

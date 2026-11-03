@@ -8,8 +8,11 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
-import { Toaster } from "sonner";
-import { AccountProvider } from '@/components/AccountProvider';
+import { ThemeProvider, themeInitScript } from "@/components/ThemeControl";
+import { DistanceProvider } from "@/components/DistanceProvider";
+import { AccountProvider } from "@/components/AccountProvider";
+import { CreationClickTracker } from "@/components/CreationClickTracker";
+import { OfflineGame } from "@/components/OfflineGame";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -80,7 +83,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "GROUP GRUB — decide where to eat, together" },
-      { name: "description", content: "Group voting for where to eat: filters, ranked votes, map, and a winner." },
+      {
+        name: "description",
+        content: "Group voting for where to eat: filters, ranked votes, map, and a winner.",
+      },
       { property: "og:title", content: "GROUP GRUB" },
       { property: "og:description", content: "Group voting for where to eat." },
       { property: "og:type", content: "website" },
@@ -109,9 +115,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body>
         {children}
@@ -126,9 +133,16 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <AccountProvider><Outlet /></AccountProvider>
-      <Toaster position="top-center" richColors />
+      <ThemeProvider>
+        <OfflineGame />
+        <CreationClickTracker />
+        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+        <AccountProvider>
+          <DistanceProvider>
+            <Outlet />
+          </DistanceProvider>
+        </AccountProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

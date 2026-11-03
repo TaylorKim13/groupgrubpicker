@@ -1,0 +1,26 @@
+# Team's existing Supabase database stays in place; no new database is created.
+services:
+  - type: web
+    name: groupgrub-team
+    runtime: node
+    plan: free
+    branch: main
+    buildCommand: bun install --frozen-lockfile && bun run build:render
+    startCommand: node scripts/start-render.mjs
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: 24.22.1
+      - key: BUN_VERSION
+        value: 1.4.4
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false

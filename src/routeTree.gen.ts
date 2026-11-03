@@ -11,6 +11,11 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AccountRouteImport } from './routes/account'
+import { Route as HealthRouteImport } from './routes/health'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as WaitRouteImport } from './routes/wait'
+import { Route as WaitCardDotpngRouteImport } from './routes/wait-card[.]png'
+import { Route as InviteCodeRouteImport } from './routes/invite.$code'
 import { Route as RoomCodeRouteImport } from './routes/room.$code'
 
 const IndexRoute = IndexRouteImport.update({
@@ -23,6 +28,31 @@ const AccountRoute = AccountRouteImport.update({
   path: '/account',
   getParentRoute: () => rootRouteImport,
 } as any)
+const HealthRoute = HealthRouteImport.update({
+  id: '/health',
+  path: '/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WaitRoute = WaitRouteImport.update({
+  id: '/wait',
+  path: '/wait',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WaitCardDotpngRoute = WaitCardDotpngRouteImport.update({
+  id: '/wait-card.png',
+  path: '/wait-card.png',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InviteCodeRoute = InviteCodeRouteImport.update({
+  id: '/invite/$code',
+  path: '/invite/$code',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RoomCodeRoute = RoomCodeRouteImport.update({
   id: '/room/$code',
   path: '/room/$code',
@@ -32,30 +62,75 @@ const RoomCodeRoute = RoomCodeRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
+  '/health': typeof HealthRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/wait': typeof WaitRoute
+  '/wait-card.png': typeof WaitCardDotpngRoute
+  '/invite/$code': typeof InviteCodeRoute
   '/room/$code': typeof RoomCodeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
+  '/health': typeof HealthRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/wait': typeof WaitRoute
+  '/wait-card.png': typeof WaitCardDotpngRoute
+  '/invite/$code': typeof InviteCodeRoute
   '/room/$code': typeof RoomCodeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
+  '/health': typeof HealthRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/wait': typeof WaitRoute
+  '/wait-card.png': typeof WaitCardDotpngRoute
+  '/invite/$code': typeof InviteCodeRoute
   '/room/$code': typeof RoomCodeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/account' | '/room/$code'
+  fullPaths:
+    | '/'
+    | '/account'
+    | '/health'
+    | '/reset-password'
+    | '/wait'
+    | '/wait-card.png'
+    | '/invite/$code'
+    | '/room/$code'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/account' | '/room/$code'
-  id: '__root__' | '/' | '/account' | '/room/$code'
+  to:
+    | '/'
+    | '/account'
+    | '/health'
+    | '/reset-password'
+    | '/wait'
+    | '/wait-card.png'
+    | '/invite/$code'
+    | '/room/$code'
+  id:
+    | '__root__'
+    | '/'
+    | '/account'
+    | '/health'
+    | '/reset-password'
+    | '/wait'
+    | '/wait-card.png'
+    | '/invite/$code'
+    | '/room/$code'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AccountRoute: typeof AccountRoute
+  HealthRoute: typeof HealthRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
+  WaitRoute: typeof WaitRoute
+  WaitCardDotpngRoute: typeof WaitCardDotpngRoute
+  InviteCodeRoute: typeof InviteCodeRoute
   RoomCodeRoute: typeof RoomCodeRoute
 }
 
@@ -75,6 +150,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccountRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/health': {
+      id: '/health'
+      path: '/health'
+      fullPath: '/health'
+      preLoaderRoute: typeof HealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/wait': {
+      id: '/wait'
+      path: '/wait'
+      fullPath: '/wait'
+      preLoaderRoute: typeof WaitRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/wait-card.png': {
+      id: '/wait-card.png'
+      path: '/wait-card.png'
+      fullPath: '/wait-card.png'
+      preLoaderRoute: typeof WaitCardDotpngRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invite/$code': {
+      id: '/invite/$code'
+      path: '/invite/$code'
+      fullPath: '/invite/$code'
+      preLoaderRoute: typeof InviteCodeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/room/$code': {
       id: '/room/$code'
       path: '/room/$code'
@@ -88,6 +198,11 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccountRoute: AccountRoute,
+  HealthRoute: HealthRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
+  WaitRoute: WaitRoute,
+  WaitCardDotpngRoute: WaitCardDotpngRoute,
+  InviteCodeRoute: InviteCodeRoute,
   RoomCodeRoute: RoomCodeRoute,
 }
 export const routeTree = rootRouteImport

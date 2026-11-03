@@ -15,6 +15,55 @@
       "when": 1793047094455,
       "tag": "0001_friends_and_crews",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793116800000,
+      "tag": "0002_account_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793120400000,
+      "tag": "0003_profile_photos",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793124000000,
+      "tag": "0004_filter_usage_metrics",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793127600000,
+      "tag": "0005_selection_abandonment",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793131200000,
+      "tag": "0006_group_creation_clicks",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793134800000,
+      "tag": "0007_dashboard_administrators",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793138400000,
+      "tag": "0008_voting_duration",
+      "breakpoints": true
     }
   ]
 }
