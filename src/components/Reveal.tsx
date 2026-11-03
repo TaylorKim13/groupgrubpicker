@@ -83,7 +83,6 @@ export function Reveal({ result }: { result: Result }) {
   }
   const w = result.winner;
   const directions = `https://www.google.com/maps/dir/?api=1&destination=${w.lat},${w.lng}`;
-  const reserve = `https://www.opentable.com/s?term=${encodeURIComponent(w.name)}&latitude=${w.lat}&longitude=${w.lng}`;
   const max = Math.max(...result.scores.map((s) => s.points), 1);
   return (
     <div className="relative overflow-hidden">
@@ -102,18 +101,14 @@ export function Reveal({ result }: { result: Result }) {
         <p className="font-bold uppercase tracking-widest text-primary">We're eating at</p>
         <h2 className="mt-2 text-5xl font-extrabold md:text-7xl">{w.name}</h2>
         <p className="mt-3 text-lg text-muted-foreground">
-          {w.cuisine} · {priceLabel(w.price)} · ~{w.wait} min wait
+          {w.cuisine} · {w.priceUnknown ? "Price unknown" : priceLabel(w.price)}
           {w.address ? ` · ${w.address}` : ""}
         </p>
+        {w.websiteUri && <a href={w.websiteUri} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm font-semibold underline">Restaurant website</a>}
         <div className="mt-6 flex flex-wrap justify-center gap-3">
           <a href={directions} target="_blank" rel="noreferrer" className="rounded-xl bg-primary px-5 py-3 font-bold text-primary-foreground chunky">
             Get directions
           </a>
-          {!w.fastFood && (
-            <a href={reserve} target="_blank" rel="noreferrer" className="rounded-xl bg-secondary px-5 py-3 font-bold chunky">
-              Reserve a table
-            </a>
-          )}
         </div>
       </div>
       <div className="relative z-10 mx-auto mt-10 max-w-xl rounded-2xl bg-card p-5 chunky">

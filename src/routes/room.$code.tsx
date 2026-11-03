@@ -3,10 +3,12 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { ArrowLeft } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { ProfilePicker } from "@/components/ProfilePicker";
 import { RestaurantMap } from "@/components/RestaurantMap";
+import { GooglePopularTimes } from "@/components/GooglePopularTimes";
 import { Reveal } from "@/components/Reveal";
 import type { Result } from "@/lib/room.functions";
 import {
@@ -20,7 +22,7 @@ import {
   startVoting,
   updateSettings,
 } from "@/lib/room.functions";
-import { AVATARS, DIETS, distanceKm, priceLabel, type Restaurant, type RoomSettings } from "@/lib/restaurants";
+import { AVATARS, DIETS, distanceKm, kmToMiles, milesToKm, priceLabel, type Restaurant, type RoomSettings } from "@/lib/restaurants";
 import { clearSession, loadSession, saveSession, type Session } from "@/lib/session";
 import { useAccount } from "@/components/AccountProvider";
 import { useSocial } from "@/components/SocialPanel";
@@ -164,7 +166,7 @@ function TopBar({ s, onLeave }: { s: State; onLeave: () => void }) {
           onClick={onLeave}
           className="rounded-lg border-2 bg-background px-3 py-2 text-sm font-bold"
         >
-          ← Back
+          <ArrowLeft /> Back
         </button>
         <span className="font-display text-3xl tracking-[0.25em]">{s.code}</span>
         <button
@@ -293,9 +295,9 @@ function SettingsSummary({ settings: st }: { settings: RoomSettings }) {
     <div className="rounded-2xl bg-card p-5 text-sm chunky">
       <h2 className="mb-2 text-xl font-extrabold">House rules</h2>
       <p>📍 {st.center.label}</p>
-      <p>📏 Within {st.radiusKm} km</p>
+      <p>📏 Within {kmToMiles(st.radiusKm).toFixed(1)} mi</p>
       <p>💸 {priceLabel(st.priceMin)}–{priceLabel(st.priceMax)}</p>
-      <p>⏱ Max wait {st.maxWait} min</p>
+      <p>⏱ Google Popular times and wait estimates appear when available</p>
       {st.diets.length > 0 && <p>🥦 {st.diets.join(", ")}</p>}
       <p>{st.anonymous ? "🙈 Anonymous voting" : "👀 Public voting"}</p>
     </div>
@@ -361,8 +363,8 @@ function HostSettings({ s, session, refresh }: { s: State; session: Session; ref
         </button>
       </div>
       <div>
-        <label className="text-xs font-bold uppercase">Radius: {st.radiusKm} km</label>
-        <Slider className="mt-3" min={0.5} max={20} step={0.5} value={[st.radiusKm]} onValueChange={([v]) => set({ radiusKm: v ?? 5 })} />
+        <label className="text-xs font-bold uppercase">Radius: {kmToMiles(st.radiusKm).toFixed(1)} mi</label>
+        <Slider className="mt-3" min={0.5} max={24.5} step={0.5} value={[kmToMiles(st.radiusKm)]} onValueChange={([v]) => set({ radiusKm: milesToKm(v ?? 5) })} />
       </div>
       <div>
         <label className="text-xs font-bold uppercase">Price range</label>
@@ -388,7 +390,8 @@ function HostSettings({ s, session, refresh }: { s: State; session: Session; ref
         </div>
       </div>
       <div>
-        <label className="text-xs font-bold uppercase">Dietary / allergy needs</label>
+        <label className="text-xs font-bold uppercase">Dietary / allergy search hints</label>
+        <p className="mt-1 text-xs text-muted-foreground">Google listings don’t verify allergies or every dietary option. Check with the restaurant.</p>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {DIETS.map((d) => {
             const on = st.diets.includes(d);
@@ -406,8 +409,8 @@ function HostSettings({ s, session, refresh }: { s: State; session: Session; ref
         </div>
       </div>
       <div>
-        <label className="text-xs font-bold uppercase">Max wait: {st.maxWait} min</label>
-        <Slider className="mt-3" min={5} max={120} step={5} value={[st.maxWait]} onValueChange={([v]) => set({ maxWait: v ?? 60 })} />
+        <label className="text-xs font-bold uppercase">Popular times &amp; wait estimates</label>
+        <p className="mt-1 text-sm text-muted-foreground">Select a restaurant marker, then open Google Maps to view popular times and wait estimates when available.</p>
       </div>
       <div className="flex items-center justify-between">
         <span className="text-sm font-bold">Public lobby</span>
@@ -427,8 +430,17 @@ function Pool({ s, session, refresh }: { s: State; session: Session; refresh: ()
   const [want, setWant] = useState<string | null>(s.myVote?.want ?? null);
   const [could, setCould] = useState<string | null>(s.myVote?.could ?? null);
   const [focus, setFocus] = useState<string | null>(null);
+  const [restaurantSearch, setRestaurantSearch] = useState("");
   const voting = s.status === "voting";
   const pool = s.pool;
+  const filteredPool = useMemo(() => {
+    const query = restaurantSearch.trim().toLocaleLowerCase();
+    if (!query) return pool;
+    return pool.filter((restaurant) =>
+      [restaurant.name, restaurant.cuisine, restaurant.address ?? ""]
+        .some((value) => value.toLocaleLowerCase().includes(query)),
+    );
+  }, [pool, restaurantSearch]);
 
   const tally = useMemo(() => {
     const m: Record<string, { want: string[]; could: string[] }> = {};
@@ -484,15 +496,34 @@ function Pool({ s, session, refresh }: { s: State; session: Session; refresh: ()
 
       <div>
         <h2 className="mb-3 text-2xl font-extrabold">
-          The pool <span className="text-base font-normal text-muted-foreground">({pool.length} spots)</span>
+          The pool <span className="text-base font-normal text-muted-foreground">({filteredPool.length === pool.length ? `${pool.length}` : `${filteredPool.length} of ${pool.length}`} spots)</span>
         </h2>
+        {pool.length > 0 && (
+          <label className="mb-3 block">
+            <span className="sr-only">Search restaurants in the pool</span>
+            <input
+              type="search"
+              value={restaurantSearch}
+              onChange={(event) => setRestaurantSearch(event.target.value)}
+              placeholder="Search by restaurant, cuisine, or address"
+              className="w-full rounded-xl border-2 bg-background px-4 py-3 text-base"
+              aria-label="Search restaurants in the pool"
+            />
+          </label>
+        )}
+        <p className="mb-3 text-sm text-muted-foreground">Live restaurant listings from Google. Prices and popular-times data vary by restaurant; verify dietary needs directly with each restaurant.</p>
         {pool.length === 0 && (
           <p className="rounded-xl border-2 border-dashed p-6 text-center text-muted-foreground">
-            Nothing matches these filters. Widen the radius, price, or wait time — or nominate a spot.
+            Nothing matches these filters. Widen the radius or price range — or nominate a spot.
+          </p>
+        )}
+        {pool.length > 0 && filteredPool.length === 0 && (
+          <p className="mb-3 rounded-xl border-2 border-dashed p-6 text-center text-muted-foreground">
+            No restaurants match “{restaurantSearch}”. Try another name, cuisine, or address.
           </p>
         )}
         <div className="grid gap-3 sm:grid-cols-2">
-          {pool.map((r) => (
+          {filteredPool.map((r) => (
             <RestaurantCard
               key={r.id}
               r={r}
@@ -536,14 +567,19 @@ function RestaurantCard({
   return (
     <div
       onMouseEnter={onFocus}
-      className={`rounded-xl border-2 bg-card p-4 transition ${want ? "ring-4 ring-primary" : could ? "ring-4 ring-secondary" : ""} ${focused ? "chunky" : ""}`}
+      className={`min-w-0 rounded-xl border-2 bg-card p-4 transition ${want ? "ring-4 ring-primary" : could ? "ring-4 ring-secondary" : ""} ${focused ? "chunky" : ""}`}
     >
       <div className="flex items-start justify-between gap-2">
-        <div>
+        <div className="min-w-0 flex-1">
           <h3 className="text-lg font-extrabold leading-tight">{r.name}</h3>
           <p className="text-sm text-muted-foreground">
-            {r.cuisine} · {priceLabel(r.price)} · {distanceKm(center, r).toFixed(1)} km · ~{r.wait} min
+            {r.cuisine} · {r.priceUnknown ? "Price unknown" : priceLabel(r.price)} · {kmToMiles(distanceKm(center, r)).toFixed(1)} mi
           </p>
+          {r.address && <p className="mt-1 text-xs text-muted-foreground">{r.address}</p>}
+          {r.websiteUri && <a href={r.websiteUri} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs font-semibold underline">Restaurant website</a>}
+          <GooglePopularTimes
+            placeId={r.google && r.id.startsWith("g_") ? r.id.slice(2) : undefined}
+          />
         </div>
         {r.custom && <span className="shrink-0 rounded bg-success px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary-foreground">by {r.nominatedBy}</span>}
       </div>
@@ -641,6 +677,7 @@ function Nominate({ s, session, refresh }: { s: State; session: Session; refresh
                   <div className="min-w-0">
                     <p className="truncate font-bold">{r.name}</p>
                     <p className="truncate text-xs text-muted-foreground">{r.address}</p>
+                    {r.websiteUri && <a href={r.websiteUri} target="_blank" rel="noreferrer" className="text-xs font-semibold underline">Website</a>}
                   </div>
                   <button onClick={() => submit(r)} className="shrink-0 rounded-md bg-primary px-3 py-1 text-sm font-bold text-primary-foreground">
                     Nominate

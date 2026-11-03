@@ -43,6 +43,20 @@ function Home() {
   const [busy, setBusy] = useState(false);
   const rooms = useQuery({ queryKey: ["public-rooms"], queryFn: () => list(), refetchInterval: 10000 });
 
+  function getHostLocation(): Promise<{ lat: number; lng: number }> {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error("This browser can’t share its location. Enable location access to create a room."));
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        ({ coords }) => resolve({ lat: coords.latitude, lng: coords.longitude }),
+        () => reject(new Error("Location access is needed to create a room. Allow it in your browser and try again.")),
+        { enableHighAccuracy: false, maximumAge: 300000, timeout: 12000 },
+      );
+    });
+  }
+
   async function go(kind: "host" | "join", joinCode?: string) {
     if (!nickname.trim()) {
       toast.error("Pick a nickname first");
@@ -52,7 +66,7 @@ function Home() {
     try {
       const s =
         kind === "host"
-          ? await create({ data: { nickname, avatar } })
+          ? await create({ data: { nickname, avatar, center: await getHostLocation() } })
           : await join({ data: { nickname, avatar, code: (joinCode ?? code).toUpperCase() } });
       saveSession(s);
       navigate({ to: "/room/$code", params: { code: s.code } });
@@ -76,6 +90,7 @@ function Home() {
       </section> : <section>
         <Button variant="ghost" className="mb-4" onClick={() => setMode(null)}><ArrowLeft />Back</Button>
         <ProfilePicker {...{ nickname, setNickname, avatar, setAvatar }} />
+        {mode === 'host' && <p className="mt-4 text-sm text-muted-foreground">New rooms use your current location as the restaurant search center. Allow location access when prompted.</p>}
         {mode === 'join' && <div className="mt-6"><label htmlFor="room-code" className="text-sm font-bold">Room code</label><input id="room-code" value={code} onChange={e => setCode(e.target.value.toUpperCase().slice(0, 6))} placeholder="6-character code" className="mt-2 w-full rounded-lg border-2 bg-card px-4 py-3 font-display text-xl uppercase" /></div>}
         <Button disabled={busy || !nickname.trim() || (mode === 'join' && code.length !== 6)} onClick={() => go(mode)} className="mt-6 h-12 w-full text-lg font-bold chunky">{busy ? 'Setting the table…' : mode === 'host' ? 'Create table' : 'Join the table'}<ArrowRight /></Button>
       </section>}

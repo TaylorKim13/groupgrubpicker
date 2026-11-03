@@ -12,5 +12,5 @@
 ## Architecture rules
 - Room data (rooms, members, nominations, votes) is server-only: no browser table access; every read/write goes through `src/lib/room.functions.ts`, which checks the member's hashed room pass. Why: guests join without accounts and anonymous votes must stay hidden.
 - Clients poll room state every 2.5s instead of realtime. Why: realtime would need public read access to the vote tables.
-- Mock restaurants are placed relative to the host's search center (`src/lib/restaurants.ts`). Why: the curated pool works in any city.
+- Restaurant pools come from Google Places searches centered on the host's search center (`src/lib/room.functions.ts`). Results are cached briefly because room state is polled. Prices, dietary details, and wait times may be missing from Google listings and must be shown as unknown rather than invented.
 - vite.config.ts defines publishable backend URL/key fallbacks when VITE_* env is absent at build. Why: published builds ran without .env and blanked the site.

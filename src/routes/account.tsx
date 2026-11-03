@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+﻿import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useServerFn } from '@tanstack/react-start';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
@@ -12,7 +12,7 @@ import { SocialPanel } from '@/components/SocialPanel';
 import { supabase } from '@/integrations/supabase/client';
 import { getAccount, saveAccount } from '@/lib/account.functions';
 import { getGroupHistory } from '@/lib/room.functions';
-import { priceLabel, type RoomSettings } from '@/lib/restaurants';
+import { kmToMiles, priceLabel, type RoomSettings } from '@/lib/restaurants';
 
 export const Route = createFileRoute('/account')({
  head: () => ({ meta: [{ title: 'Your table — GROUP GRUB' }, { name: 'description', content: 'Your saved dining preferences and group history.' }, { property: 'og:title', content: 'Your table — GROUP GRUB' }, { property: 'og:description', content: 'Your saved dining preferences and group history.' }, { property: 'og:type', content: 'website' }, { name: 'twitter:card', content: 'summary' }] }),
@@ -40,7 +40,7 @@ function AccountPage() {
     {account.isPending ? <p>Loading your profile…</p> : account.error ? <p role="alert">Could not load your profile. <Button variant="link" onClick={() => account.refetch()}>Try again</Button></p> : <><ProfilePicker {...{ nickname, setNickname, avatar, setAvatar }} /><Button className="mt-4" disabled={busy || !nickname.trim()} onClick={async () => { setBusy(true); try { await save({ data: { display_name: nickname, avatar } }); toast.success('Profile saved'); await account.refetch(); } catch { toast.error('Could not save your profile'); } finally { setBusy(false); } }}>Save profile</Button></>}
    </section>
    <SocialPanel userId={user.id} />
-    <section className="py-6 border-b-2"><h2 className="text-2xl font-bold">Saved preferences</h2>{settings?.center ? <p className="mt-3 text-muted-foreground">{settings.center.label} · {settings.radiusKm} km · {priceLabel(settings.priceMin)}–{priceLabel(settings.priceMax)} · {settings.maxWait} min max wait{settings.diets.length ? ` · ${settings.diets.join(', ')}` : ''}</p> : <p className="mt-3 text-muted-foreground">No preferences saved yet. Save them when setting up a room.</p>}</section>
+    <section className="py-6 border-b-2"><h2 className="text-2xl font-bold">Saved preferences</h2>{settings?.center ? <p className="mt-3 text-muted-foreground">{settings.center.label} · {kmToMiles(settings.radiusKm).toFixed(1)} mi · {priceLabel(settings.priceMin)}–{priceLabel(settings.priceMax)}{settings.diets.length ? ` · ${settings.diets.join(', ')}` : ''}</p> : <p className="mt-3 text-muted-foreground">No preferences saved yet. Save them when setting up a room.</p>}</section>
    <section className="py-6"><h2 className="text-2xl font-bold">Past & current groups</h2>
     {history.isPending ? <p className="mt-3">Loading groups…</p> : history.error ? <p role="alert">Could not load groups. <Button variant="link" onClick={() => history.refetch()}>Try again</Button></p> : !history.data?.length ? <p className="mt-3 text-muted-foreground">Your groups will appear here after you join while signed in.</p> : <ul className="mt-4 divide-y-2">{history.data.map((r: any, i: number) => <li key={`${r.code}-${i}`} className="py-4"><div className="flex items-start justify-between gap-3"><div><p className="font-bold">{r.winner ?? r.label ?? r.code}</p><p className="text-sm text-muted-foreground">{r.code} · {new Date(r.joinedAt).toLocaleDateString()} · {r.status === 'closed' ? 'Finished' : r.status === 'voting' ? 'Voting' : 'Getting ready'}</p>{r.votingStartedAt && r.closedAt && <p className="text-xs text-muted-foreground">Decided in {Math.max(1, Math.round((Date.parse(r.closedAt) - Date.parse(r.votingStartedAt)) / 60000))} min</p>}</div><Button asChild variant="outline"><Link to="/room/$code" params={{ code: r.code }}>Open</Link></Button></div></li>)}</ul>}
    </section>
