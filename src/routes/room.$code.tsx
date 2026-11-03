@@ -3,7 +3,6 @@ import { ThemeControl } from "@/components/ThemeControl";
 import { useSelectionTracking } from "@/components/useSelectionTracking";
 import { RoomInvite } from "@/components/RoomInvite";
 import { RoomCodeSchema, normalizeRoomCode } from "@/lib/room-access";
-import { RoomSettingsFields } from "@/components/RoomSettingsFields";
 import { Button } from "@/components/ui/button";
 import { useDistanceUnit } from "@/lib/distance-context";
 import { formatDistance, SettingsSchema } from "@/lib/settings";
@@ -12,8 +11,10 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { ArrowLeft } from "lucide-react";
 import { ProfilePicker } from "@/components/ProfilePicker";
 import { RestaurantMap } from "@/components/RestaurantMap";
+import { GooglePopularTimes } from "@/components/GooglePopularTimes";
 import { Reveal } from "@/components/Reveal";
 import { ShareWaitButton } from "@/components/ShareWaitButton";
 import { ShareInviteButton } from "@/components/ShareInviteButton";
@@ -36,6 +37,7 @@ import {
 } from "@/lib/room.functions";
 import {
   AVATARS,
+  DIETS,
   distanceKm,
   priceLabel,
   type Restaurant,
@@ -44,7 +46,11 @@ import {
 import { clearSession, loadSession, saveSession, type Session } from "@/lib/session";
 import { useAccount } from "@/components/AccountProvider";
 import { useSocial } from "@/components/SocialPanel";
-import { addFriendFromRoom, inviteFriendsToTable, linkSeatToAccount } from "@/lib/social.functions";
+import {
+  addFriendFromRoom,
+  inviteFriendsToTable,
+  linkSeatToAccount,
+} from "@/lib/social.functions";
 
 export const Route = createFileRoute("/room/$code")({
   ssr: false,
@@ -240,7 +246,7 @@ function TopBar({ s, onLeave }: { s: State; onLeave: () => void }) {
           onClick={onLeave}
           className="rounded-lg border-2 bg-background px-3 py-2 text-sm font-bold"
         >
-          ← Back
+          <ArrowLeft /> Back
         </button>
         <RoomInvite code={s.code} />
         <span className="font-display text-3xl tracking-[0.25em]">{s.code}</span>
@@ -835,8 +841,17 @@ function Pool({ s, session, refresh }: { s: State; session: Session; refresh: ()
   const [want, setWant] = useState<string | null>(s.myVote?.want ?? null);
   const [could, setCould] = useState<string | null>(s.myVote?.could ?? null);
   const [focus, setFocus] = useState<string | null>(null);
+  const [restaurantSearch, setRestaurantSearch] = useState("");
   const voting = s.status === "voting";
   const pool = s.pool;
+  const filteredPool = useMemo(() => {
+    const query = restaurantSearch.trim().toLocaleLowerCase();
+    if (!query) return pool;
+    return pool.filter((restaurant) =>
+      [restaurant.name, restaurant.cuisine, restaurant.address ?? ""]
+        .some((value) => value.toLocaleLowerCase().includes(query)),
+    );
+  }, [pool, restaurantSearch]);
 
   const tally = useMemo(() => {
     const m: Record<string, { want: string[]; could: string[] }> = {};
@@ -898,6 +913,30 @@ function Pool({ s, session, refresh }: { s: State; session: Session; refresh: ()
 
       <div>
         <h2 className="mb-3 text-2xl font-extrabold">
+          The pool <span className="text-base font-normal text-muted-foreground">({filteredPool.length === pool.length ? `${pool.length}` : `${filteredPool.length} of ${pool.length}`} spots)</span>
+        </h2>
+        {pool.length > 0 && (
+          <label className="mb-3 block">
+            <span className="sr-only">Search restaurants in the pool</span>
+            <input
+              type="search"
+              value={restaurantSearch}
+              onChange={(event) => setRestaurantSearch(event.target.value)}
+              placeholder="Search by restaurant, cuisine, or address"
+              className="w-full rounded-xl border-2 bg-background px-4 py-3 text-base"
+              aria-label="Search restaurants in the pool"
+            />
+          </label>
+        )}
+        <p className="mb-3 text-sm text-muted-foreground">Live restaurant listings from Google. Prices and popular-times data vary by restaurant; verify dietary needs directly with each restaurant.</p>
+        {pool.length === 0 && (
+          <p className="rounded-xl border-2 border-dashed p-6 text-center text-muted-foreground">
+            Nothing matches these filters. Widen the radius or price range — or nominate a spot.
+          </p>
+        )}
+        {pool.length > 0 && filteredPool.length === 0 && (
+          <p className="mb-3 rounded-xl border-2 border-dashed p-6 text-center text-muted-foreground">
+            No restaurants match “{restaurantSearch}”. Try another name, cuisine, or address.
           The pool{" "}
           <span className="text-base font-normal text-muted-foreground">({pool.length} spots)</span>
         </h2>
@@ -915,7 +954,7 @@ function Pool({ s, session, refresh }: { s: State; session: Session; refresh: ()
           </p>
         )}
         <div className="grid gap-3 sm:grid-cols-2">
-          {pool.map((r) => (
+          {filteredPool.map((r) => (
             <RestaurantCard
               key={r.id}
               r={r}
@@ -960,16 +999,21 @@ function RestaurantCard({
   return (
     <div
       onMouseEnter={onFocus}
-      className={`rounded-xl border-2 bg-card p-4 transition ${want ? "ring-4 ring-primary" : could ? "ring-4 ring-secondary" : ""} ${focused ? "chunky" : ""}`}
+      className={`min-w-0 rounded-xl border-2 bg-card p-4 transition ${want ? "ring-4 ring-primary" : could ? "ring-4 ring-secondary" : ""} ${focused ? "chunky" : ""}`}
     >
       <div className="flex items-start justify-between gap-2">
-        <div>
+        <div className="min-w-0 flex-1">
           <h3 className="text-lg font-extrabold leading-tight">{r.name}</h3>
           <p className="text-sm text-muted-foreground">
             {r.cuisine} · {r.priceUnknown ? "Price unknown" : priceLabel(r.price)} ·{" "}
             {formatDistance(distanceKm(center, r), unit)} ·{" "}
             {r.google ? "Wait unknown" : `~${r.wait} min`}
           </p>
+          {r.address && <p className="mt-1 text-xs text-muted-foreground">{r.address}</p>}
+          {r.websiteUri && <a href={r.websiteUri} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs font-semibold underline">Restaurant website</a>}
+          <GooglePopularTimes
+            placeId={r.google && r.id.startsWith("g_") ? r.id.slice(2) : undefined}
+          />
         </div>
         {r.custom && (
           <span className="shrink-0 rounded bg-success px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary-foreground">
@@ -1092,6 +1136,7 @@ function Nominate({ s, session, refresh }: { s: State; session: Session; refresh
                   <div className="min-w-0">
                     <p className="truncate font-bold">{r.name}</p>
                     <p className="truncate text-xs text-muted-foreground">{r.address}</p>
+                    {r.websiteUri && <a href={r.websiteUri} target="_blank" rel="noreferrer" className="text-xs font-semibold underline">Website</a>}
                   </div>
                   <button
                     onClick={() => submit(r)}

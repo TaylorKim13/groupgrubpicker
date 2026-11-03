@@ -22,6 +22,9 @@ export type Restaurant = {
   custom?: boolean;
   google?: boolean;
   priceUnknown?: boolean;
+  waitUnknown?: boolean;
+  dietInfoUnknown?: boolean;
+  websiteUri?: string;
   nominatedBy?: string;
   nominatedByMemberId?: string;
 };
@@ -41,7 +44,7 @@ export type RoomSettings = {
 
 export const DEFAULT_SETTINGS: RoomSettings = {
   center: { lat: 37.7749, lng: -122.4194, label: "San Francisco, CA" },
-  radiusKm: 5,
+  radiusKm: 8.04672,
   priceMin: 1,
   priceMax: 4,
   diets: [],
@@ -264,6 +267,9 @@ export function distanceKm(a: { lat: number; lng: number }, b: { lat: number; ln
     Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(s));
 }
+
+export const kmToMiles = (km: number) => km * 0.621371;
+export const milesToKm = (miles: number) => miles / 0.621371;
 
 export function mockRestaurants(center: Center): Restaurant[] {
   return MOCK.map(({ dn, de, ...r }) => ({
