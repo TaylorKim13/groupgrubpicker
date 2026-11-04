@@ -4,6 +4,10 @@ import { useSelectionTracking } from "@/components/useSelectionTracking";
 import { RoomInvite } from "@/components/RoomInvite";
 import { RoomCodeSchema, normalizeRoomCode } from "@/lib/room-access";
 import { RoomSettingsFields } from "@/components/RoomSettingsFields";
+import { DiningPanel } from "@/components/DiningPanel";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
+import { roomJoinUrl } from "@/lib/room-access";
 import { Button } from "@/components/ui/button";
 import { useDistanceUnit } from "@/lib/distance-context";
 import { formatDistance, SettingsSchema } from "@/lib/settings";
@@ -34,6 +38,7 @@ import {
 } from "@/lib/room.functions";
 import {
   AVATARS,
+  DIETS,
   distanceKm,
   priceLabel,
   type Restaurant,
@@ -201,6 +206,13 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
       {s.status === "closed" && s.result ? (
         <div className="py-10">
           <Reveal result={s.result} />
+          <DiningPanel
+            session={session}
+            status={s.status}
+            isHost={s.me.isHost}
+            linked={s.me.linked}
+            pool={s.pool}
+          />
         </div>
       ) : (
         <div className="mt-6 grid gap-6 lg:grid-cols-[320px_1fr]">
@@ -213,6 +225,13 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
             {s.status === "lobby" && !s.me.isHost && <SettingsSummary settings={s.settings} />}
           </aside>
           <section className="space-y-6">
+            <DiningPanel
+              session={session}
+              status={s.status}
+              isHost={s.me.isHost}
+              linked={s.me.linked}
+              pool={s.pool}
+            />
             <Pool s={s} session={session} refresh={refresh} />
           </section>
         </div>
@@ -244,7 +263,7 @@ function TopBar({ s, onLeave }: { s: State; onLeave: () => void }) {
         <span className="font-display text-3xl tracking-[0.25em]">{s.code}</span>
         <button
           onClick={() => {
-            navigator.clipboard.writeText(link);
+            navigator.clipboard.writeText(roomJoinUrl(window.location.origin, s.code));
             toast.success("Invite link copied");
           }}
           className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground chunky"
@@ -495,6 +514,7 @@ function HostSettings({
   const [presetBusy, setPresetBusy] = useState(false);
   const [saveError, setSaveError] = useState("");
   const geo = useServerFn(geocodeCenter);
+  const [addr, setAddr] = useState("");
   const [st, setSt] = useState<RoomSettings>(s.settings);
   const [dirty, setDirty] = useState(false);
   const unit = useDistanceUnit();
@@ -627,9 +647,7 @@ function HostSettings({
           </div>
 
           <div>
-            <label className="text-xs font-bold uppercase">
-              Radius: {st.radiusKm} km
-            </label>
+            <label className="text-xs font-bold uppercase">Radius: {st.radiusKm} km</label>
             <Slider
               className="mt-3"
               min={0.5}
@@ -656,10 +674,8 @@ function HostSettings({
                     onClick={() => {
                       if (p < st.priceMin) set({ priceMin: p });
                       else if (p > st.priceMax) set({ priceMax: p });
-                      else if (p === st.priceMin && p < st.priceMax)
-                        set({ priceMin: p + 1 });
-                      else if (p === st.priceMax && p > st.priceMin)
-                        set({ priceMax: p - 1 });
+                      else if (p === st.priceMin && p < st.priceMax) set({ priceMin: p + 1 });
+                      else if (p === st.priceMax && p > st.priceMin) set({ priceMax: p - 1 });
                     }}
                     className={`rounded-md border-2 py-1.5 text-sm font-bold ${
                       on ? "bg-primary text-primary-foreground" : "bg-background"
@@ -673,9 +689,7 @@ function HostSettings({
           </div>
 
           <div>
-            <label className="text-xs font-bold uppercase">
-              Dietary / allergy needs
-            </label>
+            <label className="text-xs font-bold uppercase">Dietary / allergy needs</label>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {DIETS.map((d) => {
                 const on = st.diets.includes(d);
@@ -685,9 +699,7 @@ function HostSettings({
                     type="button"
                     onClick={() =>
                       set({
-                        diets: on
-                          ? st.diets.filter((x) => x !== d)
-                          : [...st.diets, d],
+                        diets: on ? st.diets.filter((x) => x !== d) : [...st.diets, d],
                       })
                     }
                     className={`rounded-full border-2 px-2.5 py-0.5 text-xs font-bold ${
@@ -702,9 +714,7 @@ function HostSettings({
           </div>
 
           <div>
-            <label className="text-xs font-bold uppercase">
-              Max wait: {st.maxWait} min
-            </label>
+            <label className="text-xs font-bold uppercase">Max wait: {st.maxWait} min</label>
             <Slider
               className="mt-3"
               min={5}
@@ -728,18 +738,13 @@ function HostSettings({
             </span>
             <Switch
               checked={st.visibility === "public"}
-              onCheckedChange={(c) =>
-                set({ visibility: c ? "public" : "private" })
-              }
+              onCheckedChange={(c) => set({ visibility: c ? "public" : "private" })}
             />
           </div>
 
           <div className="flex items-center justify-between">
             <span className="text-sm font-bold">Anonymous voting</span>
-            <Switch
-              checked={st.anonymous}
-              onCheckedChange={(c) => set({ anonymous: c })}
-            />
+            <Switch checked={st.anonymous} onCheckedChange={(c) => set({ anonymous: c })} />
           </div>
         </>
       )}
@@ -762,9 +767,7 @@ function HostSettings({
             Next →
           </button>
         ) : (
-          <span className="text-sm font-bold">
-            All set — open voting when ready
-          </span>
+          <span className="text-sm font-bold">All set — open voting when ready</span>
         )}
       </div>
 
@@ -788,9 +791,7 @@ function HostSettings({
                 await qc.invalidateQueries({ queryKey: ["account", user.id] });
                 toast.success("Hosting preferences saved");
               } catch (e) {
-                toast.error(
-                  e instanceof Error ? e.message : "Could not save preferences",
-                );
+                toast.error(e instanceof Error ? e.message : "Could not save preferences");
               } finally {
                 setPresetBusy(false);
               }
@@ -809,9 +810,7 @@ function HostSettings({
                 refresh();
                 toast.success("Saved defaults applied");
               } catch (e) {
-                toast.error(
-                  e instanceof Error ? e.message : "Could not apply preferences",
-                );
+                toast.error(e instanceof Error ? e.message : "Could not apply preferences");
               } finally {
                 setPresetBusy(false);
               }

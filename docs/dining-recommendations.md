@@ -1,0 +1,137 @@
+# Group dining recommendations
+
+## Enable the feature
+
+1. In the team's existing Supabase project, apply
+   `drizzle/migrations/0009_dining_recommendations.sql` through SQL Editor or the
+   established migration process. It adds four private tables, a preference
+   lock, account-deletion cleanup, and a function for claiming generation jobs.
+   No existing restaurant, member, room, nomination, or vote data is rewritten.
+   Then apply `drizzle/migrations/0010_gemini_dining.sql` to allow Gemini's
+   provider label. If you already ran 0009, run only 0010; do not rerun 0009.
+   For refresh and suggestion history, then apply
+   `drizzle/migrations/0011_dining_suggestion_history.sql`. If 0009 and 0010 are
+   already applied, only 0011 is needed. This preserves existing suggestions.
+2. Build/deploy the application. Existing Google Maps server credentials provide
+   the live restaurant pool. Without Maps, suggestions are explicitly labeled
+   demo restaurants.
+3. For AI-assisted explanations later, set these **server-only** variables in
+   local `.env` and in Render's Environment settings, then restart/redeploy:
+
+   ```dotenv
+   GEMINI_API_KEY=your-private-api-key
+   GEMINI_MODEL=gemini-3.5-flash-lite
+   ```
+
+   The key is optional. No key, a timeout, a refusal, invalid output, or an API
+   failure uses the ordinary ranking and its factual explanations. No Gemini
+   request is made without the key. Create a Gemini key at
+   <https://aistudio.google.com/api-keys> using a project marked Free tier.
+   A separate project from your billed Maps project helps keep the AI setup on
+   the free tier. Keep billing disabled for that project and check the current
+   model limits in AI Studio. Quota exhaustion falls back to ordinary rankings.
+   Google may use free-tier content to improve its products; only aggregate
+   approved facts are sent. Do not use `VITE_*` for either credential setting.
+   Existing OpenAI variables are no longer used and can be removed privately.
+
+## How it works
+
+The room's **Suggestions for your table** section offers three candidates from
+the existing pool. Members can expand **Share my dining preferences** to choose
+cuisines, dislikes, a maximum price/distance, required dietary options, familiar
+versus new places, and favorite restaurants. Clicking **Use for this outing**
+includes those preferences. **Stop sharing** excludes them again. Preferences
+lock when voting starts.
+
+The host can click **Refresh suggestions** in the lobby to show up to three
+previously unshown matching restaurants. The previous set moves to the room's
+**History** tab with its original timestamp, reasons, and warnings. History is
+shared with room members and remains viewable after voting closes. Earlier
+suggestions may no longer match changed filters. Up to 100 previous sets are
+shown, newest first. It is suggestion history, not evidence of a visit.
+
+Refresh keeps all dietary, budget, and distance checks. With fewer than three
+unseen matches, it returns only those remaining; once exhausted, the button
+disables and the group can review history or change filters. Changed inputs
+start a fresh candidate search. Refresh remains host-only and locks when voting
+starts. A database version check prevents double clicks from advancing multiple
+rounds, and archiving/publishing runs in one transaction. No additional model
+request is made just by opening History.
+
+Guests can participate without an account. Signed-in members who link their
+seat can remember their preferences and separately opt into history use. Saved
+defaults are presented privately on the next outing but still require sharing
+for that outing. Hosting defaults and personal dining preferences are separate.
+
+The host's open room automatically prepares explanations when the input
+fingerprint changes. Membership, preferences, restaurant candidates, settings,
+consented history/feedback, the date, and AI configuration affect that
+fingerprint. Room data continues polling every 2.5 seconds; generation claims
+use a database lease to prevent duplicate calls across server instances. A
+short cooldown handles rapid edits. Identical input reuses persisted results.
+If the host leaves the page, local scoring remains available; AI preparation
+resumes when the host returns. No external scheduler or always-running agent
+is required.
+
+The ranking first checks all shared budget, distance, and dietary requirements.
+Unknown prices cannot satisfy a restricted price range. Google/custom places
+have no verified dietary evidence in the current integration, so they cannot
+satisfy a dietary requirement. Missing dietary matches produce an explanation
+rather than silently relaxing a requirement. Live wait times remain unknown.
+
+Eligible places receive per-person scores using explicit cuisines/favorites,
+recent repetition, confirmed visit feedback, and preference for familiar/new
+places. A small cuisine signal is inferred from confirmed feedback. The group
+score is 65% mean fit and 35% lowest fit. These initial heuristic weights can
+be tuned later; the scores are not probabilities or learned predictions.
+
+History uses up to 30 recent memberships per consenting account within 90 days.
+Previous closed rooms supply selections; private feedback confirms whether the
+person visited and enjoyed the winner. A selection alone is never a like or
+confirmed visit. At least two distinct consenting current accounts appearing
+in a previous room provide a shared-group repetition signal. Duplicate seats
+for one account do not receive additional preference weight. Current votes
+are never recommendation inputs.
+
+Gemini uses generateContent with structured JSON output. It receives only
+candidate IDs, aggregate scores, and approved factual reason sentences. It
+selects reason indexes to assemble a short grounded explanation, preserving
+ranking and warnings. It cannot add restaurants, write unsupported claims, or
+expose personal histories. This first version uses AI to prioritize factual
+explanations; all eligibility and ranking run in application code.
+
+After voting closes, **Did you eat at the winning restaurant?** records private
+visit and enjoyment feedback. Choosing **Didn't go** clears the enjoyment
+rating. Feedback can be corrected later by reopening the room.
+
+## Privacy and verification
+
+All room reads/writes enter through `src/lib/room.functions.ts` and verify the
+hashed room pass. Only the host can claim AI preparation. Remembering defaults
+or enabling history additionally verifies the signed-in account owns the seat.
+Other members see only recommendations and aggregate participation counts.
+The tables and generation function grant no access to browser roles. Deleting
+an account removes its saved defaults, per-seat preferences, and visit feedback.
+
+Run:
+
+```text
+node --test tests/dining.test.mjs tests/room-flow.test.mjs tests/restaurant-discovery.test.mjs tests/settings.test.mjs
+npx tsc --noEmit
+npm run build:render
+```
+
+For an isolated PostgreSQL migration test, install `@electric-sql/pglite`
+temporarily and set `PGLITE_MODULE` to its `dist/index.js` path, then run
+`node --test tests/dining-migration.test.mjs`. It never uses the live database.
+
+After migration/deployment, create a room with two members, save conflicting
+cuisine preferences, confirm suggestions update, and try a guest and a linked
+account. Open voting and confirm preference changes are locked. Close voting,
+save feedback, and use history in a subsequent room. With a Gemini key, check
+that explanations prepare once per changed input and fallback rankings remain
+usable when the key or upstream service fails.
+
+References: [Gemini structured outputs](https://ai.google.dev/gemini-api/docs/structured-output),
+[Gemini pricing and free tiers](https://ai.google.dev/gemini-api/docs/pricing),
+[Gemini billing](https://ai.google.dev/gemini-api/docs/billing).
