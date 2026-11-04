@@ -477,7 +477,7 @@ async function discoverRestaurants(settings: RoomSettings): Promise<Restaurant[]
       response = await gmaps("/v1/places:searchText", {
         method: "POST",
         fieldMask:
-          "nextPageToken,places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.primaryTypeDisplayName,places.types,places.businessStatus,places.websiteUri",
+          "nextPageToken,places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.priceRange,places.primaryTypeDisplayName,places.types,places.businessStatus,places.websiteUri",
         body,
       });
     } catch (error) {
@@ -487,7 +487,7 @@ async function discoverRestaurants(settings: RoomSettings): Promise<Restaurant[]
         response = await gmaps("/v1/places:searchText", {
           method: "POST",
           fieldMask:
-            "nextPageToken,places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.primaryTypeDisplayName,places.types,places.businessStatus",
+            "nextPageToken,places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.priceRange,places.primaryTypeDisplayName,places.types,places.businessStatus",
           body,
         });
       } catch {
@@ -517,6 +517,7 @@ async function discoverRestaurants(settings: RoomSettings): Promise<Restaurant[]
         name: place.displayName?.text ?? "Restaurant",
         cuisine: place.primaryTypeDisplayName?.text ?? "Restaurant",
         price,
+        ...(place.priceRange ? { priceRange: place.priceRange } : {}),
         wait: 0,
         diets: [],
         fastFood: (place.types ?? []).includes("fast_food_restaurant"),
@@ -544,7 +545,7 @@ async function discoverRestaurants(settings: RoomSettings): Promise<Restaurant[]
       const nearby = await gmaps("/v1/places:searchNearby", {
         method: "POST",
         fieldMask:
-          "places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.primaryTypeDisplayName,places.types,places.businessStatus,places.websiteUri",
+          "places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.priceRange,places.primaryTypeDisplayName,places.types,places.businessStatus,places.websiteUri",
         body: JSON.stringify({
           includedTypes: ["fast_food_restaurant"],
           maxResultCount: 20,
@@ -575,6 +576,7 @@ async function discoverRestaurants(settings: RoomSettings): Promise<Restaurant[]
           name: place.displayName?.text ?? "Restaurant",
           cuisine: place.primaryTypeDisplayName?.text ?? "Restaurant",
           price,
+        ...(place.priceRange ? { priceRange: place.priceRange } : {}),
           wait: 0,
           diets: [],
           fastFood: (place.types ?? []).includes("fast_food_restaurant"),
@@ -609,7 +611,7 @@ export const searchPlaces = createServerFn({ method: "POST" })
     const c = (room.settings as RoomSettings).center ?? DEFAULT_SETTINGS.center;
     const j = await gmaps("/v1/places:searchText", {
       method: "POST",
-      fieldMask: "places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.primaryTypeDisplayName,places.types,places.websiteUri",
+      fieldMask: "places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.priceRange,places.primaryTypeDisplayName,places.types,places.websiteUri",
       body: JSON.stringify({
         textQuery: data.query,
         pageSize: 6,
@@ -623,6 +625,7 @@ export const searchPlaces = createServerFn({ method: "POST" })
         name: p.displayName?.text ?? "Unknown",
         cuisine: p.primaryTypeDisplayName?.text ?? "Restaurant",
         price: PRICE_MAP[p.priceLevel] ?? 2,
+        ...(p.priceRange ? { priceRange: p.priceRange } : {}),
         wait: 0,
         diets: [],
         fastFood: (p.types ?? []).includes("fast_food_restaurant"),
@@ -652,6 +655,10 @@ const RestaurantSchema = z.object({
   address: z.string().max(300).optional(),
   google: z.boolean().optional(),
   priceUnknown: z.boolean().optional(),
+  priceRange: z.object({
+    startPrice: z.object({ currencyCode: z.string().length(3), units: z.string().regex(/^\d+$/), nanos: z.number().int().min(0).max(999999999).optional() }).optional(),
+    endPrice: z.object({ currencyCode: z.string().length(3), units: z.string().regex(/^\d+$/), nanos: z.number().int().min(0).max(999999999).optional() }).optional(),
+  }).optional(),
   waitUnknown: z.boolean().optional(),
   dietInfoUnknown: z.boolean().optional(),
   websiteUri: z

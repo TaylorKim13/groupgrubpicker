@@ -1,3 +1,4 @@
+import { googlePriceLabel, directionsUrl } from "@/lib/restaurant-info";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { ThemeControl } from "@/components/ThemeControl";
 import { useSelectionTracking } from "@/components/useSelectionTracking";
@@ -937,20 +938,6 @@ function Pool({ s, session, refresh }: { s: State; session: Session; refresh: ()
         {pool.length > 0 && filteredPool.length === 0 && (
           <p className="mb-3 rounded-xl border-2 border-dashed p-6 text-center text-muted-foreground">
             No restaurants match “{restaurantSearch}”. Try another name, cuisine, or address.
-          The pool{" "}
-          <span className="text-base font-normal text-muted-foreground">({pool.length} spots)</span>
-        </h2>
-        {pool.some((r) => r.google) && (
-          <p className="mb-3 text-sm text-muted-foreground">
-            Restaurants from Google Maps. Distance and known prices are filtered. Wait times and
-            dietary or allergy suitability are not verified; confirm with the restaurant. Places
-            without price data are included and marked.
-          </p>
-        )}
-        {pool.length === 0 && (
-          <p className="rounded-xl border-2 border-dashed p-6 text-center text-muted-foreground">
-            Nothing matches these filters. Widen the radius, price, or wait time — or nominate a
-            spot.
           </p>
         )}
         <div className="grid gap-3 sm:grid-cols-2">
@@ -1007,8 +994,11 @@ function RestaurantCard({
           <p className="text-sm text-muted-foreground">
             {r.cuisine} · {r.priceUnknown ? "Price unknown" : priceLabel(r.price)} ·{" "}
             {formatDistance(distanceKm(center, r), unit)} ·{" "}
-            {r.google ? "Wait unknown" : `~${r.wait} min`}
+            {r.waitUnknown || r.google ? "Wait unknown" : `~${r.wait} min`}
           </p>
+          {googlePriceLabel(r) && <p className="mt-1 text-sm font-bold">{googlePriceLabel(r)} <span className="font-normal text-muted-foreground">Google price range</span></p>}
+          <p className="mt-1 text-xs text-muted-foreground">Distance shown is straight-line from the group search center.</p>
+          <a href={directionsUrl(r)} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs font-semibold underline">Get directions</a>
           {r.address && <p className="mt-1 text-xs text-muted-foreground">{r.address}</p>}
           {r.websiteUri && <a href={r.websiteUri} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs font-semibold underline">Restaurant website</a>}
           <GooglePopularTimes

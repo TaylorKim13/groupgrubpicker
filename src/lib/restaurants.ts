@@ -22,6 +22,7 @@ export type Restaurant = {
   custom?: boolean;
   google?: boolean;
   priceUnknown?: boolean;
+  priceRange?: { startPrice?: { currencyCode: string; units: string; nanos?: number }; endPrice?: { currencyCode: string; units: string; nanos?: number } };
   waitUnknown?: boolean;
   dietInfoUnknown?: boolean;
   websiteUri?: string;
