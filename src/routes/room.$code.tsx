@@ -3,6 +3,8 @@ import { ThemeControl } from "@/components/ThemeControl";
 import { useSelectionTracking } from "@/components/useSelectionTracking";
 import { RoomInvite } from "@/components/RoomInvite";
 import { RoomCodeSchema, normalizeRoomCode } from "@/lib/room-access";
+import { DiningPanel } from "@/components/DiningPanel";
+import { roomJoinUrl } from "@/lib/room-access";
 import { Button } from "@/components/ui/button";
 import { useDistanceUnit } from "@/lib/distance-context";
 import { formatDistance, SettingsSchema } from "@/lib/settings";
@@ -46,11 +48,7 @@ import {
 import { clearSession, loadSession, saveSession, type Session } from "@/lib/session";
 import { useAccount } from "@/components/AccountProvider";
 import { useSocial } from "@/components/SocialPanel";
-import {
-  addFriendFromRoom,
-  inviteFriendsToTable,
-  linkSeatToAccount,
-} from "@/lib/social.functions";
+import { addFriendFromRoom, inviteFriendsToTable, linkSeatToAccount } from "@/lib/social.functions";
 
 export const Route = createFileRoute("/room/$code")({
   ssr: false,
@@ -209,6 +207,13 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
       {s.status === "closed" && s.result ? (
         <div className="py-10">
           <Reveal result={s.result} />
+          <DiningPanel
+            session={session}
+            status={s.status}
+            isHost={s.me.isHost}
+            linked={s.me.linked}
+            pool={s.pool}
+          />
         </div>
       ) : (
         <div className="mt-6 grid gap-6 lg:grid-cols-[320px_1fr]">
@@ -221,6 +226,13 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
             {s.status === "lobby" && !s.me.isHost && <SettingsSummary settings={s.settings} />}
           </aside>
           <section className="space-y-6">
+            <DiningPanel
+              session={session}
+              status={s.status}
+              isHost={s.me.isHost}
+              linked={s.me.linked}
+              pool={s.pool}
+            />
             <Pool s={s} session={session} refresh={refresh} />
           </section>
         </div>
@@ -252,7 +264,7 @@ function TopBar({ s, onLeave }: { s: State; onLeave: () => void }) {
         <span className="font-display text-3xl tracking-[0.25em]">{s.code}</span>
         <button
           onClick={() => {
-            navigator.clipboard.writeText(link);
+            navigator.clipboard.writeText(roomJoinUrl(window.location.origin, s.code));
             toast.success("Invite link copied");
           }}
           className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground chunky"
@@ -503,7 +515,6 @@ function HostSettings({
   const [presetBusy, setPresetBusy] = useState(false);
   const [saveError, setSaveError] = useState("");
   const geo = useServerFn(geocodeCenter);
-  
   const [addr, setAddr] = useState("");
   const [st, setSt] = useState<RoomSettings>(s.settings);
   const [dirty, setDirty] = useState(false);
@@ -637,9 +648,7 @@ function HostSettings({
           </div>
 
           <div>
-            <label className="text-xs font-bold uppercase">
-              Radius: {st.radiusKm} km
-            </label>
+            <label className="text-xs font-bold uppercase">Radius: {st.radiusKm} km</label>
             <Slider
               className="mt-3"
               min={0.5}
@@ -666,10 +675,8 @@ function HostSettings({
                     onClick={() => {
                       if (p < st.priceMin) set({ priceMin: p });
                       else if (p > st.priceMax) set({ priceMax: p });
-                      else if (p === st.priceMin && p < st.priceMax)
-                        set({ priceMin: p + 1 });
-                      else if (p === st.priceMax && p > st.priceMin)
-                        set({ priceMax: p - 1 });
+                      else if (p === st.priceMin && p < st.priceMax) set({ priceMin: p + 1 });
+                      else if (p === st.priceMax && p > st.priceMin) set({ priceMax: p - 1 });
                     }}
                     className={`rounded-md border-2 py-1.5 text-sm font-bold ${
                       on ? "bg-primary text-primary-foreground" : "bg-background"
@@ -683,9 +690,7 @@ function HostSettings({
           </div>
 
           <div>
-            <label className="text-xs font-bold uppercase">
-              Dietary / allergy needs
-            </label>
+            <label className="text-xs font-bold uppercase">Dietary / allergy needs</label>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {DIETS.map((d) => {
                 const on = st.diets.includes(d);
@@ -695,9 +700,7 @@ function HostSettings({
                     type="button"
                     onClick={() =>
                       set({
-                        diets: on
-                          ? st.diets.filter((x) => x !== d)
-                          : [...st.diets, d],
+                        diets: on ? st.diets.filter((x) => x !== d) : [...st.diets, d],
                       })
                     }
                     className={`rounded-full border-2 px-2.5 py-0.5 text-xs font-bold ${
@@ -712,9 +715,7 @@ function HostSettings({
           </div>
 
           <div>
-            <label className="text-xs font-bold uppercase">
-              Max wait: {st.maxWait} min
-            </label>
+            <label className="text-xs font-bold uppercase">Max wait: {st.maxWait} min</label>
             <Slider
               className="mt-3"
               min={5}
@@ -738,18 +739,13 @@ function HostSettings({
             </span>
             <Switch
               checked={st.visibility === "public"}
-              onCheckedChange={(c) =>
-                set({ visibility: c ? "public" : "private" })
-              }
+              onCheckedChange={(c) => set({ visibility: c ? "public" : "private" })}
             />
           </div>
 
           <div className="flex items-center justify-between">
             <span className="text-sm font-bold">Anonymous voting</span>
-            <Switch
-              checked={st.anonymous}
-              onCheckedChange={(c) => set({ anonymous: c })}
-            />
+            <Switch checked={st.anonymous} onCheckedChange={(c) => set({ anonymous: c })} />
           </div>
         </>
       )}
@@ -772,9 +768,7 @@ function HostSettings({
             Next →
           </button>
         ) : (
-          <span className="text-sm font-bold">
-            All set — open voting when ready
-          </span>
+          <span className="text-sm font-bold">All set — open voting when ready</span>
         )}
       </div>
 
@@ -798,9 +792,7 @@ function HostSettings({
                 await qc.invalidateQueries({ queryKey: ["account", user.id] });
                 toast.success("Hosting preferences saved");
               } catch (e) {
-                toast.error(
-                  e instanceof Error ? e.message : "Could not save preferences",
-                );
+                toast.error(e instanceof Error ? e.message : "Could not save preferences");
               } finally {
                 setPresetBusy(false);
               }
@@ -819,9 +811,7 @@ function HostSettings({
                 refresh();
                 toast.success("Saved defaults applied");
               } catch (e) {
-                toast.error(
-                  e instanceof Error ? e.message : "Could not apply preferences",
-                );
+                toast.error(e instanceof Error ? e.message : "Could not apply preferences");
               } finally {
                 setPresetBusy(false);
               }
@@ -848,8 +838,9 @@ function Pool({ s, session, refresh }: { s: State; session: Session; refresh: ()
     const query = restaurantSearch.trim().toLocaleLowerCase();
     if (!query) return pool;
     return pool.filter((restaurant) =>
-      [restaurant.name, restaurant.cuisine, restaurant.address ?? ""]
-        .some((value) => value.toLocaleLowerCase().includes(query)),
+      [restaurant.name, restaurant.cuisine, restaurant.address ?? ""].some((value) =>
+        value.toLocaleLowerCase().includes(query),
+      ),
     );
   }, [pool, restaurantSearch]);
 
@@ -913,7 +904,14 @@ function Pool({ s, session, refresh }: { s: State; session: Session; refresh: ()
 
       <div>
         <h2 className="mb-3 text-2xl font-extrabold">
-          The pool <span className="text-base font-normal text-muted-foreground">({filteredPool.length === pool.length ? `${pool.length}` : `${filteredPool.length} of ${pool.length}`} spots)</span>
+          The pool{" "}
+          <span className="text-base font-normal text-muted-foreground">
+            (
+            {filteredPool.length === pool.length
+              ? `${pool.length}`
+              : `${filteredPool.length} of ${pool.length}`}{" "}
+            spots)
+          </span>
         </h2>
         {pool.length > 0 && (
           <label className="mb-3 block">
@@ -928,7 +926,10 @@ function Pool({ s, session, refresh }: { s: State; session: Session; refresh: ()
             />
           </label>
         )}
-        <p className="mb-3 text-sm text-muted-foreground">Live restaurant listings from Google. Prices and popular-times data vary by restaurant; verify dietary needs directly with each restaurant.</p>
+        <p className="mb-3 text-sm text-muted-foreground">
+          Live restaurant listings from Google. Prices and popular-times data vary by restaurant;
+          verify dietary needs directly with each restaurant.
+        </p>
         {pool.length === 0 && (
           <p className="rounded-xl border-2 border-dashed p-6 text-center text-muted-foreground">
             Nothing matches these filters. Widen the radius or price range — or nominate a spot.
@@ -937,20 +938,13 @@ function Pool({ s, session, refresh }: { s: State; session: Session; refresh: ()
         {pool.length > 0 && filteredPool.length === 0 && (
           <p className="mb-3 rounded-xl border-2 border-dashed p-6 text-center text-muted-foreground">
             No restaurants match “{restaurantSearch}”. Try another name, cuisine, or address.
-          The pool{" "}
-          <span className="text-base font-normal text-muted-foreground">({pool.length} spots)</span>
-        </h2>
+          </p>
+        )}
         {pool.some((r) => r.google) && (
           <p className="mb-3 text-sm text-muted-foreground">
             Restaurants from Google Maps. Distance and known prices are filtered. Wait times and
             dietary or allergy suitability are not verified; confirm with the restaurant. Places
             without price data are included and marked.
-          </p>
-        )}
-        {pool.length === 0 && (
-          <p className="rounded-xl border-2 border-dashed p-6 text-center text-muted-foreground">
-            Nothing matches these filters. Widen the radius, price, or wait time — or nominate a
-            spot.
           </p>
         )}
         <div className="grid gap-3 sm:grid-cols-2">
@@ -1010,9 +1004,18 @@ function RestaurantCard({
             {r.google ? "Wait unknown" : `~${r.wait} min`}
           </p>
           {r.address && <p className="mt-1 text-xs text-muted-foreground">{r.address}</p>}
-          {r.websiteUri && <a href={r.websiteUri} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs font-semibold underline">Restaurant website</a>}
+          {r.websiteUri && (
+            <a
+              href={r.websiteUri}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 inline-block text-xs font-semibold underline"
+            >
+              Restaurant website
+            </a>
+          )}
           <GooglePopularTimes
-            placeId={r.google && r.id.startsWith("g_") ? r.id.slice(2) : undefined}
+            {...(r.google && r.id.startsWith("g_") ? { placeId: r.id.slice(2) } : {})}
           />
         </div>
         {r.custom && (
@@ -1136,7 +1139,16 @@ function Nominate({ s, session, refresh }: { s: State; session: Session; refresh
                   <div className="min-w-0">
                     <p className="truncate font-bold">{r.name}</p>
                     <p className="truncate text-xs text-muted-foreground">{r.address}</p>
-                    {r.websiteUri && <a href={r.websiteUri} target="_blank" rel="noreferrer" className="text-xs font-semibold underline">Website</a>}
+                    {r.websiteUri && (
+                      <a
+                        href={r.websiteUri}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs font-semibold underline"
+                      >
+                        Website
+                      </a>
+                    )}
                   </div>
                   <button
                     onClick={() => submit(r)}

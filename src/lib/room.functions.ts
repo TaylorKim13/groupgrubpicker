@@ -4,14 +4,7 @@ import { RoomCodeSchema, RoomProfileSchema } from "./room-access";
 import { CreationClickSchema } from "./creation-clicks";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import {
-  authMember,
-  db,
-  getRoomByCode,
-  hashToken,
-  newCode,
-  newToken,
-} from "./room.server";
+import { authMember, db, getRoomByCode, hashToken, newCode, newToken } from "./room.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
   buildPool,
@@ -137,8 +130,10 @@ export const createRoom = createServerFn({ method: "POST" })
           details: error.details,
           hint: error.hint,
         });
-        if (import.meta.env.DEV) {
-          throw new Error(`Could not create your group (${error.code ?? "database error"}): ${error.message}`);
+        if (import.meta.env?.DEV) {
+          throw new Error(
+            `Could not create your group (${error.code ?? "database error"}): ${error.message}`,
+          );
         }
         throw new Error("Could not create your group. Please try again.");
       }
@@ -281,7 +276,10 @@ export const startVoting = createServerFn({ method: "POST" })
     const { room } = await requireHost(data);
     if (room.status !== "lobby") return { ok: true, alreadyStarted: true };
     const noms = await loadNominations(room.id);
-    const pool = await loadRestaurantPool(room, noms.map(n => n.restaurant));
+    const pool = await loadRestaurantPool(
+      room,
+      noms.map((n) => n.restaurant),
+    );
     if (pool.length < 2) throw new Error("Choose filters with at least two restaurants");
     const { error: snapshotError } = await db()
       .from("room_restaurants")
@@ -304,7 +302,7 @@ export const startVoting = createServerFn({ method: "POST" })
   });
 
 // ---------- Google Maps (server-side requests) ----------
-async function gmaps(path: string, init: RequestInit & { fieldMask?: string } = {}) {
+export async function gmaps(path: string, init: RequestInit & { fieldMask?: string } = {}) {
   const gk = process.env["GOOGLE_MAPS_API_KEY"] || process.env["MAPS_API"];
   if (!gk) throw new Error("Google Maps is not configured on the server");
   const { fieldMask, ...request } = init;
@@ -402,7 +400,7 @@ async function loadRestaurantPool(
       .eq("room_id", room.id);
     if (error) throw new Error("Could not load the voting restaurant list");
     if (data?.length) {
-      const pool = new Map(
+      const pool = new Map<string, Restaurant>(
         data.map((row: { restaurant: Restaurant }) => [row.restaurant.id, row.restaurant]),
       );
       nominations.forEach((restaurant) => pool.set(restaurant.id, restaurant));
@@ -492,7 +490,9 @@ async function discoverRestaurants(settings: RoomSettings): Promise<Restaurant[]
         });
       } catch {
         if (page > 0 && restaurants.size > 0) {
-          console.warn("[Google Maps] A later restaurant result page failed; keeping earlier results");
+          console.warn(
+            "[Google Maps] A later restaurant result page failed; keeping earlier results",
+          );
           break;
         }
         throw error;
@@ -509,7 +509,8 @@ async function discoverRestaurants(settings: RoomSettings): Promise<Restaurant[]
         continue;
       }
       const priceUnknown = !place.priceLevel || place.priceLevel === "PRICE_LEVEL_UNSPECIFIED";
-      const price = PRICE_MAP[place.priceLevel] ?? (place.priceLevel === "PRICE_LEVEL_FREE" ? 1 : 2);
+      const price =
+        PRICE_MAP[place.priceLevel] ?? (place.priceLevel === "PRICE_LEVEL_FREE" ? 1 : 2);
       if (!priceUnknown && (price < settings.priceMin || price > settings.priceMax)) continue;
 
       const restaurant: Restaurant = {
@@ -568,7 +569,8 @@ async function discoverRestaurants(settings: RoomSettings): Promise<Restaurant[]
           continue;
         }
         const priceUnknown = !place.priceLevel || place.priceLevel === "PRICE_LEVEL_UNSPECIFIED";
-        const price = PRICE_MAP[place.priceLevel] ?? (place.priceLevel === "PRICE_LEVEL_FREE" ? 1 : 2);
+        const price =
+          PRICE_MAP[place.priceLevel] ?? (place.priceLevel === "PRICE_LEVEL_FREE" ? 1 : 2);
         if (!priceUnknown && (price < settings.priceMin || price > settings.priceMax)) continue;
         const restaurant: Restaurant = {
           id: `g_${place.id}`,
@@ -609,7 +611,8 @@ export const searchPlaces = createServerFn({ method: "POST" })
     const c = (room.settings as RoomSettings).center ?? DEFAULT_SETTINGS.center;
     const j = await gmaps("/v1/places:searchText", {
       method: "POST",
-      fieldMask: "places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.primaryTypeDisplayName,places.types,places.websiteUri",
+      fieldMask:
+        "places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.primaryTypeDisplayName,places.types,places.websiteUri",
       body: JSON.stringify({
         textQuery: data.query,
         pageSize: 6,
@@ -617,26 +620,24 @@ export const searchPlaces = createServerFn({ method: "POST" })
         locationBias: { circle: { center: { latitude: c.lat, longitude: c.lng }, radius: 30000 } },
       }),
     });
-    return ((j.places ?? []) as any[]).map(
-      (p): Restaurant => ({
-        id: `g_${p.id}`,
-        name: p.displayName?.text ?? "Unknown",
-        cuisine: p.primaryTypeDisplayName?.text ?? "Restaurant",
-        price: PRICE_MAP[p.priceLevel] ?? 2,
-        wait: 0,
-        diets: [],
-        fastFood: (p.types ?? []).includes("fast_food_restaurant"),
-        lat: p.location?.latitude,
-        lng: p.location?.longitude,
-        address: p.formattedAddress,
-        custom: true,
-        google: true,
-        priceUnknown: !p.priceLevel || p.priceLevel === "PRICE_LEVEL_UNSPECIFIED",
-        waitUnknown: true,
-        dietInfoUnknown: true,
-        websiteUri: p.websiteUri,
-      }),
-    );
+    return ((j.places ?? []) as any[]).map((p): Restaurant => ({
+      id: `g_${p.id}`,
+      name: p.displayName?.text ?? "Unknown",
+      cuisine: p.primaryTypeDisplayName?.text ?? "Restaurant",
+      price: PRICE_MAP[p.priceLevel] ?? 2,
+      wait: 0,
+      diets: [],
+      fastFood: (p.types ?? []).includes("fast_food_restaurant"),
+      lat: p.location?.latitude,
+      lng: p.location?.longitude,
+      address: p.formattedAddress,
+      custom: true,
+      google: true,
+      priceUnknown: !p.priceLevel || p.priceLevel === "PRICE_LEVEL_UNSPECIFIED",
+      waitUnknown: true,
+      dietInfoUnknown: true,
+      websiteUri: p.websiteUri,
+    }));
   });
 
 const RestaurantSchema = z.object({
@@ -701,9 +702,15 @@ export const castVote = createServerFn({ method: "POST" })
     if (room.status !== "voting") throw new Error("Voting isn't open");
     const noms = await loadNominations(room.id);
     const ids = new Set(
-      (await loadRestaurantPool(room, noms.map((n) => n.restaurant))).map((restaurant) => restaurant.id),
+      (
+        await loadRestaurantPool(
+          room,
+          noms.map((n) => n.restaurant),
+        )
+      ).map((restaurant) => restaurant.id),
     );
-    if (!ids.has(data.want) || !ids.has(data.could)) throw new Error("That place isn't in the pool");
+    if (!ids.has(data.want) || !ids.has(data.could))
+      throw new Error("That place isn't in the pool");
     const { error } = await db()
       .from("votes")
       .upsert(
@@ -732,7 +739,10 @@ export const closeVoting = createServerFn({ method: "POST" })
       loadNominations(room.id),
     ]);
     if (!votes?.length) throw new Error("Nobody has voted yet");
-    const pool = await loadRestaurantPool(room, noms.map((n) => n.restaurant));
+    const pool = await loadRestaurantPool(
+      room,
+      noms.map((n) => n.restaurant),
+    );
     const byId = new Map(pool.map((r) => [r.id, r]));
     const tally = new Map<string, Score>();
     const bump = (id: string, pts: number) => {
@@ -870,4 +880,74 @@ export const getGroupHistory = createServerFn({ method: "GET" })
       votingStartedAt: row.rooms.voting_started_at as string | null,
       closedAt: row.rooms.closed_at as string | null,
     }));
+  });
+
+// Dining data stays behind the same hashed room-pass checks as votes and members.
+export const getRoomDiningState = createServerFn({ method: "POST" })
+  .middleware([optionalAccountAuth])
+  .inputValidator((input) => Auth.parse(input))
+  .handler(async ({ data, context }) => {
+    const { room, member } = await authMember(data.code, data.memberId, data.token);
+    const { getDiningState } = await import("./dining.server");
+    const nominations = await loadNominations(room.id);
+    const pool = await loadRestaurantPool(
+      room,
+      nominations.map((n) => n.restaurant),
+    );
+    return getDiningState(room, member, context.accountUserId, pool);
+  });
+
+export const saveRoomDiningPreferences = createServerFn({ method: "POST" })
+  .middleware([optionalAccountAuth])
+  .inputValidator((input) =>
+    Auth.extend({ preferences: z.unknown(), remember: z.boolean() }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { room, member } = await authMember(data.code, data.memberId, data.token);
+    const { saveDiningPreferences } = await import("./dining.server");
+    return saveDiningPreferences(
+      room,
+      member,
+      context.accountUserId,
+      data.preferences,
+      data.remember,
+    );
+  });
+
+export const prepareRoomDiningSuggestions = createServerFn({ method: "POST" })
+  .middleware([optionalAccountAuth])
+  .inputValidator((input) => Auth.parse(input))
+  .handler(async ({ data, context }) => {
+    const { room, member } = await requireHost(data);
+    const { generateDiningSuggestions } = await import("./dining.server");
+    const nominations = await loadNominations(room.id);
+    const pool = await loadRestaurantPool(
+      room,
+      nominations.map((n) => n.restaurant),
+    );
+    return generateDiningSuggestions(room, member, context.accountUserId, pool);
+  });
+
+export const saveRoomDiningFeedback = createServerFn({ method: "POST" })
+  .inputValidator((input) =>
+    Auth.extend({ visited: z.boolean(), enjoyed: z.boolean().nullable() }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const { room, member } = await authMember(data.code, data.memberId, data.token);
+    const { saveDiningFeedback } = await import("./dining.server");
+    return saveDiningFeedback(room, member, { visited: data.visited, enjoyed: data.enjoyed });
+  });
+
+export const refreshRoomDiningSuggestions = createServerFn({ method: "POST" })
+  .middleware([optionalAccountAuth])
+  .inputValidator((input) => Auth.parse(input))
+  .handler(async ({ data, context }) => {
+    const { room, member } = await requireHost(data);
+    const { refreshDiningSuggestions } = await import("./dining.server");
+    const nominations = await loadNominations(room.id);
+    const pool = await loadRestaurantPool(
+      room,
+      nominations.map((n) => n.restaurant),
+    );
+    return refreshDiningSuggestions(room, member, context.accountUserId, pool);
   });

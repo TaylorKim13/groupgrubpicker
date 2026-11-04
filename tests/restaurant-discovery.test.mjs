@@ -11,9 +11,12 @@ const js = ts.transpileModule(helper, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 }).outputText;
 const prefix =
-  "const gmaps=(path,init)=>globalThis.__discoveryTest.fetch(path,init); const distanceKm=(a,b)=>Math.abs(a.lat-b.lat)*111; const db=()=>globalThis.__discoveryTest.db; const buildPool=()=>[];";
+  "const DEFAULT_SETTINGS={}; const gmaps=(path,init)=>globalThis.__discoveryTest.fetch(path,init); const distanceKm=(a,b)=>Math.abs(a.lat-b.lat)*111; const db=()=>globalThis.__discoveryTest.db; const buildPool=()=>[];";
 const { discoverRestaurants, loadRestaurantPool } = await import(
-  "data:text/javascript;base64," + Buffer.from(prefix + js + "\nexport { discoverRestaurants, loadRestaurantPool };").toString("base64")
+  "data:text/javascript;base64," +
+    Buffer.from(prefix + js + "\nexport { discoverRestaurants, loadRestaurantPool };").toString(
+      "base64",
+    )
 );
 test("real discovery paginates, filters distance and known price, preserves unknowns and uses voting snapshot", async () => {
   const old = process.env.GOOGLE_MAPS_API_KEY;
@@ -29,6 +32,8 @@ test("real discovery paginates, filters distance and known price, preserves unkn
     fetch: async (path, init) => {
       const body = JSON.parse(init.body);
       calls.push(body);
+      if (path === "/v1/places:searchNearby")
+        return { places: [place("chain", 0.01, "PRICE_LEVEL_MODERATE")] };
       return body.pageToken
         ? { places: [place("second", 0.01, "PRICE_LEVEL_MODERATE")] }
         : {
@@ -54,7 +59,7 @@ test("real discovery paginates, filters distance and known price, preserves unkn
     const found = await discoverRestaurants(settings);
     assert.deepEqual(
       found.map((r) => r.id),
-      ["g_near", "g_unknown", "g_second"],
+      ["g_near", "g_unknown", "g_second", "g_chain"],
     );
     assert.equal(found[1].priceUnknown, true);
     assert.equal(found[0].google, true);
@@ -64,7 +69,11 @@ test("real discovery paginates, filters distance and known price, preserves unkn
     const room = { id: "test", status: "lobby", settings };
     const before = calls.length;
     await Promise.all([loadRestaurantPool(room, []), loadRestaurantPool(room, [])]);
-    assert.equal(calls.length - before, 2, "simultaneous polls share one paginated discovery");
+    assert.equal(
+      calls.length - before,
+      3,
+      "simultaneous polls share one paginated discovery and fast-food search",
+    );
     globalThis.__discoveryTest.db = {
       from: () => ({
         select: () => ({ eq: async () => ({ data: [{ restaurant: found[0] }], error: null }) }),
@@ -72,7 +81,7 @@ test("real discovery paginates, filters distance and known price, preserves unkn
     };
     const saved = await loadRestaurantPool({ ...room, status: "voting" }, []);
     assert.deepEqual(saved, [found[0]]);
-    assert.equal(calls.length - before, 2, "voting uses stored snapshot");
+    assert.equal(calls.length - before, 3, "voting uses stored snapshot");
   } finally {
     if (old === undefined) delete process.env.GOOGLE_MAPS_API_KEY;
     else process.env.GOOGLE_MAPS_API_KEY = old;

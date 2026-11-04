@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,6 +15,36 @@ export function SignInPanel() {
   const [sent, setSent] = useState(false);
   const [recovering, setRecovering] = useState(false);
   const [username, setUsername] = useState("");
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const hash = new URLSearchParams(url.hash.slice(1));
+    if (!url.searchParams.has("error") && !hash.has("error")) return;
+    toast.error("Sign-in could not be completed. Please try again or use another sign-in method.");
+    for (const key of ["error", "error_code", "error_description"]) {
+      url.searchParams.delete(key);
+      hash.delete(key);
+    }
+    url.hash = hash.toString();
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+  }, []);
+
+  async function withGoogle() {
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: window.location.origin + "/account",
+        },
+      });
+      if (error) throw error;
+      // Keep the controls disabled while the browser leaves for the provider.
+    } catch {
+      toast.error("Could not start sign-in. Please try again or sign in with email.");
+      setBusy(false);
+    }
+  }
 
   async function withEmail(e: React.FormEvent) {
     e.preventDefault();
@@ -58,8 +88,8 @@ export function SignInPanel() {
 
         if (error) throw error;
       }
-    } catch (err: any) {
-      toast.error(err?.message ?? "Could not sign in");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Could not sign in");
     } finally {
       setBusy(false);
     }
@@ -76,6 +106,19 @@ export function SignInPanel() {
 
   return (
     <div className="mt-6 space-y-3">
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
+        disabled={busy}
+        onClick={() => void withGoogle()}
+      >
+        Continue with Google
+      </Button>
+      <p className="text-sm text-muted-foreground">
+        New here? Continuing with Google creates your account automatically.
+      </p>
+      <p className="text-center text-sm text-muted-foreground">Or use email</p>
       <form onSubmit={withEmail} className="space-y-3">
         {mode === "up" && (
           <label className="block text-sm font-bold">
@@ -146,6 +189,8 @@ export function SignInPanel() {
         </Button>
       )}
       <button
+        type="button"
+        disabled={busy}
         className="text-sm font-bold underline"
         onClick={() => {
           setMode(mode === "in" ? "up" : "in");
