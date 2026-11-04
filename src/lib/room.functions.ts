@@ -3,15 +3,20 @@ import { optionalAccountAuth } from "./account-auth";
 import { RoomCodeSchema, RoomProfileSchema } from "./room-access";
 import { CreationClickSchema } from "./creation-clicks";
 import { createServerFn } from "@tanstack/react-start";
-// import { mapsFetch as gmaps } from "./maps.server";
 import { z } from "zod";
-import { authMember, db, getRoomByCode, hashToken, newCode, newToken } from "./room.server";
+import {
+  authMember,
+  db,
+  getRoomByCode,
+  hashToken,
+  newCode,
+  newToken,
+} from "./room.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
   buildPool,
   distanceKm,
   DEFAULT_SETTINGS,
-  DIETS,
   type Restaurant,
   type RoomSettings,
 } from "./restaurants";
@@ -93,9 +98,20 @@ async function addMember(
 
 export const createRoom = createServerFn({ method: "POST" })
   .middleware([optionalAccountAuth])
-  .inputValidator((d) => Profile.parse(d))
+  .inputValidator((d) =>
+    Profile.extend({
+      center: z.object({
+        lat: z.number().min(-90).max(90),
+        lng: z.number().min(-180).max(180),
+      }),
+    }).parse(d),
+  )
   .handler(async ({ data, context }) => {
-    let settings = DEFAULT_SETTINGS;
+    let settings = {
+      ...DEFAULT_SETTINGS,
+      center: { ...data.center, label: "Host location" },
+    };
+
     if (context.accountUserId) {
       const { data: preset, error } = await db()
         .from("preset_filters")
@@ -103,8 +119,9 @@ export const createRoom = createServerFn({ method: "POST" })
         .eq("user_id", context.accountUserId)
         .maybeSingle();
       if (error) throw new Error("Could not load hosting preferences");
-      if (preset) settings = applyHostingPreferences(DEFAULT_SETTINGS, preset.settings);
+      if (preset) settings = applyHostingPreferences(settings, preset.settings);
     }
+
     for (let i = 0; i < 5; i++) {
       const code = newCode();
       const { data: room, error } = await db()
@@ -127,15 +144,17 @@ export const createRoom = createServerFn({ method: "POST" })
         }
         throw new Error("Could not create your group. Please try again.");
       }
+
       try {
-        const m = await addMember(room.id, data, true, context.accountUserId);
-        return { code, ...m };
+        const member = await addMember(room.id, data, true, context.accountUserId);
+        return { code, ...member };
       } catch (error) {
         // A room without its host cannot be used. Remove only this failed creation.
         await db().from("rooms").delete().eq("id", room.id);
         throw error;
       }
     }
+
     throw new Error("Could not create room, try again");
   });
 
@@ -264,10 +283,7 @@ export const startVoting = createServerFn({ method: "POST" })
     const { room } = await requireHost(data);
     if (room.status !== "lobby") return { ok: true, alreadyStarted: true };
     const noms = await loadNominations(room.id);
-    const pool = await loadRestaurantPool(
-      room,
-      noms.map((n) => n.restaurant),
-    );
+    const pool = await loadRestaurantPool(room, noms.map(n => n.restaurant));
     if (pool.length < 2) throw new Error("Choose filters with at least two restaurants");
     const { error: snapshotError } = await db()
       .from("room_restaurants")
@@ -289,18 +305,18 @@ export const startVoting = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// ---------- Google Maps (direct server-side requests) ----------
-export async function gmaps(path: string, init: RequestInit & { fieldMask?: string } = {}) {
-  const gk = process.env["GOOGLE_MAPS_API_KEY"];
-  if (!gk) throw new Error("Google Maps search is not configured");
+// ---------- Google Maps (server-side requests) ----------
+async function gmaps(path: string, init: RequestInit & { fieldMask?: string } = {}) {
+  const gk = process.env["GOOGLE_MAPS_API_KEY"] || process.env["MAPS_API"];
+  if (!gk) throw new Error("Google Maps is not configured on the server");
   const { fieldMask, ...request } = init;
   const headers = new Headers(request.headers);
   let url: URL;
   if (path.startsWith("/maps/api/geocode/json?")) {
     url = new URL(path, "https://maps.googleapis.com");
     url.searchParams.set("key", gk);
-  } else if (path === "/places/v1/places:searchText") {
-    url = new URL("https://places.googleapis.com/v1/places:searchText");
+  } else if (path === "/v1/places:searchText" || path === "/v1/places:searchNearby") {
+    url = new URL(`https://places.googleapis.com${path}`);
     headers.set("X-Goog-Api-Key", gk);
     headers.set("Content-Type", "application/json");
     if (fieldMask) headers.set("X-Goog-FieldMask", fieldMask);
@@ -315,14 +331,31 @@ export async function gmaps(path: string, init: RequestInit & { fieldMask?: stri
       signal: request.signal ?? AbortSignal.timeout(15000),
     });
   } catch {
-    // Fetch errors can include the geocoding URL, which contains the server key.
+    // Geocoding URLs contain the server key; keep fetch errors out of user-visible output.
     throw new Error("Map search could not connect. Please try again.");
   }
   if (!res.ok) {
-    throw new Error(`Map search failed (${res.status})`);
+    const payload = await res.json().catch(() => null);
+    const googleStatus = payload?.error?.status;
+    const googleMessage = String(payload?.error?.message ?? "").slice(0, 180);
+    console.error(
+      `[Google Maps] HTTP ${res.status}; API status ${googleStatus ?? "unknown"}; ${googleMessage}`,
+    );
+    if (res.status === 403) {
+      throw new Error(
+        `Google denied the restaurant search${googleMessage ? `: ${googleMessage}` : ". Enable Places API (New), confirm billing is active, and allow Places API (New) on the server key."}`,
+      );
+    }
+    if (res.status === 400) {
+      throw new Error(
+        `Google rejected the restaurant search request (${googleStatus ?? "INVALID_ARGUMENT"})${googleMessage ? `: ${googleMessage}` : "."}`,
+      );
+    }
+    throw new Error(
+      `Google restaurant search failed (${res.status}${googleStatus ? ` ${googleStatus}` : ""})${googleMessage ? `: ${googleMessage}` : "."}`,
+    );
   }
   const result = await res.json();
-  // Geocoding reports failures inside HTTP 200 responses.
   if (result.status && result.status !== "OK" && result.status !== "ZERO_RESULTS") {
     throw new Error(`Map search failed (${result.status})`);
   }
@@ -351,23 +384,36 @@ const PRICE_MAP: Record<string, number> = {
   PRICE_LEVEL_VERY_EXPENSIVE: 4,
 };
 
-// Reuse discovery across the 2.5s room polls and simultaneous participants.
-const discoveryCache = new Map<string, { expires: number; results: Promise<Restaurant[]> }>();
+// Room state is polled frequently, so reuse each Places search for five minutes.
+const restaurantDiscoveryCache = new Map<
+  string,
+  { expiresAt: number; results: Promise<Restaurant[]> }
+>();
+
 async function loadRestaurantPool(
   room: { id: string; status: string; settings: RoomSettings },
   nominations: Restaurant[],
 ): Promise<Restaurant[]> {
-  if (!process.env["GOOGLE_MAPS_API_KEY"]) return buildPool(room.settings, nominations);
+  if (!process.env["GOOGLE_MAPS_API_KEY"] && !process.env["MAPS_API"]) {
+    return buildPool(room.settings, nominations);
+  }
   if (room.status !== "lobby") {
     const { data, error } = await db()
       .from("room_restaurants")
       .select("restaurant")
       .eq("room_id", room.id);
     if (error) throw new Error("Could not load the voting restaurant list");
-    if (data?.length) return data.map((row: { restaurant: Restaurant }) => row.restaurant);
+    if (data?.length) {
+      const pool = new Map(
+        data.map((row: { restaurant: Restaurant }) => [row.restaurant.id, row.restaurant]),
+      );
+      nominations.forEach((restaurant) => pool.set(restaurant.id, restaurant));
+      return [...pool.values()];
+    }
   }
-  const settings = room.settings;
-  const key = JSON.stringify([
+
+  const settings = { ...DEFAULT_SETTINGS, ...room.settings };
+  const cacheKey = JSON.stringify([
     settings.center.lat,
     settings.center.lng,
     settings.radiusKm,
@@ -375,86 +421,189 @@ async function loadRestaurantPool(
     settings.priceMax,
     settings.diets,
   ]);
-  let entry = discoveryCache.get(key);
-  if (!entry || entry.expires < Date.now()) {
+  let entry = restaurantDiscoveryCache.get(cacheKey);
+  if (!entry || entry.expiresAt <= Date.now()) {
     const results = discoverRestaurants(settings);
-    entry = { expires: Date.now() + 5 * 60000, results };
-    if (discoveryCache.size >= 100) discoveryCache.delete(discoveryCache.keys().next().value!);
-    discoveryCache.set(key, entry);
+    entry = { expiresAt: Date.now() + 5 * 60_000, results };
+    restaurantDiscoveryCache.set(cacheKey, entry);
+    if (restaurantDiscoveryCache.size > 100) {
+      const oldest = restaurantDiscoveryCache.keys().next().value;
+      if (oldest) restaurantDiscoveryCache.delete(oldest);
+    }
     results.catch(() => {
-      if (discoveryCache.get(key)?.results === results) discoveryCache.delete(key);
+      if (restaurantDiscoveryCache.get(cacheKey)?.results === results) {
+        restaurantDiscoveryCache.delete(cacheKey);
+      }
     });
   }
+
   const nearby = await entry.results;
-  const merged = new Map(nearby.map((r) => [r.id, r]));
-  nominations.forEach((r) => merged.set(r.id, r));
-  return [...merged.values()];
+  const pool = new Map(nearby.map((restaurant) => [restaurant.id, restaurant]));
+  nominations.forEach((restaurant) => pool.set(restaurant.id, restaurant));
+  return [...pool.values()];
 }
 
 async function discoverRestaurants(settings: RoomSettings): Promise<Restaurant[]> {
-  const c = settings.center;
-  const latSpan = settings.radiusKm / 110.574;
-  const lngSpan = settings.radiusKm / (111.32 * Math.max(0.01, Math.cos((c.lat * Math.PI) / 180)));
-  // Google returns a bounded candidate list; enforce the actual circular radius locally.
-  const found = new Map<string, Restaurant>();
+  const center = settings.center;
+  const dietSearchTerms: Record<string, string> = {
+    vegetarian: "vegetarian",
+    vegan: "vegan",
+    "gluten-free": "gluten free",
+    halal: "halal",
+    "nut-free": "nut free",
+    "dairy-free": "dairy free",
+  };
+  const textQuery = [
+    ...settings.diets.map((diet) => dietSearchTerms[diet] ?? diet),
+    "restaurants",
+  ].join(" ");
+  const restaurants = new Map<string, Restaurant>();
   let pageToken: string | undefined;
   for (let page = 0; page < 3; page++) {
-    const response = await gmaps("/places/v1/places:searchText", {
-      method: "POST",
-      fieldMask:
-        "nextPageToken,places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.primaryTypeDisplayName,places.types,places.businessStatus",
-      body: JSON.stringify({
-        textQuery: [...settings.diets, "restaurants"].join(" "),
-        includedType: "restaurant",
-        strictTypeFiltering: true,
-        pageSize: 20,
-        rankPreference: "DISTANCE",
-        locationRestriction: {
-          rectangle: {
-            low: {
-              latitude: Math.max(-90, c.lat - latSpan),
-              longitude: Math.max(-180, c.lng - lngSpan),
-            },
-            high: {
-              latitude: Math.min(90, c.lat + latSpan),
-              longitude: Math.min(180, c.lng + lngSpan),
-            },
-          },
+    const body = JSON.stringify({
+      textQuery,
+      includedType: "restaurant",
+      strictTypeFiltering: true,
+      pageSize: 20,
+      rankPreference: "DISTANCE",
+      locationBias: {
+        circle: {
+          center: { latitude: center.lat, longitude: center.lng },
+          radius: settings.radiusKm * 1000,
         },
-        ...(pageToken ? { pageToken } : {}),
-      }),
+      },
+      ...(pageToken ? { pageToken } : {}),
     });
-    for (const p of response.places ?? []) {
+    let response: any;
+    try {
+      response = await gmaps("/v1/places:searchText", {
+        method: "POST",
+        fieldMask:
+          "nextPageToken,places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.priceRange,places.primaryTypeDisplayName,places.types,places.businessStatus,places.websiteUri",
+        body,
+      });
+    } catch (error) {
+      // Website URI is only used to validate restaurant favicon domains. If Google
+      // rejects that optional field, retry the core search so places still load.
+      try {
+        response = await gmaps("/v1/places:searchText", {
+          method: "POST",
+          fieldMask:
+            "nextPageToken,places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.priceRange,places.primaryTypeDisplayName,places.types,places.businessStatus",
+          body,
+        });
+      } catch {
+        if (page > 0 && restaurants.size > 0) {
+          console.warn("[Google Maps] A later restaurant result page failed; keeping earlier results");
+          break;
+        }
+        throw error;
+      }
+    }
+
+    for (const place of response.places ?? []) {
       if (
-        !p.id ||
-        !p.location ||
-        p.businessStatus === "CLOSED_PERMANENTLY" ||
-        p.businessStatus === "CLOSED_TEMPORARILY"
-      )
+        !place.id ||
+        !place.location ||
+        place.businessStatus === "CLOSED_PERMANENTLY" ||
+        place.businessStatus === "CLOSED_TEMPORARILY"
+      ) {
         continue;
-      const price = PRICE_MAP[p.priceLevel] ?? (p.priceLevel === "PRICE_LEVEL_FREE" ? 1 : 2);
-      const r: Restaurant = {
-        id: "g_" + p.id,
-        name: p.displayName?.text ?? "Restaurant",
-        cuisine: p.primaryTypeDisplayName?.text ?? "Restaurant",
+      }
+      const priceUnknown = !place.priceLevel || place.priceLevel === "PRICE_LEVEL_UNSPECIFIED";
+      const price = PRICE_MAP[place.priceLevel] ?? (place.priceLevel === "PRICE_LEVEL_FREE" ? 1 : 2);
+      if (!priceUnknown && (price < settings.priceMin || price > settings.priceMax)) continue;
+
+      const restaurant: Restaurant = {
+        id: `g_${place.id}`,
+        name: place.displayName?.text ?? "Restaurant",
+        cuisine: place.primaryTypeDisplayName?.text ?? "Restaurant",
         price,
+        ...(place.priceRange ? { priceRange: place.priceRange } : {}),
         wait: 0,
         diets: [],
-        fastFood: (p.types ?? []).includes("fast_food_restaurant"),
-        lat: p.location.latitude,
-        lng: p.location.longitude,
-        address: p.formattedAddress ?? "",
+        fastFood: (place.types ?? []).includes("fast_food_restaurant"),
+        lat: place.location.latitude,
+        lng: place.location.longitude,
+        address: place.formattedAddress ?? undefined,
         google: true,
-        priceUnknown: !p.priceLevel || p.priceLevel === "PRICE_LEVEL_UNSPECIFIED",
+        priceUnknown,
+        waitUnknown: true,
+        dietInfoUnknown: true,
+        websiteUri: place.websiteUri,
       };
-      if (distanceKm(c, r) > settings.radiusKm) continue;
-      if (!r.priceUnknown && (price < settings.priceMin || price > settings.priceMax)) continue;
-      found.set(r.id, r);
+      if (distanceKm(center, restaurant) <= settings.radiusKm) {
+        restaurants.set(restaurant.id, restaurant);
+      }
     }
     pageToken = response.nextPageToken;
     if (!pageToken) break;
   }
-  return [...found.values()];
+
+  // Text Search can rank common chains below its 60-result cap in dense areas.
+  // A separate fast-food type search brings the closest chains into the pool.
+  if (!settings.diets.length) {
+    try {
+      const nearby = await gmaps("/v1/places:searchNearby", {
+        method: "POST",
+        fieldMask:
+          "places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.priceRange,places.primaryTypeDisplayName,places.types,places.businessStatus,places.websiteUri",
+        body: JSON.stringify({
+          includedTypes: ["fast_food_restaurant"],
+          maxResultCount: 20,
+          rankPreference: "DISTANCE",
+          locationRestriction: {
+            circle: {
+              center: { latitude: center.lat, longitude: center.lng },
+              radius: settings.radiusKm * 1000,
+            },
+          },
+        }),
+      });
+
+      for (const place of nearby.places ?? []) {
+        if (
+          !place.id ||
+          !place.location ||
+          place.businessStatus === "CLOSED_PERMANENTLY" ||
+          place.businessStatus === "CLOSED_TEMPORARILY"
+        ) {
+          continue;
+        }
+        const priceUnknown = !place.priceLevel || place.priceLevel === "PRICE_LEVEL_UNSPECIFIED";
+        const price = PRICE_MAP[place.priceLevel] ?? (place.priceLevel === "PRICE_LEVEL_FREE" ? 1 : 2);
+        if (!priceUnknown && (price < settings.priceMin || price > settings.priceMax)) continue;
+        const restaurant: Restaurant = {
+          id: `g_${place.id}`,
+          name: place.displayName?.text ?? "Restaurant",
+          cuisine: place.primaryTypeDisplayName?.text ?? "Restaurant",
+          price,
+        ...(place.priceRange ? { priceRange: place.priceRange } : {}),
+          wait: 0,
+          diets: [],
+          fastFood: (place.types ?? []).includes("fast_food_restaurant"),
+          lat: place.location.latitude,
+          lng: place.location.longitude,
+          address: place.formattedAddress ?? undefined,
+          google: true,
+          priceUnknown,
+          waitUnknown: true,
+          dietInfoUnknown: true,
+          websiteUri: place.websiteUri,
+        };
+        if (distanceKm(center, restaurant) <= settings.radiusKm) {
+          restaurants.set(restaurant.id, restaurant);
+        }
+      }
+    } catch (error) {
+      // Keep the main Google Text Search results usable if the optional fast-food
+      // request is unavailable because of quota, billing, or API configuration.
+      console.warn(
+        `[Google Maps] Fast-food results unavailable; keeping restaurant search results (${error instanceof Error ? error.message.slice(0, 200) : "unknown error"})`,
+      );
+    }
+  }
+  return [...restaurants.values()];
 }
 
 export const searchPlaces = createServerFn({ method: "POST" })
@@ -462,10 +611,9 @@ export const searchPlaces = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { room } = await authMember(data.code, data.memberId, data.token);
     const c = (room.settings as RoomSettings).center ?? DEFAULT_SETTINGS.center;
-    const j = await gmaps("/places/v1/places:searchText", {
+    const j = await gmaps("/v1/places:searchText", {
       method: "POST",
-      fieldMask:
-        "places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.primaryTypeDisplayName,places.types",
+      fieldMask: "places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.priceRange,places.primaryTypeDisplayName,places.types,places.websiteUri",
       body: JSON.stringify({
         textQuery: data.query,
         pageSize: 6,
@@ -473,19 +621,27 @@ export const searchPlaces = createServerFn({ method: "POST" })
         locationBias: { circle: { center: { latitude: c.lat, longitude: c.lng }, radius: 30000 } },
       }),
     });
-    return ((j.places ?? []) as any[]).map((p): Restaurant => ({
-      id: `g_${p.id}`,
-      name: p.displayName?.text ?? "Unknown",
-      cuisine: p.primaryTypeDisplayName?.text ?? "Restaurant",
-      price: PRICE_MAP[p.priceLevel] ?? 2,
-      wait: 20,
-      diets: [],
-      fastFood: (p.types ?? []).includes("fast_food_restaurant"),
-      lat: p.location?.latitude,
-      lng: p.location?.longitude,
-      address: p.formattedAddress,
-      custom: true,
-    }));
+    return ((j.places ?? []) as any[]).map(
+      (p): Restaurant => ({
+        id: `g_${p.id}`,
+        name: p.displayName?.text ?? "Unknown",
+        cuisine: p.primaryTypeDisplayName?.text ?? "Restaurant",
+        price: PRICE_MAP[p.priceLevel] ?? 2,
+        ...(p.priceRange ? { priceRange: p.priceRange } : {}),
+        wait: 0,
+        diets: [],
+        fastFood: (p.types ?? []).includes("fast_food_restaurant"),
+        lat: p.location?.latitude,
+        lng: p.location?.longitude,
+        address: p.formattedAddress,
+        custom: true,
+        google: true,
+        priceUnknown: !p.priceLevel || p.priceLevel === "PRICE_LEVEL_UNSPECIFIED",
+        waitUnknown: true,
+        dietInfoUnknown: true,
+        websiteUri: p.websiteUri,
+      }),
+    );
   });
 
 const RestaurantSchema = z.object({
@@ -499,6 +655,20 @@ const RestaurantSchema = z.object({
   lat: z.number(),
   lng: z.number(),
   address: z.string().max(300).optional(),
+  google: z.boolean().optional(),
+  priceUnknown: z.boolean().optional(),
+  priceRange: z.object({
+    startPrice: z.object({ currencyCode: z.string().length(3), units: z.string().regex(/^\d+$/), nanos: z.number().int().min(0).max(999999999).optional() }).optional(),
+    endPrice: z.object({ currencyCode: z.string().length(3), units: z.string().regex(/^\d+$/), nanos: z.number().int().min(0).max(999999999).optional() }).optional(),
+  }).optional(),
+  waitUnknown: z.boolean().optional(),
+  dietInfoUnknown: z.boolean().optional(),
+  websiteUri: z
+    .string()
+    .url()
+    .max(500)
+    .refine((value) => ["http:", "https:"].includes(new URL(value).protocol))
+    .optional(),
 });
 
 export const nominate = createServerFn({ method: "POST" })
@@ -540,15 +710,9 @@ export const castVote = createServerFn({ method: "POST" })
     if (room.status !== "voting") throw new Error("Voting isn't open");
     const noms = await loadNominations(room.id);
     const ids = new Set(
-      (
-        await loadRestaurantPool(
-          room,
-          noms.map((n) => n.restaurant),
-        )
-      ).map((r) => r.id),
+      (await loadRestaurantPool(room, noms.map((n) => n.restaurant))).map((restaurant) => restaurant.id),
     );
-    if (!ids.has(data.want) || !ids.has(data.could))
-      throw new Error("That place isn't in the pool");
+    if (!ids.has(data.want) || !ids.has(data.could)) throw new Error("That place isn't in the pool");
     const { error } = await db()
       .from("votes")
       .upsert(
@@ -577,10 +741,7 @@ export const closeVoting = createServerFn({ method: "POST" })
       loadNominations(room.id),
     ]);
     if (!votes?.length) throw new Error("Nobody has voted yet");
-    const pool = await loadRestaurantPool(
-      room,
-      noms.map((n) => n.restaurant),
-    );
+    const pool = await loadRestaurantPool(room, noms.map((n) => n.restaurant));
     const byId = new Map(pool.map((r) => [r.id, r]));
     const tally = new Map<string, Score>();
     const bump = (id: string, pts: number) => {

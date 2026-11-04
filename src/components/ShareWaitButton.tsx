@@ -2,7 +2,8 @@ import { MessageSquare } from "lucide-react";
 import type { Restaurant } from "@/lib/restaurants";
 import { waitTimeSmsUrl } from "@/lib/share-wait";
 
-export function ShareWaitButton({ restaurant }: { restaurant: Pick<Restaurant, "name" | "wait"> }) {
+export function ShareWaitButton({ restaurant }: { restaurant: Pick<Restaurant, "name" | "wait" | "waitUnknown" | "google"> }) {
+  if (restaurant.waitUnknown || restaurant.google) return null;
   return (
     <button
       type="button"
