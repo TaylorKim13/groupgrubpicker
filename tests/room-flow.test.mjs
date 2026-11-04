@@ -38,6 +38,9 @@ const server = await sourceModule("lib/room.server.ts", {
   "./room-access": access,
 });
 const handlersUrl = await sourceModule("lib/room.functions.ts", {
+  "./dining.server": url(
+    "const reached = async () => { throw new Error('dining-handler-reached'); }; export const getDiningState = reached, saveDiningPreferences = reached, generateDiningSuggestions = reached, saveDiningFeedback = reached, refreshDiningSuggestions = reached;",
+  ),
   "./settings": settings,
   "./creation-clicks": await sourceModule("lib/creation-clicks.ts", { zod }),
   "./restaurants": restaurants,
@@ -56,6 +59,11 @@ const {
   updateSettings,
   recordSelectionActivity,
   recordGroupCreationClicks,
+  getRoomDiningState,
+  saveRoomDiningPreferences,
+  prepareRoomDiningSuggestions,
+  saveRoomDiningFeedback,
+  refreshRoomDiningSuggestions,
 } = await import(handlersUrl);
 const { hashToken, newCode } = await import(server);
 const { RoomCodeSchema, roomJoinUrl } = await import(access);
@@ -162,6 +170,29 @@ after(() => {
   delete globalThis.__grubRoomFlowTest;
 });
 const profile = { nickname: "  Aaron  ", avatar: "🍕" };
+
+test("every dining endpoint checks the hashed room pass and only the host can generate suggestions", async () => {
+  const host = await createRoom({ data: profile });
+  const friend = await joinRoom({ data: { ...profile, code: host.code } });
+  for (const [handler, extra] of [
+    [getRoomDiningState, {}],
+    [saveRoomDiningPreferences, { preferences: {}, remember: false }],
+    [prepareRoomDiningSuggestions, {}],
+    [refreshRoomDiningSuggestions, {}],
+    [saveRoomDiningFeedback, { visited: true, enjoyed: null }],
+  ]) {
+    await assert.rejects(
+      handler({ data: { ...host, ...extra, token: friend.token } }),
+      /Not a member/,
+    );
+  }
+  await assert.rejects(prepareRoomDiningSuggestions({ data: friend }), /Only the host/);
+  await assert.rejects(refreshRoomDiningSuggestions({ data: friend }), /Only the host/);
+  await assert.rejects(
+    saveRoomDiningPreferences({ data: { ...host, preferences: {}, remember: false } }),
+    /dining-handler-reached/,
+  );
+});
 
 test("guest host creates a six-character room and friends join by code or link", async () => {
   const host = await createRoom({ data: profile });

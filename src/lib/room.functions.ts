@@ -137,8 +137,10 @@ export const createRoom = createServerFn({ method: "POST" })
           details: error.details,
           hint: error.hint,
         });
-        if (import.meta.env.DEV) {
-          throw new Error(`Could not create your group (${error.code ?? "database error"}): ${error.message}`);
+        if (import.meta.env?.DEV) {
+          throw new Error(
+            `Could not create your group (${error.code ?? "database error"}): ${error.message}`,
+          );
         }
         throw new Error("Could not create your group. Please try again.");
       }
@@ -877,4 +879,74 @@ export const getGroupHistory = createServerFn({ method: "GET" })
       votingStartedAt: row.rooms.voting_started_at as string | null,
       closedAt: row.rooms.closed_at as string | null,
     }));
+  });
+
+// Dining data stays behind the same hashed room-pass checks as votes and members.
+export const getRoomDiningState = createServerFn({ method: "POST" })
+  .middleware([optionalAccountAuth])
+  .inputValidator((input) => Auth.parse(input))
+  .handler(async ({ data, context }) => {
+    const { room, member } = await authMember(data.code, data.memberId, data.token);
+    const { getDiningState } = await import("./dining.server");
+    const nominations = await loadNominations(room.id);
+    const pool = await loadRestaurantPool(
+      room,
+      nominations.map((n) => n.restaurant),
+    );
+    return getDiningState(room, member, context.accountUserId, pool);
+  });
+
+export const saveRoomDiningPreferences = createServerFn({ method: "POST" })
+  .middleware([optionalAccountAuth])
+  .inputValidator((input) =>
+    Auth.extend({ preferences: z.unknown(), remember: z.boolean() }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { room, member } = await authMember(data.code, data.memberId, data.token);
+    const { saveDiningPreferences } = await import("./dining.server");
+    return saveDiningPreferences(
+      room,
+      member,
+      context.accountUserId,
+      data.preferences,
+      data.remember,
+    );
+  });
+
+export const prepareRoomDiningSuggestions = createServerFn({ method: "POST" })
+  .middleware([optionalAccountAuth])
+  .inputValidator((input) => Auth.parse(input))
+  .handler(async ({ data, context }) => {
+    const { room, member } = await requireHost(data);
+    const { generateDiningSuggestions } = await import("./dining.server");
+    const nominations = await loadNominations(room.id);
+    const pool = await loadRestaurantPool(
+      room,
+      nominations.map((n) => n.restaurant),
+    );
+    return generateDiningSuggestions(room, member, context.accountUserId, pool);
+  });
+
+export const saveRoomDiningFeedback = createServerFn({ method: "POST" })
+  .inputValidator((input) =>
+    Auth.extend({ visited: z.boolean(), enjoyed: z.boolean().nullable() }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const { room, member } = await authMember(data.code, data.memberId, data.token);
+    const { saveDiningFeedback } = await import("./dining.server");
+    return saveDiningFeedback(room, member, { visited: data.visited, enjoyed: data.enjoyed });
+  });
+
+export const refreshRoomDiningSuggestions = createServerFn({ method: "POST" })
+  .middleware([optionalAccountAuth])
+  .inputValidator((input) => Auth.parse(input))
+  .handler(async ({ data, context }) => {
+    const { room, member } = await requireHost(data);
+    const { refreshDiningSuggestions } = await import("./dining.server");
+    const nominations = await loadNominations(room.id);
+    const pool = await loadRestaurantPool(
+      room,
+      nominations.map((n) => n.restaurant),
+    );
+    return refreshDiningSuggestions(room, member, context.accountUserId, pool);
   });
