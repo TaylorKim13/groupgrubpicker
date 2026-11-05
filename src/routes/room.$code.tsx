@@ -996,9 +996,7 @@ function RestaurantCard({
           <a href={directionsUrl(r)} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs font-semibold underline">Get directions</a>
           {r.address && <p className="mt-1 text-xs text-muted-foreground">{r.address}</p>}
           {r.websiteUri && <a href={r.websiteUri} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs font-semibold underline">Restaurant website</a>}
-          <GooglePopularTimes
-            placeId={r.google && r.id.startsWith("g_") ? r.id.slice(2) : undefined}
-          />
+          {r.google && r.id.startsWith("g_") && <GooglePopularTimes placeId={r.id.slice(2)} />}
         </div>
         {r.custom && (
           <span className="shrink-0 rounded bg-success px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary-foreground">

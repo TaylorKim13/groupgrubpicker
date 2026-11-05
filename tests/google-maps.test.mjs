@@ -30,7 +30,7 @@ test("direct Google transports authenticate correctly and handle provider failur
     assert.equal(calls[0].url.searchParams.get("address"), "Salt Lake City & Main");
     assert.equal(calls[0].init.headers.has("Authorization"), false);
     assert.ok(calls[0].init.signal);
-    await gmaps("/places/v1/places:searchText", {
+    await gmaps("/v1/places:searchText", {
       method: "POST",
       fieldMask: "places.id",
       body: JSON.stringify({ textQuery: "pizza" }),
@@ -53,8 +53,8 @@ test("direct Google transports authenticate correctly and handle provider failur
     assert.deepEqual((await gmaps("/maps/api/geocode/json?address=x")).results, []);
     globalThis.fetch = async () => new Response("private detail", { status: 403 });
     await assert.rejects(
-      gmaps("/places/v1/places:searchText"),
-      /^Error: Map search failed \(403\)$/,
+      gmaps("/v1/places:searchText"),
+      /^Error: Google denied the restaurant search/,
     );
     globalThis.fetch = async () => {
       throw new Error("URL containing test-server-secret");

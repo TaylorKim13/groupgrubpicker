@@ -65,6 +65,7 @@ export function rankDiningSuggestions(
   members: DiningMember[],
   now = Date.now(),
   excludedIds: readonly string[] = [],
+  limit = 3,
 ): DiningRanking {
   const active = members.filter((m) => m.preferences.participating);
   const requiredDiets = [
@@ -184,7 +185,7 @@ export function rankDiningSuggestions(
     })
     .sort((a, b) => b.score - a.score || a.restaurant.id.localeCompare(b.restaurant.id));
   return {
-    suggestions: scored.slice(0, 3),
+    suggestions: scored.slice(0, limit),
     eligibleCount: scored.length,
     participants: active.length,
     message: scored.length

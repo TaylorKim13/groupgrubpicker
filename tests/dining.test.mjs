@@ -25,7 +25,7 @@ const { DiningPreferencesSchema, defaultDiningPreferences, rankDiningSuggestions
   dining
 );
 const { DEFAULT_SETTINGS } = await import(restaurants);
-const { explainDiningSuggestions } = await import(
+const { selectDiningSuggestions } = await import(
   await compile("dining-ai.server.ts", { zod: import.meta.resolve("zod") })
 );
 const settings = { ...DEFAULT_SETTINGS, center: { lat: 0, lng: 0, label: "Test" }, radiusKm: 10 };
@@ -179,7 +179,7 @@ test("confirmed feedback supplies a small cuisine signal for restaurants not yet
   assert.ok(ranked.suggestions[0].score > ranked.suggestions[1].score);
 });
 
-test("Gemini uses structured output, sends only approved facts, and preserves ranking and warnings", async () => {
+test("Gemini uses structured output, sends only approved facts, and preserves restaurant facts and warnings", async () => {
   const suggestions = rankDiningSuggestions(
     [place("taco", { google: true })],
     settings,
@@ -187,7 +187,7 @@ test("Gemini uses structured output, sends only approved facts, and preserves ra
     now,
   ).suggestions;
   let calls = 0;
-  const explained = await explainDiningSuggestions(
+  const explained = await selectDiningSuggestions(
     suggestions,
     { key: "private-key", model: "gemini-3.5-flash-lite" },
     async (url, options) => {
@@ -202,11 +202,10 @@ test("Gemini uses structured output, sends only approved facts, and preserves ra
       const body = JSON.parse(options.body);
       assert.equal(body.generationConfig.responseMimeType, "application/json");
       assert.equal(body.generationConfig.responseJsonSchema.additionalProperties, false);
-      assert.deepEqual(Object.keys(JSON.parse(body.contents[0].parts[0].text)[0]).sort(), [
-        "id",
-        "reasons",
-        "score",
-      ]);
+      assert.deepEqual(
+        Object.keys(JSON.parse(body.contents[0].parts[0].text).candidates[0]).sort(),
+        ["cuisine", "id", "name", "price", "reasons", "score", "warnings"],
+      );
       return {
         ok: true,
         json: async () => ({
@@ -263,11 +262,11 @@ test("missing keys, refusals, malformed responses, made-up IDs, bad indexes, and
       [{ id: "taco", reasonIndexes: [0], inventedClaim: "allergy safe" }],
     ].map((explanations) => wrap(JSON.stringify({ explanations }))),
   ]) {
-    const result = await explainDiningSuggestions(suggestions, key, request);
+    const result = await selectDiningSuggestions(suggestions, key, request);
     assert.equal(result.method, "rules");
     assert.deepEqual(result.suggestions, suggestions);
   }
-  const missing = await explainDiningSuggestions(
+  const missing = await selectDiningSuggestions(
     suggestions,
     { key: undefined, model: "gemini-3.5-flash-lite" },
     () => {
@@ -278,6 +277,92 @@ test("missing keys, refusals, malformed responses, made-up IDs, bad indexes, and
 });
 
 // Exercise real server logic using a minimal Supabase transport, not browser table access.
+test("Gemini selects beyond the rule-based top three and can return only the favored cuisine", async () => {
+  const candidates = rankDiningSuggestions(
+    [place("a"), place("b"), place("c"), place("korean", { cuisine: "Korean" })],
+    settings,
+    [],
+    now,
+    [],
+    10,
+  ).suggestions;
+  assert.equal(candidates.length, 4);
+  const preferences = [{ cuisine: "Korean", favorites: 1, avoids: 0 }];
+  const picked = await selectDiningSuggestions(
+    candidates,
+    { key: "test", model: "test" },
+    async (_, options) => {
+      const payload = JSON.parse(JSON.parse(options.body).contents[0].parts[0].text);
+      assert.equal(payload.candidates.length, 4);
+      assert.deepEqual(payload.cuisinePreferences, preferences);
+      return {
+        ok: true,
+        json: async () => ({
+          candidates: [
+            {
+              finishReason: "STOP",
+              content: {
+                parts: [
+                  {
+                    text: JSON.stringify({ explanations: [{ id: "korean", reasonIndexes: [0] }] }),
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      };
+    },
+    preferences,
+  );
+  assert.equal(picked.method, "gemini");
+  assert.deepEqual(
+    picked.suggestions.map((s) => s.restaurant.id),
+    ["korean"],
+  );
+  const fallback = await selectDiningSuggestions(candidates, { key: undefined, model: "test" });
+  assert.equal(fallback.suggestions.length, 3);
+});
+
+test("Gemini output order determines the picks and duplicate IDs are rejected", async () => {
+  const candidates = rankDiningSuggestions(
+    [place("a"), place("b"), place("c"), place("d")],
+    settings,
+    [],
+    now,
+    [],
+    10,
+  ).suggestions;
+  const response = (ids) => async () => ({
+    ok: true,
+    json: async () => ({
+      candidates: [
+        {
+          finishReason: "STOP",
+          content: {
+            parts: [
+              {
+                text: JSON.stringify({
+                  explanations: ids.map((id) => ({ id, reasonIndexes: [0] })),
+                }),
+              },
+            ],
+          },
+        },
+      ],
+    }),
+  });
+  const config = { key: "test", model: "test" };
+  const selected = await selectDiningSuggestions(candidates, config, response(["d", "b", "a"]));
+  assert.deepEqual(
+    selected.suggestions.map((s) => s.restaurant.id),
+    ["d", "b", "a"],
+  );
+  const invalid = await selectDiningSuggestions(candidates, config, response(["d", "d"]));
+  assert.equal(invalid.method, "rules");
+  assert.deepEqual(invalid.suggestions, candidates.slice(0, 3));
+});
+
 let tables, reads, writes, claims;
 class Query {
   constructor(table) {
@@ -352,7 +437,7 @@ const server = await import(
     "./room.server": database,
     "./dining": dining,
     "./dining-ai.server": moduleUrl(
-      "export const explainDiningSuggestions = async suggestions => ({ suggestions, method: 'rules' });",
+      "export const selectDiningSuggestions = async suggestions => ({ suggestions: suggestions.slice(0, 3), method: 'rules' });",
     ),
   })
 );
