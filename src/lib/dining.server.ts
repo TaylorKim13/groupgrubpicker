@@ -11,7 +11,7 @@ import {
   type DiningSuggestion,
 } from "./dining";
 import type { Restaurant, RoomSettings } from "./restaurants";
-import { explainDiningSuggestions } from "./dining-ai.server";
+import { selectDiningSuggestions } from "./dining-ai.server";
 
 type DiningRoom = {
   id: string;
@@ -187,7 +187,7 @@ export async function loadDiningContext(
   const contextFingerprint = createHash("sha256")
     .update(
       JSON.stringify({
-        version: 3,
+        version: 4,
         day: new Date().toISOString().slice(0, 10),
         settings: room.settings,
         members: members.map((m) => [m.id, m.user_id]),
@@ -213,7 +213,31 @@ export async function loadDiningContext(
     version > (cached?.generated_version ?? 0)
       ? [...previouslyShown, ...currentIds]
       : previouslyShown;
-  const ranking = rankDiningSuggestions(orderedPool, room.settings, inputs, Date.now(), excluded);
+  const candidates = rankDiningSuggestions(
+    orderedPool,
+    room.settings,
+    inputs,
+    Date.now(),
+    excluded,
+    orderedPool.length,
+  );
+  const ranking = { ...candidates, suggestions: candidates.suggestions.slice(0, 3) };
+  const cuisinePreferences = [
+    ...new Set(
+      inputs.flatMap(({ preferences }) => [
+        ...preferences.favoriteCuisines,
+        ...preferences.dislikedCuisines,
+      ]),
+    ),
+  ]
+    .sort()
+    .map((cuisine) => ({
+      cuisine,
+      favorites: inputs.filter(({ preferences }) => preferences.favoriteCuisines.includes(cuisine))
+        .length,
+      avoids: inputs.filter(({ preferences }) => preferences.dislikedCuisines.includes(cuisine))
+        .length,
+    }));
   const remaining = rankDiningSuggestions(orderedPool, room.settings, inputs, Date.now(), [
     ...previouslyShown,
     ...currentIds,
@@ -225,6 +249,8 @@ export async function loadDiningContext(
     remaining,
     suggestionHistory,
     ranking,
+    candidates: candidates.suggestions,
+    cuisinePreferences,
     cached,
     mine,
     feedback: feedback as { visited: boolean; enjoyed: boolean | null } | null,
@@ -297,12 +323,8 @@ export async function generateDiningSuggestions(
   pool: Restaurant[],
 ) {
   if (room.status !== "lobby") throw new Error("Suggestions are locked once voting starts");
-  const { fingerprint, contextFingerprint, version, ranking, cached } = await loadDiningContext(
-    room,
-    member,
-    accountUserId,
-    pool,
-  );
+  const { fingerprint, contextFingerprint, version, candidates, cuisinePreferences, cached } =
+    await loadDiningContext(room, member, accountUserId, pool);
   if (cached?.fingerprint === fingerprint) return { pending: false };
   const { data: claimed, error } = await db().rpc("claim_dining_suggestions", {
     p_room_id: room.id,
@@ -310,7 +332,12 @@ export async function generateDiningSuggestions(
   });
   check(error, "Could not prepare suggestions");
   if (!claimed) return { pending: true };
-  const explained = await explainDiningSuggestions(ranking.suggestions);
+  const explained = await selectDiningSuggestions(
+    candidates,
+    undefined,
+    undefined,
+    cuisinePreferences,
+  );
   const { error: saveError } = await db().rpc("complete_dining_suggestions", {
     p_room_id: room.id,
     p_fingerprint: fingerprint,

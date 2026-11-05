@@ -353,6 +353,22 @@ const PRICE_MAP: Record<string, number> = {
 
 // Reuse discovery across the 2.5s room polls and simultaneous participants.
 const discoveryCache = new Map<string, { expires: number; results: Promise<Restaurant[]> }>();
+const CUISINE_TYPES: Record<string, string> = {
+  american_restaurant: "American",
+  chinese_restaurant: "Chinese",
+  indian_restaurant: "Indian",
+  italian_restaurant: "Italian",
+  japanese_restaurant: "Japanese",
+  korean_restaurant: "Korean",
+  mediterranean_restaurant: "Mediterranean",
+  mexican_restaurant: "Mexican",
+  thai_restaurant: "Thai",
+  vietnamese_restaurant: "Vietnamese",
+};
+function placeCuisine(place: { types?: string[]; primaryTypeDisplayName?: { text?: string } }) {
+  const type = place.types?.find((type) => CUISINE_TYPES[type]);
+  return (type && CUISINE_TYPES[type]) || place.primaryTypeDisplayName?.text || "Restaurant";
+}
 async function loadRestaurantPool(
   room: { id: string; status: string; settings: RoomSettings },
   nominations: Restaurant[],
@@ -367,6 +383,25 @@ async function loadRestaurantPool(
     if (data?.length) return data.map((row: { restaurant: Restaurant }) => row.restaurant);
   }
   const settings = room.settings;
+  // Search the shared favorites as well as nearby places, so a preferred cuisine
+  // is not lost beyond Google's bounded general search. Never return member preferences.
+  const { data: preferences, error: preferenceError } = await db()
+    .from("room_dining_preferences")
+    .select("preferences")
+    .eq("room_id", room.id);
+  if (preferenceError) throw new Error("Could not load dining preferences for restaurant search");
+  const cuisines = [
+    ...new Set<string>(
+      (preferences ?? []).flatMap((row: { preferences: unknown }) => {
+        const p = row.preferences as { participating?: boolean; favoriteCuisines?: unknown } | null;
+        return p?.participating === true && Array.isArray(p.favoriteCuisines)
+          ? p.favoriteCuisines.filter(
+              (c): c is string => typeof c === "string" && Object.values(CUISINE_TYPES).includes(c),
+            )
+          : [];
+      }),
+    ),
+  ].sort();
   const key = JSON.stringify([
     settings.center.lat,
     settings.center.lng,
@@ -374,10 +409,11 @@ async function loadRestaurantPool(
     settings.priceMin,
     settings.priceMax,
     settings.diets,
+    cuisines,
   ]);
   let entry = discoveryCache.get(key);
   if (!entry || entry.expires < Date.now()) {
-    const results = discoverRestaurants(settings);
+    const results = discoverRestaurants(settings, cuisines);
     entry = { expires: Date.now() + 5 * 60000, results };
     if (discoveryCache.size >= 100) discoveryCache.delete(discoveryCache.keys().next().value!);
     discoveryCache.set(key, entry);
@@ -391,68 +427,73 @@ async function loadRestaurantPool(
   return [...merged.values()];
 }
 
-async function discoverRestaurants(settings: RoomSettings): Promise<Restaurant[]> {
+async function discoverRestaurants(
+  settings: RoomSettings,
+  cuisines: string[] = [],
+): Promise<Restaurant[]> {
   const c = settings.center;
   const latSpan = settings.radiusKm / 110.574;
   const lngSpan = settings.radiusKm / (111.32 * Math.max(0.01, Math.cos((c.lat * Math.PI) / 180)));
   // Google returns a bounded candidate list; enforce the actual circular radius locally.
   const found = new Map<string, Restaurant>();
-  let pageToken: string | undefined;
-  for (let page = 0; page < 3; page++) {
-    const response = await gmaps("/places/v1/places:searchText", {
-      method: "POST",
-      fieldMask:
-        "nextPageToken,places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.primaryTypeDisplayName,places.types,places.businessStatus",
-      body: JSON.stringify({
-        textQuery: [...settings.diets, "restaurants"].join(" "),
-        includedType: "restaurant",
-        strictTypeFiltering: true,
-        pageSize: 20,
-        rankPreference: "DISTANCE",
-        locationRestriction: {
-          rectangle: {
-            low: {
-              latitude: Math.max(-90, c.lat - latSpan),
-              longitude: Math.max(-180, c.lng - lngSpan),
-            },
-            high: {
-              latitude: Math.min(90, c.lat + latSpan),
-              longitude: Math.min(180, c.lng + lngSpan),
+  for (const cuisine of ["", ...cuisines]) {
+    let pageToken: string | undefined;
+    for (let page = 0; page < (cuisine ? 1 : 3); page++) {
+      const response = await gmaps("/places/v1/places:searchText", {
+        method: "POST",
+        fieldMask:
+          "nextPageToken,places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.primaryTypeDisplayName,places.types,places.businessStatus",
+        body: JSON.stringify({
+          textQuery: [...settings.diets, cuisine, "restaurants"].filter(Boolean).join(" "),
+          includedType: "restaurant",
+          strictTypeFiltering: true,
+          pageSize: 20,
+          rankPreference: "DISTANCE",
+          locationRestriction: {
+            rectangle: {
+              low: {
+                latitude: Math.max(-90, c.lat - latSpan),
+                longitude: Math.max(-180, c.lng - lngSpan),
+              },
+              high: {
+                latitude: Math.min(90, c.lat + latSpan),
+                longitude: Math.min(180, c.lng + lngSpan),
+              },
             },
           },
-        },
-        ...(pageToken ? { pageToken } : {}),
-      }),
-    });
-    for (const p of response.places ?? []) {
-      if (
-        !p.id ||
-        !p.location ||
-        p.businessStatus === "CLOSED_PERMANENTLY" ||
-        p.businessStatus === "CLOSED_TEMPORARILY"
-      )
-        continue;
-      const price = PRICE_MAP[p.priceLevel] ?? (p.priceLevel === "PRICE_LEVEL_FREE" ? 1 : 2);
-      const r: Restaurant = {
-        id: "g_" + p.id,
-        name: p.displayName?.text ?? "Restaurant",
-        cuisine: p.primaryTypeDisplayName?.text ?? "Restaurant",
-        price,
-        wait: 0,
-        diets: [],
-        fastFood: (p.types ?? []).includes("fast_food_restaurant"),
-        lat: p.location.latitude,
-        lng: p.location.longitude,
-        address: p.formattedAddress ?? "",
-        google: true,
-        priceUnknown: !p.priceLevel || p.priceLevel === "PRICE_LEVEL_UNSPECIFIED",
-      };
-      if (distanceKm(c, r) > settings.radiusKm) continue;
-      if (!r.priceUnknown && (price < settings.priceMin || price > settings.priceMax)) continue;
-      found.set(r.id, r);
+          ...(pageToken ? { pageToken } : {}),
+        }),
+      });
+      for (const p of response.places ?? []) {
+        if (
+          !p.id ||
+          !p.location ||
+          p.businessStatus === "CLOSED_PERMANENTLY" ||
+          p.businessStatus === "CLOSED_TEMPORARILY"
+        )
+          continue;
+        const price = PRICE_MAP[p.priceLevel] ?? (p.priceLevel === "PRICE_LEVEL_FREE" ? 1 : 2);
+        const r: Restaurant = {
+          id: "g_" + p.id,
+          name: p.displayName?.text ?? "Restaurant",
+          cuisine: placeCuisine(p),
+          price,
+          wait: 0,
+          diets: [],
+          fastFood: (p.types ?? []).includes("fast_food_restaurant"),
+          lat: p.location.latitude,
+          lng: p.location.longitude,
+          address: p.formattedAddress ?? "",
+          google: true,
+          priceUnknown: !p.priceLevel || p.priceLevel === "PRICE_LEVEL_UNSPECIFIED",
+        };
+        if (distanceKm(c, r) > settings.radiusKm) continue;
+        if (!r.priceUnknown && (price < settings.priceMin || price > settings.priceMax)) continue;
+        found.set(r.id, r);
+      }
+      pageToken = response.nextPageToken;
+      if (!pageToken) break;
     }
-    pageToken = response.nextPageToken;
-    if (!pageToken) break;
   }
   return [...found.values()];
 }
@@ -476,7 +517,7 @@ export const searchPlaces = createServerFn({ method: "POST" })
     return ((j.places ?? []) as any[]).map((p): Restaurant => ({
       id: `g_${p.id}`,
       name: p.displayName?.text ?? "Unknown",
-      cuisine: p.primaryTypeDisplayName?.text ?? "Restaurant",
+      cuisine: placeCuisine(p),
       price: PRICE_MAP[p.priceLevel] ?? 2,
       wait: 20,
       diets: [],
