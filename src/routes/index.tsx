@@ -73,6 +73,20 @@ function Home() {
     refetchInterval: 10000,
   });
 
+  function getHostLocation(): Promise<{ lat: number; lng: number }> {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error("This browser can’t share its location. Enable location access to create a room."));
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        ({ coords }) => resolve({ lat: coords.latitude, lng: coords.longitude }),
+        () => reject(new Error("Location access is needed to create a room. Allow it in your browser and try again.")),
+        { enableHighAccuracy: false, maximumAge: 300000, timeout: 12000 },
+      );
+    });
+  }
+
   async function go(kind: "host" | "join", joinCode?: string) {
     if (busy) return;
     if (!nickname.trim()) {
@@ -86,9 +100,11 @@ function Home() {
     setBusy(true);
     try {
       const s =
-        kind === "host"
-          ? await create({ data: { nickname, avatar } })
-          : await join({ data: { nickname, avatar, code: normalizeRoomCode(joinCode ?? code) } });
+  kind === "host"
+    ? await create({ data: { nickname, avatar, center: await getHostLocation() } })
+    : await join({
+        data: { nickname, avatar, code: normalizeRoomCode(joinCode ?? code) },
+      });
       saveSession(s);
       if (kind === "host") completeCreationClickTracking(s);
       else resetCreationClickTracking();

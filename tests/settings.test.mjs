@@ -71,7 +71,7 @@ test("hosting defaults remain an independent room snapshot", () => {
   room.maxWait = 60;
   assert.deepEqual(saved.diets, ["vegan"]);
   assert.equal(saved.maxWait, 20);
-  assert.equal(restaurants.DEFAULT_SETTINGS.radiusKm, 5);
+  assert.equal(restaurants.DEFAULT_SETTINGS.radiusKm, toKm(5, "mi"));
 });
 test("distance filters use kilometers regardless of display units", () => {
   const settings = { ...restaurants.DEFAULT_SETTINGS, radiusKm: toKm(10, "mi"), maxWait: 20 };

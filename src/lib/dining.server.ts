@@ -283,7 +283,7 @@ export async function getDiningState(
       ? ({ ...context.ranking, suggestions: context.cached.suggestions } as DiningRanking)
       : context.ranking,
     method: current ? (context.cached.method as "rules" | "gemini") : ("rules" as const),
-    demo: !process.env["GOOGLE_MAPS_API_KEY"],
+    demo: !process.env["GOOGLE_MAPS_API_KEY"] && !process.env["MAPS_API"],
   };
 }
 
