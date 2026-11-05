@@ -13,6 +13,7 @@ import {
   newToken,
 } from "./room.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { googleMapsRequest as gmaps } from "./google-maps.server";
 import {
   buildPool,
   distanceKm,
@@ -100,16 +101,20 @@ export const createRoom = createServerFn({ method: "POST" })
   .middleware([optionalAccountAuth])
   .inputValidator((d) =>
     Profile.extend({
-      center: z.object({
-        lat: z.number().min(-90).max(90),
-        lng: z.number().min(-180).max(180),
-      }),
+      center: z
+        .object({
+          lat: z.number().min(-90).max(90),
+          lng: z.number().min(-180).max(180),
+        })
+        .optional(),
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
     let settings = {
       ...DEFAULT_SETTINGS,
-      center: { ...data.center, label: "Host location" },
+      center: data.center
+        ? { ...data.center, label: "Host location" }
+        : DEFAULT_SETTINGS.center,
     };
 
     if (context.accountUserId) {
@@ -305,63 +310,6 @@ export const startVoting = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// ---------- Google Maps (server-side requests) ----------
-async function gmaps(path: string, init: RequestInit & { fieldMask?: string } = {}) {
-  const gk = process.env["GOOGLE_MAPS_API_KEY"] || process.env["MAPS_API"];
-  if (!gk) throw new Error("Google Maps is not configured on the server");
-  const { fieldMask, ...request } = init;
-  const headers = new Headers(request.headers);
-  let url: URL;
-  if (path.startsWith("/maps/api/geocode/json?")) {
-    url = new URL(path, "https://maps.googleapis.com");
-    url.searchParams.set("key", gk);
-  } else if (path === "/v1/places:searchText" || path === "/v1/places:searchNearby") {
-    url = new URL(`https://places.googleapis.com${path}`);
-    headers.set("X-Goog-Api-Key", gk);
-    headers.set("Content-Type", "application/json");
-    if (fieldMask) headers.set("X-Goog-FieldMask", fieldMask);
-  } else {
-    throw new Error("Unsupported Google Maps request");
-  }
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      ...request,
-      headers,
-      signal: request.signal ?? AbortSignal.timeout(15000),
-    });
-  } catch {
-    // Geocoding URLs contain the server key; keep fetch errors out of user-visible output.
-    throw new Error("Map search could not connect. Please try again.");
-  }
-  if (!res.ok) {
-    const payload = await res.json().catch(() => null);
-    const googleStatus = payload?.error?.status;
-    const googleMessage = String(payload?.error?.message ?? "").slice(0, 180);
-    console.error(
-      `[Google Maps] HTTP ${res.status}; API status ${googleStatus ?? "unknown"}; ${googleMessage}`,
-    );
-    if (res.status === 403) {
-      throw new Error(
-        `Google denied the restaurant search${googleMessage ? `: ${googleMessage}` : ". Enable Places API (New), confirm billing is active, and allow Places API (New) on the server key."}`,
-      );
-    }
-    if (res.status === 400) {
-      throw new Error(
-        `Google rejected the restaurant search request (${googleStatus ?? "INVALID_ARGUMENT"})${googleMessage ? `: ${googleMessage}` : "."}`,
-      );
-    }
-    throw new Error(
-      `Google restaurant search failed (${res.status}${googleStatus ? ` ${googleStatus}` : ""})${googleMessage ? `: ${googleMessage}` : "."}`,
-    );
-  }
-  const result = await res.json();
-  if (result.status && result.status !== "OK" && result.status !== "ZERO_RESULTS") {
-    throw new Error(`Map search failed (${result.status})`);
-  }
-  return result;
-}
-
 // ---------- Google Maps ----------
 export const geocodeCenter = createServerFn({ method: "POST" })
   .inputValidator((d) => Auth.extend({ address: z.string().trim().min(2).max(200) }).parse(d))
@@ -404,8 +352,8 @@ async function loadRestaurantPool(
       .eq("room_id", room.id);
     if (error) throw new Error("Could not load the voting restaurant list");
     if (data?.length) {
-      const pool = new Map(
-        data.map((row: { restaurant: Restaurant }) => [row.restaurant.id, row.restaurant]),
+      const pool = new Map<string, Restaurant>(
+        data.map((row: { restaurant: Restaurant }) => [row.restaurant.id, row.restaurant] as const),
       );
       nominations.forEach((restaurant) => pool.set(restaurant.id, restaurant));
       return [...pool.values()];
