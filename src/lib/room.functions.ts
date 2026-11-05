@@ -4,14 +4,7 @@ import { RoomCodeSchema, RoomProfileSchema } from "./room-access";
 import { CreationClickSchema } from "./creation-clicks";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import {
-  authMember,
-  db,
-  getRoomByCode,
-  hashToken,
-  newCode,
-  newToken,
-} from "./room.server";
+import { authMember, db, getRoomByCode, hashToken, newCode, newToken } from "./room.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { googleMapsRequest as gmaps } from "./google-maps.server";
 import {
@@ -288,7 +281,10 @@ export const startVoting = createServerFn({ method: "POST" })
     const { room } = await requireHost(data);
     if (room.status !== "lobby") return { ok: true, alreadyStarted: true };
     const noms = await loadNominations(room.id);
-    const pool = await loadRestaurantPool(room, noms.map(n => n.restaurant));
+    const pool = await loadRestaurantPool(
+      room,
+      noms.map((n) => n.restaurant),
+    );
     if (pool.length < 2) throw new Error("Choose filters with at least two restaurants");
     const { error: snapshotError } = await db()
       .from("room_restaurants")
@@ -309,6 +305,63 @@ export const startVoting = createServerFn({ method: "POST" })
     if (error) throw new Error("Could not start voting");
     return { ok: true };
   });
+
+// ---------- Google Maps (server-side requests) ----------
+export async function gmaps(path: string, init: RequestInit & { fieldMask?: string } = {}) {
+  const gk = process.env["GOOGLE_MAPS_API_KEY"] || process.env["MAPS_API"];
+  if (!gk) throw new Error("Google Maps is not configured on the server");
+  const { fieldMask, ...request } = init;
+  const headers = new Headers(request.headers);
+  let url: URL;
+  if (path.startsWith("/maps/api/geocode/json?")) {
+    url = new URL(path, "https://maps.googleapis.com");
+    url.searchParams.set("key", gk);
+  } else if (path === "/v1/places:searchText" || path === "/v1/places:searchNearby") {
+    url = new URL(`https://places.googleapis.com${path}`);
+    headers.set("X-Goog-Api-Key", gk);
+    headers.set("Content-Type", "application/json");
+    if (fieldMask) headers.set("X-Goog-FieldMask", fieldMask);
+  } else {
+    throw new Error("Unsupported Google Maps request");
+  }
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...request,
+      headers,
+      signal: request.signal ?? AbortSignal.timeout(15000),
+    });
+  } catch {
+    // Geocoding URLs contain the server key; keep fetch errors out of user-visible output.
+    throw new Error("Map search could not connect. Please try again.");
+  }
+  if (!res.ok) {
+    const payload = await res.json().catch(() => null);
+    const googleStatus = payload?.error?.status;
+    const googleMessage = String(payload?.error?.message ?? "").slice(0, 180);
+    console.error(
+      `[Google Maps] HTTP ${res.status}; API status ${googleStatus ?? "unknown"}; ${googleMessage}`,
+    );
+    if (res.status === 403) {
+      throw new Error(
+        `Google denied the restaurant search${googleMessage ? `: ${googleMessage}` : ". Enable Places API (New), confirm billing is active, and allow Places API (New) on the server key."}`,
+      );
+    }
+    if (res.status === 400) {
+      throw new Error(
+        `Google rejected the restaurant search request (${googleStatus ?? "INVALID_ARGUMENT"})${googleMessage ? `: ${googleMessage}` : "."}`,
+      );
+    }
+    throw new Error(
+      `Google restaurant search failed (${res.status}${googleStatus ? ` ${googleStatus}` : ""})${googleMessage ? `: ${googleMessage}` : "."}`,
+    );
+  }
+  const result = await res.json();
+  if (result.status && result.status !== "OK" && result.status !== "ZERO_RESULTS") {
+    throw new Error(`Map search failed (${result.status})`);
+  }
+  return result;
+}
 
 // ---------- Google Maps ----------
 export const geocodeCenter = createServerFn({ method: "POST" })
@@ -338,6 +391,23 @@ const restaurantDiscoveryCache = new Map<
   { expiresAt: number; results: Promise<Restaurant[]> }
 >();
 
+const CUISINE_TYPES: Record<string, string> = {
+  american_restaurant: "American",
+  chinese_restaurant: "Chinese",
+  indian_restaurant: "Indian",
+  italian_restaurant: "Italian",
+  japanese_restaurant: "Japanese",
+  korean_restaurant: "Korean",
+  mediterranean_restaurant: "Mediterranean",
+  mexican_restaurant: "Mexican",
+  thai_restaurant: "Thai",
+  vietnamese_restaurant: "Vietnamese",
+};
+function placeCuisine(place: { types?: string[]; primaryTypeDisplayName?: { text?: string } }) {
+  const type = place.types?.find((type) => CUISINE_TYPES[type]);
+  return (type && CUISINE_TYPES[type]) || place.primaryTypeDisplayName?.text || "Restaurant";
+}
+
 async function loadRestaurantPool(
   room: { id: string; status: string; settings: RoomSettings },
   nominations: Restaurant[],
@@ -361,6 +431,24 @@ async function loadRestaurantPool(
   }
 
   const settings = { ...DEFAULT_SETTINGS, ...room.settings };
+  // Include shared favorite cuisines beyond Google's bounded general search.
+  const { data: preferences, error: preferenceError } = await db()
+    .from("room_dining_preferences")
+    .select("preferences")
+    .eq("room_id", room.id);
+  if (preferenceError) throw new Error("Could not load dining preferences for restaurant search");
+  const cuisines = [
+    ...new Set<string>(
+      (preferences ?? []).flatMap((row: { preferences: unknown }) => {
+        const p = row.preferences as { participating?: boolean; favoriteCuisines?: unknown } | null;
+        return p?.participating === true && Array.isArray(p.favoriteCuisines)
+          ? p.favoriteCuisines.filter(
+              (c): c is string => typeof c === "string" && Object.values(CUISINE_TYPES).includes(c),
+            )
+          : [];
+      }),
+    ),
+  ].sort();
   const cacheKey = JSON.stringify([
     settings.center.lat,
     settings.center.lng,
@@ -368,10 +456,11 @@ async function loadRestaurantPool(
     settings.priceMin,
     settings.priceMax,
     settings.diets,
+    cuisines,
   ]);
   let entry = restaurantDiscoveryCache.get(cacheKey);
   if (!entry || entry.expiresAt <= Date.now()) {
-    const results = discoverRestaurants(settings);
+    const results = discoverRestaurants(settings, cuisines);
     entry = { expiresAt: Date.now() + 5 * 60_000, results };
     restaurantDiscoveryCache.set(cacheKey, entry);
     if (restaurantDiscoveryCache.size > 100) {
@@ -391,7 +480,10 @@ async function loadRestaurantPool(
   return [...pool.values()];
 }
 
-async function discoverRestaurants(settings: RoomSettings): Promise<Restaurant[]> {
+async function discoverRestaurants(
+  settings: RoomSettings,
+  cuisines: string[] = [],
+): Promise<Restaurant[]> {
   const center = settings.center;
   const dietSearchTerms: Record<string, string> = {
     vegetarian: "vegetarian",
@@ -401,91 +493,99 @@ async function discoverRestaurants(settings: RoomSettings): Promise<Restaurant[]
     "nut-free": "nut free",
     "dairy-free": "dairy free",
   };
-  const textQuery = [
-    ...settings.diets.map((diet) => dietSearchTerms[diet] ?? diet),
-    "restaurants",
-  ].join(" ");
   const restaurants = new Map<string, Restaurant>();
-  let pageToken: string | undefined;
-  for (let page = 0; page < 3; page++) {
-    const body = JSON.stringify({
-      textQuery,
-      includedType: "restaurant",
-      strictTypeFiltering: true,
-      pageSize: 20,
-      rankPreference: "DISTANCE",
-      locationBias: {
-        circle: {
-          center: { latitude: center.lat, longitude: center.lng },
-          radius: settings.radiusKm * 1000,
+  for (const cuisine of ["", ...cuisines]) {
+    const textQuery = [
+      ...settings.diets.map((diet) => dietSearchTerms[diet] ?? diet),
+      cuisine,
+      "restaurants",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    let pageToken: string | undefined;
+    for (let page = 0; page < (cuisine ? 1 : 3); page++) {
+      const body = JSON.stringify({
+        textQuery,
+        includedType: "restaurant",
+        strictTypeFiltering: true,
+        pageSize: 20,
+        rankPreference: "DISTANCE",
+        locationBias: {
+          circle: {
+            center: { latitude: center.lat, longitude: center.lng },
+            radius: settings.radiusKm * 1000,
+          },
         },
-      },
-      ...(pageToken ? { pageToken } : {}),
-    });
-    let response: any;
-    try {
-      response = await gmaps("/v1/places:searchText", {
-        method: "POST",
-        fieldMask:
-          "nextPageToken,places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.priceRange,places.primaryTypeDisplayName,places.types,places.businessStatus,places.websiteUri",
-        body,
+        ...(pageToken ? { pageToken } : {}),
       });
-    } catch (error) {
-      // Website URI is only used to validate restaurant favicon domains. If Google
-      // rejects that optional field, retry the core search so places still load.
+      let response: any;
       try {
         response = await gmaps("/v1/places:searchText", {
           method: "POST",
           fieldMask:
-            "nextPageToken,places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.priceRange,places.primaryTypeDisplayName,places.types,places.businessStatus",
+            "nextPageToken,places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.priceRange,places.primaryTypeDisplayName,places.types,places.businessStatus,places.websiteUri",
           body,
         });
-      } catch {
-        if (page > 0 && restaurants.size > 0) {
-          console.warn("[Google Maps] A later restaurant result page failed; keeping earlier results");
-          break;
+      } catch (error) {
+        // Website URI is only used to validate restaurant favicon domains. If Google
+        // rejects that optional field, retry the core search so places still load.
+        try {
+          response = await gmaps("/v1/places:searchText", {
+            method: "POST",
+            fieldMask:
+              "nextPageToken,places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.priceRange,places.primaryTypeDisplayName,places.types,places.businessStatus",
+            body,
+          });
+        } catch {
+          if (page > 0 && restaurants.size > 0) {
+            console.warn(
+              "[Google Maps] A later restaurant result page failed; keeping earlier results",
+            );
+            break;
+          }
+          throw error;
         }
-        throw error;
       }
-    }
 
-    for (const place of response.places ?? []) {
-      if (
-        !place.id ||
-        !place.location ||
-        place.businessStatus === "CLOSED_PERMANENTLY" ||
-        place.businessStatus === "CLOSED_TEMPORARILY"
-      ) {
-        continue;
-      }
-      const priceUnknown = !place.priceLevel || place.priceLevel === "PRICE_LEVEL_UNSPECIFIED";
-      const price = PRICE_MAP[place.priceLevel] ?? (place.priceLevel === "PRICE_LEVEL_FREE" ? 1 : 2);
-      if (!priceUnknown && (price < settings.priceMin || price > settings.priceMax)) continue;
+      for (const place of response.places ?? []) {
+        if (
+          !place.id ||
+          !place.location ||
+          place.businessStatus === "CLOSED_PERMANENTLY" ||
+          place.businessStatus === "CLOSED_TEMPORARILY"
+        ) {
+          continue;
+        }
+        const priceUnknown = !place.priceLevel || place.priceLevel === "PRICE_LEVEL_UNSPECIFIED";
+        const price =
+          PRICE_MAP[place.priceLevel] ?? (place.priceLevel === "PRICE_LEVEL_FREE" ? 1 : 2);
+        if (!priceUnknown && (price < settings.priceMin || price > settings.priceMax)) continue;
 
-      const restaurant: Restaurant = {
-        id: `g_${place.id}`,
-        name: place.displayName?.text ?? "Restaurant",
-        cuisine: place.primaryTypeDisplayName?.text ?? "Restaurant",
-        price,
-        ...(place.priceRange ? { priceRange: place.priceRange } : {}),
-        wait: 0,
-        diets: [],
-        fastFood: (place.types ?? []).includes("fast_food_restaurant"),
-        lat: place.location.latitude,
-        lng: place.location.longitude,
-        address: place.formattedAddress ?? undefined,
-        google: true,
-        priceUnknown,
-        waitUnknown: true,
-        dietInfoUnknown: true,
-        websiteUri: place.websiteUri,
-      };
-      if (distanceKm(center, restaurant) <= settings.radiusKm) {
-        restaurants.set(restaurant.id, restaurant);
+        const restaurant: Restaurant = {
+          id: `g_${place.id}`,
+          name: place.displayName?.text ?? "Restaurant",
+          cuisine: placeCuisine(place),
+          price,
+          ...(place.priceRange ? { priceRange: place.priceRange } : {}),
+          wait: 0,
+          diets: [],
+          fastFood: (place.types ?? []).includes("fast_food_restaurant"),
+          lat: place.location.latitude,
+          lng: place.location.longitude,
+          address: place.formattedAddress ?? undefined,
+          google: true,
+          priceUnknown,
+          waitUnknown: true,
+          dietInfoUnknown: true,
+          websiteUri: place.websiteUri,
+        };
+        if (distanceKm(center, restaurant) <= settings.radiusKm) {
+          restaurants.set(restaurant.id, restaurant);
+        }
       }
+      pageToken = response.nextPageToken;
+      if (!pageToken) break;
     }
-    pageToken = response.nextPageToken;
-    if (!pageToken) break;
   }
 
   // Text Search can rank common chains below its 60-result cap in dense areas.
@@ -519,14 +619,15 @@ async function discoverRestaurants(settings: RoomSettings): Promise<Restaurant[]
           continue;
         }
         const priceUnknown = !place.priceLevel || place.priceLevel === "PRICE_LEVEL_UNSPECIFIED";
-        const price = PRICE_MAP[place.priceLevel] ?? (place.priceLevel === "PRICE_LEVEL_FREE" ? 1 : 2);
+        const price =
+          PRICE_MAP[place.priceLevel] ?? (place.priceLevel === "PRICE_LEVEL_FREE" ? 1 : 2);
         if (!priceUnknown && (price < settings.priceMin || price > settings.priceMax)) continue;
         const restaurant: Restaurant = {
           id: `g_${place.id}`,
           name: place.displayName?.text ?? "Restaurant",
-          cuisine: place.primaryTypeDisplayName?.text ?? "Restaurant",
+          cuisine: placeCuisine(place),
           price,
-        ...(place.priceRange ? { priceRange: place.priceRange } : {}),
+          ...(place.priceRange ? { priceRange: place.priceRange } : {}),
           wait: 0,
           diets: [],
           fastFood: (place.types ?? []).includes("fast_food_restaurant"),
@@ -561,7 +662,8 @@ export const searchPlaces = createServerFn({ method: "POST" })
     const c = (room.settings as RoomSettings).center ?? DEFAULT_SETTINGS.center;
     const j = await gmaps("/v1/places:searchText", {
       method: "POST",
-      fieldMask: "places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.priceRange,places.primaryTypeDisplayName,places.types,places.websiteUri",
+      fieldMask:
+        "places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.priceRange,places.primaryTypeDisplayName,places.types,places.websiteUri",
       body: JSON.stringify({
         textQuery: data.query,
         pageSize: 6,
@@ -569,27 +671,25 @@ export const searchPlaces = createServerFn({ method: "POST" })
         locationBias: { circle: { center: { latitude: c.lat, longitude: c.lng }, radius: 30000 } },
       }),
     });
-    return ((j.places ?? []) as any[]).map(
-      (p): Restaurant => ({
-        id: `g_${p.id}`,
-        name: p.displayName?.text ?? "Unknown",
-        cuisine: p.primaryTypeDisplayName?.text ?? "Restaurant",
-        price: PRICE_MAP[p.priceLevel] ?? 2,
-        ...(p.priceRange ? { priceRange: p.priceRange } : {}),
-        wait: 0,
-        diets: [],
-        fastFood: (p.types ?? []).includes("fast_food_restaurant"),
-        lat: p.location?.latitude,
-        lng: p.location?.longitude,
-        address: p.formattedAddress,
-        custom: true,
-        google: true,
-        priceUnknown: !p.priceLevel || p.priceLevel === "PRICE_LEVEL_UNSPECIFIED",
-        waitUnknown: true,
-        dietInfoUnknown: true,
-        websiteUri: p.websiteUri,
-      }),
-    );
+    return ((j.places ?? []) as any[]).map((p): Restaurant => ({
+      id: `g_${p.id}`,
+      name: p.displayName?.text ?? "Unknown",
+      cuisine: placeCuisine(p),
+      price: PRICE_MAP[p.priceLevel] ?? 2,
+      ...(p.priceRange ? { priceRange: p.priceRange } : {}),
+      wait: 0,
+      diets: [],
+      fastFood: (p.types ?? []).includes("fast_food_restaurant"),
+      lat: p.location?.latitude,
+      lng: p.location?.longitude,
+      address: p.formattedAddress,
+      custom: true,
+      google: true,
+      priceUnknown: !p.priceLevel || p.priceLevel === "PRICE_LEVEL_UNSPECIFIED",
+      waitUnknown: true,
+      dietInfoUnknown: true,
+      websiteUri: p.websiteUri,
+    }));
   });
 
 const RestaurantSchema = z.object({
@@ -605,10 +705,24 @@ const RestaurantSchema = z.object({
   address: z.string().max(300).optional(),
   google: z.boolean().optional(),
   priceUnknown: z.boolean().optional(),
-  priceRange: z.object({
-    startPrice: z.object({ currencyCode: z.string().length(3), units: z.string().regex(/^\d+$/), nanos: z.number().int().min(0).max(999999999).optional() }).optional(),
-    endPrice: z.object({ currencyCode: z.string().length(3), units: z.string().regex(/^\d+$/), nanos: z.number().int().min(0).max(999999999).optional() }).optional(),
-  }).optional(),
+  priceRange: z
+    .object({
+      startPrice: z
+        .object({
+          currencyCode: z.string().length(3),
+          units: z.string().regex(/^\d+$/),
+          nanos: z.number().int().min(0).max(999999999).optional(),
+        })
+        .optional(),
+      endPrice: z
+        .object({
+          currencyCode: z.string().length(3),
+          units: z.string().regex(/^\d+$/),
+          nanos: z.number().int().min(0).max(999999999).optional(),
+        })
+        .optional(),
+    })
+    .optional(),
   waitUnknown: z.boolean().optional(),
   dietInfoUnknown: z.boolean().optional(),
   websiteUri: z
@@ -658,9 +772,15 @@ export const castVote = createServerFn({ method: "POST" })
     if (room.status !== "voting") throw new Error("Voting isn't open");
     const noms = await loadNominations(room.id);
     const ids = new Set(
-      (await loadRestaurantPool(room, noms.map((n) => n.restaurant))).map((restaurant) => restaurant.id),
+      (
+        await loadRestaurantPool(
+          room,
+          noms.map((n) => n.restaurant),
+        )
+      ).map((restaurant) => restaurant.id),
     );
-    if (!ids.has(data.want) || !ids.has(data.could)) throw new Error("That place isn't in the pool");
+    if (!ids.has(data.want) || !ids.has(data.could))
+      throw new Error("That place isn't in the pool");
     const { error } = await db()
       .from("votes")
       .upsert(
@@ -689,7 +809,10 @@ export const closeVoting = createServerFn({ method: "POST" })
       loadNominations(room.id),
     ]);
     if (!votes?.length) throw new Error("Nobody has voted yet");
-    const pool = await loadRestaurantPool(room, noms.map((n) => n.restaurant));
+    const pool = await loadRestaurantPool(
+      room,
+      noms.map((n) => n.restaurant),
+    );
     const byId = new Map(pool.map((r) => [r.id, r]));
     const tally = new Map<string, Score>();
     const bump = (id: string, pts: number) => {

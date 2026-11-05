@@ -169,7 +169,7 @@ beforeEach(() => {
 after(() => {
   delete globalThis.__grubRoomFlowTest;
 });
-const profile = { nickname: "  Aaron  ", avatar: "🍕" };
+const profile = { nickname: "  Aaron  ", avatar: "🍕", center: { lat: 40.2338, lng: -111.6585 } };
 
 test("every dining endpoint checks the hashed room pass and only the host can generate suggestions", async () => {
   const host = await createRoom({ data: profile });

@@ -5,12 +5,8 @@ import { toast } from "sonner";
 import { Button } from "./ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { useAccount } from "./AccountProvider";
-import {
-  CUISINES,
-  DiningPreferencesSchema,
-  type DiningPreferences,
-  type DiningSuggestion,
-} from "@/lib/dining";
+import { SuggestionCards } from "./SuggestionCards";
+import { CUISINES, DiningPreferencesSchema, type DiningPreferences } from "@/lib/dining";
 import { DIETS, priceLabel, type Restaurant } from "@/lib/restaurants";
 import { useDistanceUnit } from "@/lib/distance-context";
 import { hasRewardMatch, type RewardRestaurant } from "@/lib/restaurant-rewards";
@@ -110,8 +106,30 @@ export function DiningPanel({
             Demo restaurants — these are examples, not live local listings.
           </p>
         )}
-        {data.method === "gemini" && (
-          <p className="mt-1 text-xs text-muted-foreground">AI-assisted explanations</p>
+        {data.generated && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            {data.method === "gemini"
+              ? "Picked by Gemini for your table"
+              : "Using preference-based picks · Gemini unavailable"}
+          </p>
+        )}
+        {status === "lobby" && (
+          <p className="mt-3 rounded-xl bg-muted px-3 py-2 text-sm">
+            {data.preferences.participating ? (
+              <>
+                <span className="font-bold">Your preferences are included.</span>{" "}
+                {data.preferences.favoriteCuisines.length > 0 &&
+                  `Favorites: ${data.preferences.favoriteCuisines.join(", ")}. `}
+                {data.preferences.dislikedCuisines.length > 0 &&
+                  `Avoiding ${data.preferences.dislikedCuisines.length} cuisine${data.preferences.dislikedCuisines.length === 1 ? "" : "s"}.`}
+              </>
+            ) : (
+              <>
+                <span className="font-bold">Your preferences aren’t included yet.</span> Open “Share
+                my dining preferences” below and click “Use for this outing.”
+              </>
+            )}
+          </p>
         )}
         {(data.pending || generation.isFetching) && (
           <p className="mt-2 text-sm" role="status">
@@ -148,7 +166,7 @@ export function DiningPanel({
               <p className="text-xs text-muted-foreground">
                 {data.generated && data.remaining === 0
                   ? "You've seen all matching options. Check History or adjust the group filters."
-                  : `Show up to 3 new places without repeating this search's earlier suggestions. ${data.remaining} remaining.`}
+                  : `${data.remaining} more places to explore. No repeats.`}
               </p>
             </div>
           )}
@@ -266,6 +284,7 @@ function PreferenceForm({
   const [preferences, setPreferences] = useState(initial);
   const [remember, setRemember] = useState(false);
   const [busy, setBusy] = useState(false);
+  const hasUnsavedChanges = JSON.stringify(preferences) !== JSON.stringify(initial);
   const save = useServerFn(saveRoomDiningPreferences);
   const unit = useDistanceUnit();
   const change = (patch: Partial<DiningPreferences>) =>
@@ -488,6 +507,11 @@ function PreferenceForm({
               </Button>
             )}
           </div>
+          {hasUnsavedChanges && (
+            <p role="status" className="rounded-lg bg-secondary/25 px-3 py-2 text-sm font-bold">
+              These changes aren’t used in suggestions until you click “Use for this outing.”
+            </p>
+          )}
         </fieldset>
       </form>
     </details>
