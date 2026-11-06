@@ -247,6 +247,15 @@ function Home() {
           )}
         </ul>
       </details>
+      <section className="mt-8 rounded-xl border-2 bg-secondary/40 p-5 text-center">
+        <h2 className="text-lg font-extrabold">Know about any restaurant deals?</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Enter a deal into the database and share it with the community.
+        </p>
+        <Button className="mt-4 font-bold" asChild>
+          <Link to="/deals/submit">Share a deal</Link>
+        </Button>
+      </section>
       <footer className="mt-8 flex justify-center">
         <Onboarding />
       </footer>

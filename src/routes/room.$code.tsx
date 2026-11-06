@@ -869,6 +869,7 @@ function Pool({
   const pool = s.pool;
   const dealsByRestaurant = useRestaurantDeals(
     voting ? pool.map((restaurant) => restaurant.id) : [],
+    voting ? pool.map((restaurant) => restaurant.name) : [],
   );
   const filteredPool = useMemo(() => {
     const query = restaurantSearch.trim().toLocaleLowerCase();

@@ -7,7 +7,7 @@ export function RestaurantDealIndicators({ deals }: { deals: RestaurantDeal[] })
     <div className="mt-2 space-y-1.5" aria-label="Active restaurant deals">
       {deals.map((deal, index) => (
         <div
-          key={`${deal.restaurant_id}-${deal.title}-${index}`}
+          key={`${deal.id}-${index}`}
           className="rounded-lg border border-primary/20 bg-primary/5 px-2.5 py-2 text-xs"
         >
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -15,6 +15,9 @@ export function RestaurantDealIndicators({ deals }: { deals: RestaurantDeal[] })
               Deal
             </span>
             <span className="font-semibold">{deal.title}</span>
+            {deal.scope === "chain" && (
+              <span className="text-muted-foreground">Chain-wide</span>
+            )}
             {deal.promo_code && (
               <span className="rounded bg-background px-1.5 py-0.5 font-mono">
                 Code: {deal.promo_code}
@@ -40,10 +43,25 @@ export function RestaurantDealIndicators({ deals }: { deals: RestaurantDeal[] })
               {deal.terms && <p className="mt-1">{deal.terms}</p>}
             </details>
           )}
+          {(deal.start_date || deal.end_date) && (
+            <p className="mt-1 text-muted-foreground">
+              {deal.start_date && `Starts ${formatDealDate(deal.start_date)}`}
+              {deal.start_date && deal.end_date && " · "}
+              {deal.end_date && `Ends ${formatDealDate(deal.end_date)}`}
+            </p>
+          )}
         </div>
       ))}
     </div>
   );
+}
+
+function formatDealDate(date: string) {
+  const [year, month, day] = date.split("-").map(Number);
+  if (!year || !month || !day) return date;
+  const options: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+  if (year !== new Date().getFullYear()) options.year = "numeric";
+  return new Date(year, month - 1, day).toLocaleDateString(undefined, options);
 }
 
 export function WinnerDealLinks({ deals }: { deals: RestaurantDeal[] }) {
@@ -53,7 +71,7 @@ export function WinnerDealLinks({ deals }: { deals: RestaurantDeal[] }) {
         .filter((deal) => deal.redemption_url)
         .map((deal, index) => (
           <a
-            key={`${deal.restaurant_id}-${deal.title}-${index}`}
+            key={`${deal.id}-${index}`}
             href={deal.redemption_url!}
             target="_blank"
             rel="noreferrer"

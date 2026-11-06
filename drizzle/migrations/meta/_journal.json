@@ -99,6 +99,13 @@
       "when": 1793761200000,
       "tag": "0013_linked_reward_restaurants",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793847600000,
+      "tag": "0014_community_restaurant_deals",
+      "breakpoints": true
     }
   ]
 }
