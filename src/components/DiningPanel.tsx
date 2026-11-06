@@ -9,6 +9,8 @@ import { SuggestionCards } from "./SuggestionCards";
 import { CUISINES, DiningPreferencesSchema, type DiningPreferences } from "@/lib/dining";
 import { DIETS, priceLabel, type Restaurant } from "@/lib/restaurants";
 import { useDistanceUnit } from "@/lib/distance-context";
+import { hasRewardMatch, type RewardRestaurant } from "@/lib/restaurant-rewards";
+import { Gift } from "lucide-react";
 import { fromKm, toKm } from "@/lib/settings";
 import {
   getRoomDiningState,
@@ -25,12 +27,14 @@ export function DiningPanel({
   isHost,
   linked,
   pool,
+  rewardRestaurants,
 }: {
   session: Session;
   status: "lobby" | "voting" | "closed";
   isHost: boolean;
   linked: boolean;
   pool: Restaurant[];
+  rewardRestaurants: RewardRestaurant[];
 }) {
   const user = useAccount();
   const qc = useQueryClient();
@@ -171,7 +175,10 @@ export function DiningPanel({
               The host can refresh suggestions for everyone.
             </p>
           )}
-          <SuggestionCards suggestions={data.ranking.suggestions} />
+          <SuggestionCards
+            suggestions={data.ranking.suggestions}
+            rewardRestaurants={rewardRestaurants}
+          />
         </TabsContent>
         <TabsContent value="history" className="space-y-5">
           {data.history.length === 0 ? (
@@ -184,7 +191,11 @@ export function DiningPanel({
                 <h3 className="text-sm font-bold">
                   Suggested {new Date(set.generatedAt).toLocaleString()}
                 </h3>
-                <SuggestionCards suggestions={set.suggestions} historical />
+                <SuggestionCards
+                  suggestions={set.suggestions}
+                  historical
+                  rewardRestaurants={rewardRestaurants}
+                />
               </section>
             ))
           )}
@@ -204,6 +215,56 @@ export function DiningPanel({
         />
       )}
     </section>
+  );
+}
+
+function SuggestionCards({
+  suggestions,
+  historical = false,
+  rewardRestaurants,
+}: {
+  suggestions: DiningSuggestion[];
+  historical?: boolean;
+  rewardRestaurants: RewardRestaurant[];
+}) {
+  return (
+    <ol className="grid gap-3 md:grid-cols-3">
+      {suggestions.map((suggestion, index) => (
+        <li key={suggestion.restaurant.id} className="rounded-xl border-2 bg-background p-4">
+          <p className="text-xs font-bold text-muted-foreground">Suggestion {index + 1}</p>
+          <h3 className="mt-1 flex items-center gap-2 font-bold">
+            {suggestion.restaurant.name}
+            {hasRewardMatch(rewardRestaurants, suggestion.restaurant.name) && (
+              <span
+                className="shrink-0 text-primary"
+                role="img"
+                aria-label="Your rewards account matches this restaurant"
+                title="Your rewards account matches this restaurant"
+              >
+                <Gift className="h-4 w-4" aria-hidden="true" />
+              </span>
+            )}
+          </h3>
+          <p className="text-sm">
+            {suggestion.restaurant.cuisine} ·{" "}
+            {suggestion.restaurant.priceUnknown
+              ? "Price unknown"
+              : priceLabel(suggestion.restaurant.price)}
+          </p>
+          <p className="mt-2 text-sm">{suggestion.aiExplanation ?? suggestion.reasons.join(" ")}</p>
+          {suggestion.warnings.map((warning) => (
+            <p key={warning} className="mt-2 text-xs text-muted-foreground">
+              {warning}
+            </p>
+          ))}
+          <p className="mt-2 text-xs">
+            {historical
+              ? "Earlier suggestion; it may no longer meet the current group filters."
+              : "Find this place in the restaurant list below to vote."}
+          </p>
+        </li>
+      ))}
+    </ol>
   );
 }
 

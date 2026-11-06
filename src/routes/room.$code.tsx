@@ -17,14 +17,18 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Gift } from "lucide-react";
 import { ProfilePicker } from "@/components/ProfilePicker";
 import { RestaurantMap } from "@/components/RestaurantMap";
 import { GooglePopularTimes } from "@/components/GooglePopularTimes";
 import { Reveal } from "@/components/Reveal";
 import { ShareWaitButton } from "@/components/ShareWaitButton";
+import { RestaurantDealIndicators } from "@/components/RestaurantDeals";
 import { ShareInviteButton } from "@/components/ShareInviteButton";
 import type { Result } from "@/lib/room.functions";
+import { useRestaurantDeals, type RestaurantDeal } from "@/lib/restaurant-deals";
+import { getRewardRestaurants } from "@/lib/account.functions";
+import { hasRewardMatch, type RewardRestaurant } from "@/lib/restaurant-rewards";
 import {
   castVote,
   kickMember,
@@ -172,6 +176,8 @@ type State = {
 
 function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
   const fetchState = useServerFn(getRoomState);
+  const accountUser = useAccount();
+  const fetchRewardRestaurants = useServerFn(getRewardRestaurants);
   const qc = useQueryClient();
   const key = ["room", session.code];
   const q = useQuery({
@@ -181,6 +187,12 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
       (query.state.data as State | undefined)?.status === "closed" ? false : 2500,
     retry: 1,
   });
+  const rewardQuery = useQuery({
+    queryKey: ["account-reward-restaurants", accountUser?.id],
+    queryFn: () => fetchRewardRestaurants(),
+    enabled: !!accountUser,
+  });
+  const rewardRestaurants: RewardRestaurant[] = rewardQuery.data?.restaurants ?? [];
   const refresh = () => qc.invalidateQueries({ queryKey: key });
 
   if (q.error && (!q.data || q.error.message === "Not a member of this room"))
@@ -212,13 +224,17 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
       <TopBar s={s} onLeave={onLeave} />
       {s.status === "closed" && s.result ? (
         <div className="py-10">
-          <Reveal result={s.result} />
+          <Reveal
+            result={s.result}
+            hasRewards={hasRewardMatch(rewardRestaurants, s.result.winner.name)}
+          />
           <DiningPanel
             session={session}
             status={s.status}
             isHost={s.me.isHost}
             linked={s.me.linked}
             pool={s.pool}
+            rewardRestaurants={rewardRestaurants}
           />
         </div>
       ) : (
@@ -238,8 +254,9 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
               isHost={s.me.isHost}
               linked={s.me.linked}
               pool={s.pool}
+              rewardRestaurants={rewardRestaurants}
             />
-            <Pool s={s} session={session} refresh={refresh} />
+            <Pool s={s} session={session} refresh={refresh} rewardRestaurants={rewardRestaurants} />
           </section>
         </div>
       )}
@@ -831,7 +848,17 @@ function HostSettings({
   );
 }
 
-function Pool({ s, session, refresh }: { s: State; session: Session; refresh: () => void }) {
+function Pool({
+  s,
+  session,
+  refresh,
+  rewardRestaurants,
+}: {
+  s: State;
+  session: Session;
+  refresh: () => void;
+  rewardRestaurants: RewardRestaurant[];
+}) {
   useSelectionTracking(session, s.status !== "closed" && !s.myVote);
   const vote = useServerFn(castVote);
   const [want, setWant] = useState<string | null>(s.myVote?.want ?? null);
@@ -840,6 +867,9 @@ function Pool({ s, session, refresh }: { s: State; session: Session; refresh: ()
   const [restaurantSearch, setRestaurantSearch] = useState("");
   const voting = s.status === "voting";
   const pool = s.pool;
+  const dealsByRestaurant = useRestaurantDeals(
+    voting ? pool.map((restaurant) => restaurant.id) : [],
+  );
   const filteredPool = useMemo(() => {
     const query = restaurantSearch.trim().toLocaleLowerCase();
     if (!query) return pool;
@@ -881,7 +911,14 @@ function Pool({ s, session, refresh }: { s: State; session: Session; refresh: ()
         />
       </div>
 
-      {s.status !== "closed" && <Nominate s={s} session={session} refresh={refresh} />}
+      {s.status !== "closed" && (
+        <Nominate
+          s={s}
+          session={session}
+          refresh={refresh}
+          rewardRestaurants={rewardRestaurants}
+        />
+      )}
 
       {voting && (
         <div className="sticky top-2 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-secondary p-4 chunky">
@@ -924,7 +961,11 @@ function Pool({ s, session, refresh }: { s: State; session: Session; refresh: ()
             />
           </label>
         )}
-        <p className="mb-3 text-sm text-muted-foreground">Live restaurant listings from Google. Prices and popular-times data vary by restaurant; verify dietary needs directly with each restaurant.</p>
+        <p className="mb-3 text-sm text-muted-foreground">
+          Live restaurant listings from Google. Known prices are filtered; places without price data
+          are included and marked. Popular-times data varies, and wait times and dietary or allergy
+          suitability are not verified, so confirm directly with the restaurant.
+        </p>
         {pool.length === 0 && (
           <p className="rounded-xl border-2 border-dashed p-6 text-center text-muted-foreground">
             Nothing matches these filters. Widen the radius or price range — or nominate a spot.
@@ -948,6 +989,12 @@ function Pool({ s, session, refresh }: { s: State; session: Session; refresh: ()
               could={could === r.id}
               onPick={(slot) => pick(r.id, slot)}
               tally={tally[r.id]}
+              deals={dealsByRestaurant.get(r.id) ?? []}
+              hasRewards={hasRewardMatch(
+                rewardRestaurants,
+                r.name,
+                r.id.startsWith("g_") ? r.id.slice(2) : null,
+              )}
             />
           ))}
         </div>
@@ -966,6 +1013,8 @@ function RestaurantCard({
   focused,
   onFocus,
   tally,
+  deals,
+  hasRewards,
 }: {
   r: Restaurant;
   center: RoomSettings["center"];
@@ -976,6 +1025,8 @@ function RestaurantCard({
   focused: boolean;
   onFocus: () => void;
   tally?: { want: string[]; could: string[] } | undefined;
+  deals: RestaurantDeal[];
+  hasRewards: boolean;
 }) {
   const unit = useDistanceUnit();
   return (
@@ -985,7 +1036,19 @@ function RestaurantCard({
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <h3 className="text-lg font-extrabold leading-tight">{r.name}</h3>
+          <h3 className="flex items-center gap-2 text-lg font-extrabold leading-tight">
+            {r.name}
+            {hasRewards && (
+              <span
+                className="shrink-0 text-primary"
+                role="img"
+                title="Your rewards account matches this restaurant"
+                aria-label="Your rewards account matches this restaurant"
+              >
+                <Gift className="h-4 w-4" aria-hidden="true" />
+              </span>
+            )}
+          </h3>
           <p className="text-sm text-muted-foreground">
             {r.cuisine} · {r.priceUnknown ? "Price unknown" : priceLabel(r.price)} ·{" "}
             {formatDistance(distanceKm(center, r), unit)} ·{" "}
@@ -996,7 +1059,10 @@ function RestaurantCard({
           <a href={directionsUrl(r)} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs font-semibold underline">Get directions</a>
           {r.address && <p className="mt-1 text-xs text-muted-foreground">{r.address}</p>}
           {r.websiteUri && <a href={r.websiteUri} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs font-semibold underline">Restaurant website</a>}
-          {r.google && r.id.startsWith("g_") && <GooglePopularTimes placeId={r.id.slice(2)} />}
+<RestaurantDealIndicators deals={deals} />
+{r.google && r.id.startsWith("g_") && (
+  <GooglePopularTimes placeId={r.id.slice(2)} />
+)}
         </div>
         {r.custom && (
           <span className="shrink-0 rounded bg-success px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary-foreground">
@@ -1042,7 +1108,17 @@ function RestaurantCard({
   );
 }
 
-function Nominate({ s, session, refresh }: { s: State; session: Session; refresh: () => void }) {
+function Nominate({
+  s,
+  session,
+  refresh,
+  rewardRestaurants,
+}: {
+  s: State;
+  session: Session;
+  refresh: () => void;
+  rewardRestaurants: RewardRestaurant[];
+}) {
   const search = useServerFn(searchPlaces);
   const nom = useServerFn(nominate);
   const [q, setQ] = useState("");
@@ -1117,7 +1193,23 @@ function Nominate({ s, session, refresh }: { s: State; session: Session; refresh
               {results.map((r) => (
                 <li key={r.id} className="flex items-center justify-between gap-3 p-3">
                   <div className="min-w-0">
-                    <p className="truncate font-bold">{r.name}</p>
+                    <p className="flex items-center gap-2 truncate font-bold">
+                      {r.name}
+                      {hasRewardMatch(
+                        rewardRestaurants,
+                        r.name,
+                        r.id.startsWith("g_") ? r.id.slice(2) : null,
+                      ) && (
+                        <span
+                          className="shrink-0 text-primary"
+                          role="img"
+                          aria-label="Your rewards account matches this restaurant"
+                          title="Your rewards account matches this restaurant"
+                        >
+                          <Gift className="h-4 w-4" aria-hidden="true" />
+                        </span>
+                      )}
+                    </p>
                     <p className="truncate text-xs text-muted-foreground">{r.address}</p>
                     {r.websiteUri && <a href={r.websiteUri} target="_blank" rel="noreferrer" className="text-xs font-semibold underline">Website</a>}
                   </div>

@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { createRoom, joinRoom, listPublicRooms } from "@/lib/room.functions";
 import { saveSession } from "@/lib/session";
-import { AVATARS } from "@/lib/restaurants";
+import { AVATARS, DEFAULT_SETTINGS } from "@/lib/restaurants";
 import { ProfilePicker } from "@/components/ProfilePicker";
 import { ThemeControl } from "@/components/ThemeControl";
 import { Button } from "@/components/ui/button";
@@ -73,20 +73,6 @@ function Home() {
     refetchInterval: 10000,
   });
 
-  function getHostLocation(): Promise<{ lat: number; lng: number }> {
-    return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) {
-        reject(new Error("This browser can’t share its location. Enable location access to create a room."));
-        return;
-      }
-      navigator.geolocation.getCurrentPosition(
-        ({ coords }) => resolve({ lat: coords.latitude, lng: coords.longitude }),
-        () => reject(new Error("Location access is needed to create a room. Allow it in your browser and try again.")),
-        { enableHighAccuracy: false, maximumAge: 300000, timeout: 12000 },
-      );
-    });
-  }
-
   async function go(kind: "host" | "join", joinCode?: string) {
     if (busy) return;
     if (!nickname.trim()) {
@@ -101,7 +87,7 @@ function Home() {
     try {
       const s =
   kind === "host"
-    ? await create({ data: { nickname, avatar, center: await getHostLocation() } })
+    ? await create({ data: { nickname, avatar } })
     : await join({
         data: { nickname, avatar, code: normalizeRoomCode(joinCode ?? code) },
       });
@@ -186,6 +172,12 @@ function Home() {
                 profilePhoto={user ? account.data?.profile.avatar : undefined}
                 {...{ nickname, setNickname, avatar, setAvatar }}
               />
+              {mode === "host" && (
+                <p className="mt-4 text-sm text-muted-foreground">
+                  Location access is optional. Search starts near {DEFAULT_SETTINGS.center.label};
+                  you can change it in the room settings.
+                </p>
+              )}
               {mode === "join" && (
                 <div className="mt-6">
                   <label htmlFor="room-code" className="text-sm font-bold">

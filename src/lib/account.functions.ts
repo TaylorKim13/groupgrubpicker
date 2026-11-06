@@ -5,6 +5,12 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { UsernameSchema } from "./recovery";
 import { Buffer } from "node:buffer";
+import { googleMapsRequest } from "./google-maps.server";
+import {
+  parseRewardRestaurants,
+  RewardPlaceSearchResultSchema,
+  RewardRestaurantsSchema,
+} from "./restaurant-rewards";
 import {
   AvatarSchema,
   PhotoUploadSchema,
@@ -35,6 +41,19 @@ export const getAccount = createServerFn({ method: "GET" })
       usernameAvailable = false;
     }
     if (error || !profile) throw new Error("Could not load your profile");
+    const { data: rewardData, error: rewardError } = await context.supabase
+      .from("profiles")
+      .select("reward_restaurants")
+      .eq("id", context.userId)
+      .single();
+    // Older deployments may be running before this optional account setting migration.
+    let rewardRestaurants = [] as ReturnType<typeof parseRewardRestaurants>;
+    const rewardColumnUnavailable =
+      rewardError && ["42703", "PGRST204"].includes(rewardError.code ?? "");
+    if (!rewardColumnUnavailable) {
+      if (rewardError || !rewardData) throw new Error("Could not load your restaurant rewards");
+      rewardRestaurants = parseRewardRestaurants(rewardData.reward_restaurants);
+    }
     const { data: preset, error: presetError } = await context.supabase
       .from("preset_filters")
       .select("settings")
@@ -46,7 +65,66 @@ export const getAccount = createServerFn({ method: "GET" })
       usernameAvailable,
       distanceUnit: profile.distance_unit,
       settings: preset ? getHostingPreferences(preset.settings) : null,
+      rewardRestaurants,
     };
+  });
+
+const RewardSearchInputSchema = z.object({ query: z.string().trim().min(2).max(100) });
+
+export const searchRewardPlaces = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => RewardSearchInputSchema.parse(input))
+  .handler(async ({ data }) => {
+    const response = await googleMapsRequest("/v1/places:searchText", {
+      method: "POST",
+      fieldMask: "places.id,places.displayName,places.formattedAddress,places.businessStatus",
+      body: JSON.stringify({
+        textQuery: data.query,
+        pageSize: 8,
+        languageCode: "en",
+      }),
+    });
+    return ((response.places ?? []) as any[])
+      .filter(
+        (place) =>
+          place.id &&
+          place.displayName?.text &&
+          place.businessStatus !== "CLOSED_PERMANENTLY" &&
+          place.businessStatus !== "CLOSED_TEMPORARILY",
+      )
+      .map((place) =>
+        RewardPlaceSearchResultSchema.parse({
+          placeId: place.id,
+          name: place.displayName.text,
+          address: place.formattedAddress ?? null,
+        }),
+      );
+  });
+
+export const saveRewardRestaurants = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ restaurants: RewardRestaurantsSchema }).parse(input))
+  .handler(async ({ data, context }) => {
+    const restaurants = parseRewardRestaurants(data.restaurants);
+    const { error } = await context.supabase
+      .from("profiles")
+      .update({ reward_restaurants: restaurants })
+      .eq("id", context.userId);
+    if (error) throw new Error("Could not save your restaurant rewards. Please try again.");
+    return { restaurants };
+  });
+
+export const getRewardRestaurants = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await context.supabase
+      .from("profiles")
+      .select("reward_restaurants")
+      .eq("id", context.userId)
+      .single();
+    if (error?.code === "42703" || error?.code === "PGRST204") return { restaurants: [] };
+    if (error || !data) throw new Error("Could not load your restaurant rewards");
+    return { restaurants: parseRewardRestaurants(data.reward_restaurants) };
   });
 
 export const saveAccount = createServerFn({ method: "POST" })

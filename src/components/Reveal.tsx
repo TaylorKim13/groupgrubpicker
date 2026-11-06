@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import type { Result } from "@/lib/room.functions";
 import { priceLabel } from "@/lib/restaurants";
 import { ShareWaitButton } from "@/components/ShareWaitButton";
+import { WinnerDealLinks } from "@/components/RestaurantDeals";
+import { useRestaurantDeals } from "@/lib/restaurant-deals";
+import { Gift } from "lucide-react";
 
 function CoinFlip({ result, onDone }: { result: Result; onDone: () => void }) {
   const a = result.tie!.candidates[0]!;
@@ -76,8 +79,9 @@ function Wheel({ result, onDone }: { result: Result; onDone: () => void }) {
   );
 }
 
-export function Reveal({ result }: { result: Result }) {
+export function Reveal({ result, hasRewards = false }: { result: Result; hasRewards?: boolean }) {
   const [stage, setStage] = useState<"tie" | "win">(result.tie ? "tie" : "win");
+  const dealsByRestaurant = useRestaurantDeals([result.winner.id]);
   if (stage === "tie") {
     const done = () => setStage("win");
     return result.tie!.method === "coin" ? <CoinFlip result={result} onDone={done} /> : <Wheel result={result} onDone={done} />;
@@ -100,14 +104,36 @@ export function Reveal({ result }: { result: Result }) {
       </div>
       <div className="relative z-10 text-center" style={{ animation: "pop .6s ease-out" }}>
         <p className="font-bold uppercase tracking-widest text-primary">We're eating at</p>
-        <h2 className="mt-2 text-5xl font-extrabold md:text-7xl">{w.name}</h2>
+        <h2 className="mt-2 flex flex-wrap items-center justify-center gap-3 text-5xl font-extrabold md:text-7xl">
+          {w.name}
+          {hasRewards && (
+            <span
+              className="text-primary"
+              role="img"
+              title="Your rewards account matches this restaurant"
+              aria-label="Your rewards account matches this restaurant"
+            >
+              <Gift className="h-8 w-8 md:h-10 md:w-10" aria-hidden="true" />
+            </span>
+          )}
+        </h2>
         <p className="mt-3 text-lg text-muted-foreground">
           {w.cuisine} · {w.priceUnknown ? "Price unknown" : priceLabel(w.price)}
           {w.address ? ` · ${w.address}` : ""}
         </p>
-        {w.websiteUri && <a href={w.websiteUri} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm font-semibold underline">Restaurant website</a>}
         <div className="mt-6 flex flex-wrap justify-center gap-3">
           <ShareWaitButton restaurant={w} />
+          {w.websiteUri && (
+            <a
+              href={w.websiteUri}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-xl border-2 bg-background px-5 py-3 font-bold chunky"
+            >
+              Restaurant website
+            </a>
+          )}
+          <WinnerDealLinks deals={dealsByRestaurant.get(w.id) ?? []} />
           <a href={directions} target="_blank" rel="noreferrer" className="rounded-xl bg-primary px-5 py-3 font-bold text-primary-foreground chunky">
             Get directions
           </a>

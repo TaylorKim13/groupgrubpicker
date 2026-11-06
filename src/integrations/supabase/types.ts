@@ -233,6 +233,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          reward_restaurants: Json
           username: string | null
           distance_unit: "mi" | "km"
           avatar: string
@@ -242,6 +243,7 @@ export type Database = {
           id: string
         }
         Insert: {
+          reward_restaurants?: Json
           username?: string | null
           distance_unit?: "mi" | "km"
           avatar?: string
@@ -251,6 +253,7 @@ export type Database = {
           id: string
         }
         Update: {
+          reward_restaurants?: Json
           username?: string | null
           distance_unit?: "mi" | "km"
           avatar?: string

@@ -6,6 +6,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { authMember, db, getRoomByCode, hashToken, newCode, newToken } from "./room.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { googleMapsRequest as gmaps } from "./google-maps.server";
 import {
   buildPool,
   distanceKm,
@@ -93,16 +94,20 @@ export const createRoom = createServerFn({ method: "POST" })
   .middleware([optionalAccountAuth])
   .inputValidator((d) =>
     Profile.extend({
-      center: z.object({
-        lat: z.number().min(-90).max(90),
-        lng: z.number().min(-180).max(180),
-      }),
+      center: z
+        .object({
+          lat: z.number().min(-90).max(90),
+          lng: z.number().min(-180).max(180),
+        })
+        .optional(),
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
     let settings = {
       ...DEFAULT_SETTINGS,
-      center: { ...data.center, label: "Host location" },
+      center: data.center
+        ? { ...data.center, label: "Host location" }
+        : DEFAULT_SETTINGS.center,
     };
 
     if (context.accountUserId) {
@@ -418,7 +423,7 @@ async function loadRestaurantPool(
     if (error) throw new Error("Could not load the voting restaurant list");
     if (data?.length) {
       const pool = new Map<string, Restaurant>(
-        data.map((row: { restaurant: Restaurant }) => [row.restaurant.id, row.restaurant]),
+        data.map((row: { restaurant: Restaurant }) => [row.restaurant.id, row.restaurant] as const),
       );
       nominations.forEach((restaurant) => pool.set(restaurant.id, restaurant));
       return [...pool.values()];
