@@ -43,11 +43,11 @@
 :root {
   --radius: 0.9rem;
   --background-dot: oklch(0.2 0.02 40 / 0.07);
-  --deal-background: oklch(0.96 0.025 350);
-  --deal-foreground: oklch(0.3 0.1 350);
-  --deal-border: oklch(0.78 0.1 350);
-  --deal-label: oklch(0.87 0.075 350);
-  --deal-label-foreground: oklch(0.3 0.1 350);
+  --deal-background: color-mix(in oklch, var(--primary) 14%, transparent);
+  --deal-foreground: oklch(0.3 0.1 28);
+  --deal-border: color-mix(in oklch, var(--primary) 45%, transparent);
+  --deal-label: color-mix(in oklch, var(--primary) 24%, transparent);
+  --deal-label-foreground: oklch(0.3 0.1 28);
   --background: oklch(0.97 0.025 85);
   --foreground: oklch(0.2 0.02 40);
   --card: oklch(0.995 0.01 85);
@@ -72,16 +72,16 @@
 
 .dark {
   --background-dot: oklch(0.9 0.025 75 / 0.045);
-  --deal-background: oklch(0.31 0.045 350);
+  --deal-background: color-mix(in oklch, var(--primary) 18%, transparent);
   --deal-foreground: oklch(0.94 0.035 25);
-  --deal-border: oklch(0.5 0.08 350);
-  --deal-label: oklch(0.43 0.09 350);
+  --deal-border: color-mix(in oklch, var(--primary) 48%, transparent);
+  --deal-label: color-mix(in oklch, var(--primary) 30%, transparent);
   --deal-label-foreground: oklch(0.96 0.035 25);
   --background: oklch(0.16 0.012 45);
   --foreground: oklch(0.96 0.012 75);
-  --card: oklch(0.22 0.018 55);
+  --card: oklch(0.23 0.03 300);
   --card-foreground: oklch(0.96 0.012 75);
-  --popover: oklch(0.22 0.018 55);
+  --popover: oklch(0.23 0.03 300);
   --popover-foreground: oklch(0.96 0.012 75);
   --primary: oklch(0.7 0.18 28);
   --primary-foreground: oklch(0.18 0.02 40);

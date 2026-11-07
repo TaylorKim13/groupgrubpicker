@@ -1029,6 +1029,22 @@ function RestaurantCard({
   const unit = useDistanceUnit();
   const [showDeals, setShowDeals] = useState(false);
   const dealsPanelId = `restaurant-deals-${r.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+  const dealButton = deals.length > 0 && (
+    <button
+      type="button"
+      className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      title="Show this restaurant's deal"
+      aria-expanded={showDeals}
+      aria-controls={dealsPanelId}
+      onClick={() => setShowDeals((visible) => !visible)}
+    >
+      Deal
+      <ChevronDown
+        className={`h-3.5 w-3.5 transition-transform ${showDeals ? "rotate-180" : ""}`}
+        aria-hidden="true"
+      />
+    </button>
+  );
   return (
     <div
       onMouseEnter={onFocus}
@@ -1038,22 +1054,6 @@ function RestaurantCard({
         <div className="min-w-0 flex-1">
           <h3 className="flex items-center gap-2 text-lg font-extrabold leading-tight">
             {r.name}
-            {deals.length > 0 && (
-              <button
-                type="button"
-                className="inline-flex shrink-0 items-center gap-1 rounded-full bg-deal-label px-2 py-0.5 text-[10px] font-bold text-deal-label-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                title="Show this restaurant's deal"
-                aria-expanded={showDeals}
-                aria-controls={dealsPanelId}
-                onClick={() => setShowDeals((visible) => !visible)}
-              >
-                Deal
-                <ChevronDown
-                  className={`h-3 w-3 transition-transform ${showDeals ? "rotate-180" : ""}`}
-                  aria-hidden="true"
-                />
-              </button>
-            )}
             {hasRewards && (
               <span
                 className="shrink-0 text-primary"
@@ -1084,10 +1084,15 @@ function RestaurantCard({
             {...(r.google && r.id.startsWith("g_") ? { placeId: r.id.slice(2) } : {})}
           />
         </div>
-        {r.custom && (
-          <span className="shrink-0 rounded bg-success px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary-foreground">
-            by {r.nominatedBy}
-          </span>
+        {(r.custom || dealButton) && (
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            {dealButton}
+            {r.custom && (
+              <span className="rounded bg-success px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary-foreground">
+                by {r.nominatedBy}
+              </span>
+            )}
+          </div>
         )}
       </div>
       {r.diets.length > 0 && (
