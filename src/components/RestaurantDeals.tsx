@@ -8,13 +8,13 @@ export function RestaurantDealIndicators({ deals }: { deals: RestaurantDeal[] })
       {deals.map((deal, index) => (
         <div
           key={`${deal.id}-${index}`}
-          className="rounded-lg border border-primary/20 bg-primary/5 px-2.5 py-2 text-xs"
+          className="rounded-lg border border-deal-border bg-deal-background px-2.5 py-2 text-xs text-deal-foreground"
         >
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="rounded-full bg-primary/10 px-2 py-0.5 font-bold text-primary">
+            <span className="rounded-full bg-deal-label px-2 py-0.5 font-bold text-deal-label-foreground">
               Deal
             </span>
-            <span className="font-semibold">{deal.title}</span>
+            <span className="font-semibold">{deal.polished_summary || deal.title}</span>
             {deal.scope === "chain" && (
               <span className="text-muted-foreground">Chain-wide</span>
             )}
@@ -34,12 +34,12 @@ export function RestaurantDealIndicators({ deals }: { deals: RestaurantDeal[] })
               </a>
             )}
           </div>
-          {(deal.description || deal.terms) && (
+          {((!deal.polished_summary && deal.description) || deal.terms) && (
             <details className="mt-1">
-              <summary className="w-fit cursor-pointer font-semibold underline">
-                Terms
-              </summary>
-              {deal.description && <p className="mt-1">{deal.description}</p>}
+              <summary className="w-fit cursor-pointer font-semibold underline">Terms</summary>
+              {!deal.polished_summary && deal.description && (
+                <p className="mt-1">{deal.description}</p>
+              )}
               {deal.terms && <p className="mt-1">{deal.terms}</p>}
             </details>
           )}

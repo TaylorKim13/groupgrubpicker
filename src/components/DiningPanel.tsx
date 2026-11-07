@@ -96,6 +96,7 @@ export function DiningPanel({
       </section>
     );
   const data = q.data;
+  const recentHistory = data.history.slice(0, 3);
   return (
     <section className="space-y-5 rounded-2xl bg-card p-5 chunky">
       <div>
@@ -127,7 +128,7 @@ export function DiningPanel({
       <Tabs defaultValue="current">
         <TabsList>
           <TabsTrigger value="current">Current suggestions</TabsTrigger>
-          <TabsTrigger value="history">History ({data.history.length})</TabsTrigger>
+          <TabsTrigger value="history">History (up to 3)</TabsTrigger>
         </TabsList>
         <TabsContent value="current" className="space-y-4">
           {isHost && status === "lobby" && (
@@ -163,12 +164,12 @@ export function DiningPanel({
           />
         </TabsContent>
         <TabsContent value="history" className="space-y-5">
-          {data.history.length === 0 ? (
+          {recentHistory.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               Previous sets will appear here when suggestions are refreshed or updated.
             </p>
           ) : (
-            data.history.map((set) => (
+            recentHistory.map((set) => (
               <section key={set.id} className="space-y-2">
                 <h3 className="text-sm font-bold">
                   Suggested {new Date(set.generatedAt).toLocaleString()}

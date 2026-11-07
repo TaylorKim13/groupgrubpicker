@@ -247,9 +247,9 @@ function Home() {
           )}
         </ul>
       </details>
-      <section className="mt-8 rounded-xl border-2 bg-secondary/40 p-5 text-center">
+      <section className="mt-8 rounded-xl border-2 border-black bg-transparent p-5 text-center text-black dark:border-white dark:bg-black dark:text-white">
         <h2 className="text-lg font-extrabold">Know about any restaurant deals?</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mt-2 text-sm text-black/75 dark:text-white/80">
           Enter a deal into the database and share it with the community.
         </p>
         <Button className="mt-4 font-bold" asChild>

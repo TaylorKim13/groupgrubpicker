@@ -12,12 +12,18 @@ export type RestaurantDeal = {
   scope: "location" | "chain" | null;
   title: string;
   description: string | null;
+  polished_summary: string | null;
   promo_code: string | null;
   redemption_url: string | null;
   terms: string | null;
   start_date: string | null;
   end_date: string | null;
 };
+
+function localDateString() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
 
 type DealQueryResult = {
   data: RestaurantDeal[] | null;
@@ -49,7 +55,7 @@ async function fetchRestaurantDeals(
     queries.push(
       reader
         .from("restaurant_deals")
-        .select("id,restaurant_id,restaurant_name,restaurant_key,place_id,scope,title,description,promo_code,redemption_url,terms,start_date,end_date")
+        .select("id,restaurant_id,restaurant_name,restaurant_key,place_id,scope,title,description,polished_summary,promo_code,redemption_url,terms,start_date,end_date")
         .in("restaurant_id", restaurantIds)
         .eq("status", "active"),
     );
@@ -58,7 +64,7 @@ async function fetchRestaurantDeals(
     queries.push(
       reader
         .from("restaurant_deals")
-        .select("id,restaurant_id,restaurant_name,restaurant_key,place_id,scope,title,description,promo_code,redemption_url,terms,start_date,end_date")
+        .select("id,restaurant_id,restaurant_name,restaurant_key,place_id,scope,title,description,polished_summary,promo_code,redemption_url,terms,start_date,end_date")
         .in("restaurant_key", restaurantKeys)
         .eq("status", "active")
         .eq("scope", "chain"),
@@ -68,8 +74,7 @@ async function fetchRestaurantDeals(
   const results = await Promise.all(queries);
   const errors = results.find((result) => result.error);
   if (errors?.error) throw new Error(errors.error.message);
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const today = localDateString();
   const unique = new Map<string, RestaurantDeal>();
   for (const result of results) {
     for (const deal of result.data ?? []) {

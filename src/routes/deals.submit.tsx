@@ -27,6 +27,7 @@ function SubmitDealPage() {
   const [searchComplete, setSearchComplete] = useState(false);
   const [busy, setBusy] = useState(false);
   const [submittedName, setSubmittedName] = useState<string | null>(null);
+  const [submissionPolished, setSubmissionPolished] = useState<boolean | null>(null);
   const inputClass = "mt-2 w-full rounded-lg border-2 bg-card px-4 py-3";
 
   async function search(event: FormEvent<HTMLFormElement>) {
@@ -63,6 +64,7 @@ function SubmitDealPage() {
         },
       });
       setSubmittedName(result.restaurantName);
+      setSubmissionPolished(result.polished);
       setQuery("");
       setResults([]);
       setPlace(null);
@@ -70,7 +72,11 @@ function SubmitDealPage() {
       setDescription("");
       setStartDate("");
       setEndDate("");
-      toast.success("Deal shared with the community");
+      toast.success(
+        result.polished
+          ? "Polished deal shared with the community"
+          : "Deal shared with the community",
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not submit the deal");
     } finally {
@@ -101,10 +107,16 @@ function SubmitDealPage() {
         </p>
 
         {submittedName && (
-          <div role="status" className="mt-6 rounded-xl border-2 bg-secondary/50 p-4">
+          <div
+            role="status"
+            className="mt-6 rounded-xl border-2 bg-secondary p-4 text-secondary-foreground"
+          >
             <p className="font-bold">Thanks for sharing a deal for {submittedName}.</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              You can add another deal below, or return to the table page.
+            <p className="mt-1 text-sm text-secondary-foreground/80">
+              {submissionPolished
+                ? "The AI-polished summary is now shown to the community. Your original entry is saved too."
+                : "The deal was saved with your original wording because AI polishing was unavailable."} You
+              can add another deal below, or return to the table page.
             </p>
           </div>
         )}
@@ -164,9 +176,9 @@ function SubmitDealPage() {
           )}
 
           {place && (
-            <div className="mt-3 rounded-lg bg-secondary/50 p-3">
+            <div className="mt-3 rounded-lg bg-secondary p-3 text-secondary-foreground">
               <p className="font-bold">{place.name}</p>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-sm text-secondary-foreground/80">
                 {place.address ?? "Address not listed"}
               </p>
               <button
@@ -238,6 +250,11 @@ function SubmitDealPage() {
                 placeholder="e.g. Two tacos for the price of one"
                 required
               />
+              <p className="mt-1 text-xs text-muted-foreground">
+                On submit, Google Gemini creates a clearer community summary from your title and
+                details. Your original wording is kept in the database, and AI can’t verify the
+                offer.
+              </p>
             </div>
 
             <div>
@@ -282,7 +299,7 @@ function SubmitDealPage() {
             </div>
 
             <Button className="h-12 w-full text-lg font-bold chunky" disabled={busy || !place}>
-              {busy ? "Sharing deal…" : "Submit deal"}
+              {busy ? "Polishing and sharing…" : "Submit deal"}
             </Button>
           </fieldset>
         </form>

@@ -8,7 +8,6 @@ import { RoomSettingsFields } from "@/components/RoomSettingsFields";
 import { DiningPanel } from "@/components/DiningPanel";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { roomJoinUrl } from "@/lib/room-access";
 import { Button } from "@/components/ui/button";
 import { useDistanceUnit } from "@/lib/distance-context";
 import { formatDistance, SettingsSchema } from "@/lib/settings";
@@ -17,7 +16,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Gift } from "lucide-react";
+import { ArrowLeft, ChevronDown, Gift } from "lucide-react";
 import { ProfilePicker } from "@/components/ProfilePicker";
 import { RestaurantMap } from "@/components/RestaurantMap";
 import { GooglePopularTimes } from "@/components/GooglePopularTimes";
@@ -26,7 +25,10 @@ import { ShareWaitButton } from "@/components/ShareWaitButton";
 import { RestaurantDealIndicators } from "@/components/RestaurantDeals";
 import { ShareInviteButton } from "@/components/ShareInviteButton";
 import type { Result } from "@/lib/room.functions";
-import { useRestaurantDeals, type RestaurantDeal } from "@/lib/restaurant-deals";
+import {
+  useRestaurantDeals,
+  type RestaurantDeal,
+} from "@/lib/restaurant-deals";
 import { getRewardRestaurants } from "@/lib/account.functions";
 import { hasRewardMatch, type RewardRestaurant } from "@/lib/restaurant-rewards";
 import {
@@ -267,7 +269,7 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
 function TopBar({ s, onLeave }: { s: State; onLeave: () => void }) {
   const phase = { lobby: "Lobby", voting: "Voting open", closed: "Winner!" }[s.status];
   return (
-    <header className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-card p-4 chunky">
+    <header className="rounded-2xl bg-card p-4 chunky">
       <div className="flex items-center gap-4">
         <Link to="/" className="font-display text-2xl font-extrabold leading-none">
           GROUP<span className="text-primary"> GRUB</span>
@@ -276,7 +278,7 @@ function TopBar({ s, onLeave }: { s: State; onLeave: () => void }) {
           {phase}
         </span>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="mt-3 grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-start">
         <button
           onClick={onLeave}
           className="rounded-lg border-2 bg-background px-3 py-2 text-sm font-bold"
@@ -284,17 +286,9 @@ function TopBar({ s, onLeave }: { s: State; onLeave: () => void }) {
           <ArrowLeft /> Back
         </button>
         <RoomInvite code={s.code} />
-        <span className="font-display text-3xl tracking-[0.25em]">{s.code}</span>
-        <button
-          onClick={() => {
-            navigator.clipboard.writeText(roomJoinUrl(window.location.origin, s.code));
-            toast.success("Invite link copied");
-          }}
-          className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground chunky"
-        >
-          Copy invite link
-        </button>
-        <ShareInviteButton code={s.code} />
+        <div className="sm:justify-self-end">
+          <ShareInviteButton code={s.code} />
+        </div>
       </div>
     </header>
   );
@@ -868,8 +862,8 @@ function Pool({
   const voting = s.status === "voting";
   const pool = s.pool;
   const dealsByRestaurant = useRestaurantDeals(
-    voting ? pool.map((restaurant) => restaurant.id) : [],
-    voting ? pool.map((restaurant) => restaurant.name) : [],
+    pool.map((restaurant) => restaurant.id),
+    pool.map((restaurant) => restaurant.name),
   );
   const filteredPool = useMemo(() => {
     const query = restaurantSearch.trim().toLocaleLowerCase();
@@ -949,6 +943,9 @@ function Pool({
         <h2 className="mb-3 text-2xl font-extrabold">
           The pool <span className="text-base font-normal text-muted-foreground">({filteredPool.length === pool.length ? `${pool.length}` : `${filteredPool.length} of ${pool.length}`} spots)</span>
         </h2>
+        <p className="mb-3 text-sm text-muted-foreground">
+          Showing up to 7 nearby spots. Each person can add one restaurant with a wildcard pick.
+        </p>
         {pool.length > 0 && (
           <label className="mb-3 block">
             <span className="sr-only">Search restaurants in the pool</span>
@@ -962,11 +959,6 @@ function Pool({
             />
           </label>
         )}
-        <p className="mb-3 text-sm text-muted-foreground">
-          Live restaurant listings from Google. Known prices are filtered; places without price data
-          are included and marked. Popular-times data varies, and wait times and dietary or allergy
-          suitability are not verified, so confirm directly with the restaurant.
-        </p>
         {pool.length === 0 && (
           <p className="rounded-xl border-2 border-dashed p-6 text-center text-muted-foreground">
             Nothing matches these filters. Widen the radius or price range — or nominate a spot.
@@ -999,6 +991,11 @@ function Pool({
             />
           ))}
         </div>
+        <p className="mt-4 text-sm text-muted-foreground">
+          Live restaurant listings from Google. Known prices are filtered; places without price data
+          are included and marked. Popular-times data varies, and wait times and dietary or allergy
+          suitability are not verified, so confirm directly with the restaurant.
+        </p>
       </div>
     </>
   );
@@ -1030,6 +1027,8 @@ function RestaurantCard({
   hasRewards: boolean;
 }) {
   const unit = useDistanceUnit();
+  const [showDeals, setShowDeals] = useState(false);
+  const dealsPanelId = `restaurant-deals-${r.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
   return (
     <div
       onMouseEnter={onFocus}
@@ -1039,6 +1038,22 @@ function RestaurantCard({
         <div className="min-w-0 flex-1">
           <h3 className="flex items-center gap-2 text-lg font-extrabold leading-tight">
             {r.name}
+            {deals.length > 0 && (
+              <button
+                type="button"
+                className="inline-flex shrink-0 items-center gap-1 rounded-full bg-deal-label px-2 py-0.5 text-[10px] font-bold text-deal-label-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                title="Show this restaurant's deal"
+                aria-expanded={showDeals}
+                aria-controls={dealsPanelId}
+                onClick={() => setShowDeals((visible) => !visible)}
+              >
+                Deal
+                <ChevronDown
+                  className={`h-3 w-3 transition-transform ${showDeals ? "rotate-180" : ""}`}
+                  aria-hidden="true"
+                />
+              </button>
+            )}
             {hasRewards && (
               <span
                 className="shrink-0 text-primary"
@@ -1060,7 +1075,11 @@ function RestaurantCard({
           <a href={directionsUrl(r)} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs font-semibold underline">Get directions</a>
           {r.address && <p className="mt-1 text-xs text-muted-foreground">{r.address}</p>}
           {r.websiteUri && <a href={r.websiteUri} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs font-semibold underline">Restaurant website</a>}
-          <RestaurantDealIndicators deals={deals} />
+          {showDeals && (
+            <div id={dealsPanelId}>
+              <RestaurantDealIndicators deals={deals} />
+            </div>
+          )}
           <GooglePopularTimes
             {...(r.google && r.id.startsWith("g_") ? { placeId: r.id.slice(2) } : {})}
           />
