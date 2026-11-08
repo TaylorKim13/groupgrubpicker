@@ -274,7 +274,7 @@ function TopBar({ s, onLeave }: { s: State; onLeave: () => void }) {
         <Link to="/" className="font-display text-2xl font-extrabold leading-none">
           GROUP<span className="text-primary"> GRUB</span>
         </Link>
-        <span className="rounded-full bg-secondary px-3 py-1 text-xs font-bold uppercase">
+        <span className="rounded-full bg-secondary px-3 py-1 text-xs font-bold uppercase text-secondary-foreground">
           {phase}
         </span>
       </div>
