@@ -11,9 +11,12 @@ const js = ts.transpileModule(helper, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 }).outputText;
 const prefix =
-  "const gmaps=(path,init)=>globalThis.__discoveryTest.fetch(path,init); const distanceKm=(a,b)=>Math.abs(a.lat-b.lat)*111; const db=()=>globalThis.__discoveryTest.db; const buildPool=()=>[];";
+  "const DEFAULT_SETTINGS={}; const gmaps=(path,init)=>globalThis.__discoveryTest.fetch(path,init); const distanceKm=(a,b)=>Math.abs(a.lat-b.lat)*111; const db=()=>globalThis.__discoveryTest.db; const buildPool=()=>[];";
 const { discoverRestaurants, loadRestaurantPool } = await import(
-  "data:text/javascript;base64," + Buffer.from(prefix + js + "\nexport { discoverRestaurants, loadRestaurantPool };").toString("base64")
+  "data:text/javascript;base64," +
+    Buffer.from(prefix + js + "\nexport { discoverRestaurants, loadRestaurantPool };").toString(
+      "base64",
+    )
 );
 test("real discovery paginates, filters distance and known price, preserves unknowns and uses voting snapshot", async () => {
   const old = process.env.GOOGLE_MAPS_API_KEY;
@@ -26,9 +29,11 @@ test("real discovery paginates, filters distance and known price, preserves unkn
     priceLevel,
   });
   globalThis.__discoveryTest = {
+    db: { from: () => ({ select: () => ({ eq: async () => ({ data: [], error: null }) }) }) },
     fetch: async (path, init) => {
       const body = JSON.parse(init.body);
       calls.push(body);
+      if (path.endsWith("searchNearby")) return { places: [] };
       return body.pageToken
         ? { places: [place("second", 0.01, "PRICE_LEVEL_MODERATE")] }
         : {
@@ -64,7 +69,7 @@ test("real discovery paginates, filters distance and known price, preserves unkn
     const room = { id: "test", status: "lobby", settings };
     const before = calls.length;
     await Promise.all([loadRestaurantPool(room, []), loadRestaurantPool(room, [])]);
-    assert.equal(calls.length - before, 2, "simultaneous polls share one paginated discovery");
+    assert.equal(calls.length - before, 3, "simultaneous polls share text and nearby discovery");
     globalThis.__discoveryTest.db = {
       from: () => ({
         select: () => ({ eq: async () => ({ data: [{ restaurant: found[0] }], error: null }) }),
@@ -72,7 +77,71 @@ test("real discovery paginates, filters distance and known price, preserves unkn
     };
     const saved = await loadRestaurantPool({ ...room, status: "voting" }, []);
     assert.deepEqual(saved, [found[0]]);
-    assert.equal(calls.length - before, 2, "voting uses stored snapshot");
+    assert.equal(calls.length - before, 3, "voting uses stored snapshot");
+  } finally {
+    if (old === undefined) delete process.env.GOOGLE_MAPS_API_KEY;
+    else process.env.GOOGLE_MAPS_API_KEY = old;
+    delete globalThis.__discoveryTest;
+  }
+});
+
+test("favorite cuisine searches expand the pool, classify Google types, and invalidate discovery cache", async () => {
+  const old = process.env.GOOGLE_MAPS_API_KEY;
+  process.env.GOOGLE_MAPS_API_KEY = "test";
+  const calls = [];
+  let preferences = [
+    { preferences: { participating: true, favoriteCuisines: ["Korean", "Korean", "invalid"] } },
+    { preferences: { participating: false, favoriteCuisines: ["Italian"] } },
+  ];
+  globalThis.__discoveryTest = {
+    db: {
+      from: () => ({ select: () => ({ eq: async () => ({ data: preferences, error: null }) }) }),
+    },
+    fetch: async (path, init) => {
+      if (path.endsWith("searchNearby")) return { places: [] };
+      const body = JSON.parse(init.body);
+      calls.push(body);
+      return {
+        places: [
+          {
+            id: body.textQuery,
+            displayName: { text: "A place" },
+            location: { latitude: 1.001, longitude: 0 },
+            primaryTypeDisplayName: { text: "Restaurant" },
+            types: body.textQuery.startsWith("Korean")
+              ? ["barbecue_restaurant", "korean_restaurant"]
+              : ["restaurant"],
+          },
+        ],
+      };
+    },
+  };
+  try {
+    const room = {
+      id: "cuisine-test",
+      status: "lobby",
+      settings: {
+        center: { lat: 1, lng: 0 },
+        radiusKm: 5,
+        priceMin: 1,
+        priceMax: 4,
+        diets: [],
+      },
+    };
+    const pool = await loadRestaurantPool(room, []);
+    assert.deepEqual(
+      calls.map((c) => c.textQuery),
+      ["restaurants", "Korean restaurants"],
+    );
+    assert.equal(pool.find((r) => r.id === "g_Korean restaurants").cuisine, "Korean");
+    await loadRestaurantPool(room, []);
+    assert.equal(calls.length, 2);
+    preferences = [{ preferences: { participating: true, favoriteCuisines: ["Italian"] } }];
+    await loadRestaurantPool(room, []);
+    assert.deepEqual(
+      calls.slice(2).map((c) => c.textQuery),
+      ["restaurants", "Italian restaurants"],
+    );
   } finally {
     if (old === undefined) delete process.env.GOOGLE_MAPS_API_KEY;
     else process.env.GOOGLE_MAPS_API_KEY = old;
