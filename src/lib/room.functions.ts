@@ -6,7 +6,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { authMember, db, getRoomByCode, hashToken, newCode, newToken } from "./room.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { googleMapsRequest as gmaps } from "./google-maps.server";
 import {
   buildPool,
   distanceKm,
