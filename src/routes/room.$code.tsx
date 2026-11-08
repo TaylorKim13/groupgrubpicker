@@ -207,7 +207,7 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
         </p>
         <button
           onClick={onLeave}
-          className="mt-4 rounded-xl bg-secondary px-4 py-2 font-bold chunky"
+          className="mt-4 rounded-xl bg-secondary px-4 py-2 font-bold text-secondary-foreground chunky"
         >
           Join again
         </button>
@@ -474,7 +474,7 @@ function RoomFriends({ s, session, refresh }: { s: State; session: Session; refr
                 key={c.id}
                 disabled={!ids.length}
                 onClick={() => send(ids)}
-                className="rounded-lg bg-secondary px-3 py-1.5 text-sm font-bold chunky disabled:opacity-50"
+                className="rounded-lg bg-secondary px-3 py-1.5 text-sm font-bold text-secondary-foreground chunky disabled:opacity-50"
               >
                 👥 {c.name}
               </button>
@@ -638,7 +638,7 @@ function HostSettings({
               />
               <button
                 disabled={addr.trim().length < 2}
-                className="rounded-lg bg-secondary px-3 text-sm font-bold disabled:opacity-50"
+                className="rounded-lg bg-secondary px-3 text-sm font-bold text-secondary-foreground disabled:opacity-50"
               >
                 Set
               </button>
@@ -721,7 +721,7 @@ function HostSettings({
                       })
                     }
                     className={`rounded-full border-2 px-2.5 py-0.5 text-xs font-bold ${
-                      on ? "bg-secondary" : "bg-background"
+                      on ? "bg-secondary text-secondary-foreground" : "bg-background"
                     }`}
                   >
                     {d}
@@ -780,7 +780,7 @@ function HostSettings({
           <button
             type="button"
             onClick={() => setStep(step + 1)}
-            className="rounded-lg bg-secondary px-4 py-1.5 text-sm font-extrabold chunky"
+            className="rounded-lg bg-secondary px-4 py-1.5 text-sm font-extrabold text-secondary-foreground chunky"
           >
             Next →
           </button>
@@ -916,7 +916,7 @@ function Pool({
       )}
 
       {voting && (
-        <div className="sticky top-2 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-secondary p-4 chunky">
+        <div className="sticky top-2 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-secondary p-4 text-secondary-foreground chunky">
           <div className="text-sm">
             <b>Want</b> (2 pts): {pool.find((r) => r.id === want)?.name ?? "—"} · <b>Could</b> (1
             pt): {pool.find((r) => r.id === could)?.name ?? "—"}
@@ -1056,12 +1056,12 @@ function RestaurantCard({
             {r.name}
             {hasRewards && (
               <span
-                className="shrink-0 text-primary"
-                role="img"
+                className="inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs font-bold text-secondary-foreground"
                 title="Your rewards account matches this restaurant"
                 aria-label="Your rewards account matches this restaurant"
               >
-                <Gift className="h-4 w-4" aria-hidden="true" />
+                <Gift className="h-3.5 w-3.5" aria-hidden="true" />
+                Your rewards
               </span>
             )}
           </h3>
@@ -1123,7 +1123,7 @@ function RestaurantCard({
           </button>
           <button
             onClick={() => onPick("could")}
-            className={`rounded-lg border-2 py-1.5 text-sm font-bold ${could ? "bg-secondary" : "bg-background"}`}
+            className={`rounded-lg border-2 py-1.5 text-sm font-bold ${could ? "bg-secondary text-secondary-foreground" : "bg-background"}`}
           >
             {could ? "☆ Could" : "Could"}
           </button>
@@ -1205,7 +1205,7 @@ function Nominate({
             />
             <button
               disabled={busy || q.trim().length < 2}
-              className="rounded-lg bg-secondary px-4 font-bold chunky disabled:opacity-50"
+              className="rounded-lg bg-secondary px-4 font-bold text-secondary-foreground chunky disabled:opacity-50"
             >
               {busy ? "…" : "Search"}
             </button>
@@ -1226,12 +1226,12 @@ function Nominate({
                         r.id.startsWith("g_") ? r.id.slice(2) : null,
                       ) && (
                         <span
-                          className="shrink-0 text-primary"
-                          role="img"
+                          className="inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold text-secondary-foreground"
                           aria-label="Your rewards account matches this restaurant"
                           title="Your rewards account matches this restaurant"
                         >
-                          <Gift className="h-4 w-4" aria-hidden="true" />
+                          <Gift className="h-3 w-3" aria-hidden="true" />
+                          Rewards
                         </span>
                       )}
                     </p>

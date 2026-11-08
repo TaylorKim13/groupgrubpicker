@@ -142,7 +142,7 @@ export function AccountSettings({
                 id="profile-photo"
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
-                className="block w-full text-sm file:mr-3 file:rounded-lg file:border-2 file:bg-secondary file:px-3 file:py-2 file:font-bold"
+                className="block w-full text-sm file:mr-3 file:rounded-lg file:border-2 file:bg-secondary file:px-3 file:py-2 file:font-bold file:text-secondary-foreground"
                 aria-describedby="photo-help"
                 onChange={async (e) => {
                   const file = e.currentTarget.files?.[0];

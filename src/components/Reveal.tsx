@@ -26,7 +26,7 @@ function CoinFlip({ result, onDone }: { result: Result; onDone: () => void }) {
             transform: winnerIsA ? undefined : "rotateY(180deg)",
           }}
         >
-          <div className="absolute inset-0 grid place-items-center rounded-full bg-secondary p-4 text-center font-display text-xl font-extrabold chunky" style={{ backfaceVisibility: "hidden" }}>
+          <div className="absolute inset-0 grid place-items-center rounded-full bg-secondary p-4 text-center font-display text-xl font-extrabold text-secondary-foreground chunky" style={{ backfaceVisibility: "hidden" }}>
             {a.name}
           </div>
           <div className="absolute inset-0 grid place-items-center rounded-full bg-primary p-4 text-center font-display text-xl font-extrabold text-primary-foreground chunky" style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}>
