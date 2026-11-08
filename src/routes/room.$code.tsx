@@ -333,7 +333,7 @@ function Members({ s, session, refresh }: { s: State; session: Session; refresh:
               {m.nickname}
               {m.id === s.me.id && <span className="text-muted-foreground"> (you)</span>}
               {m.isHost && (
-                <span className="ml-1 rounded bg-secondary px-1.5 text-[10px] font-bold uppercase">
+                <span className="ml-1 rounded bg-secondary px-1.5 text-[10px] font-bold uppercase text-secondary-foreground">
                   host
                 </span>
               )}
