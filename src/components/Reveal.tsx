@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { Result } from "@/lib/room.functions";
 import { priceLabel } from "@/lib/restaurants";
 import { ShareWaitButton } from "@/components/ShareWaitButton";
-import { WinnerDealLinks } from "@/components/RestaurantDeals";
+import { RestaurantDealIndicators, WinnerDealLinks } from "@/components/RestaurantDeals";
 import { useRestaurantDeals } from "@/lib/restaurant-deals";
 import { Gift } from "lucide-react";
 
@@ -26,7 +26,7 @@ function CoinFlip({ result, onDone }: { result: Result; onDone: () => void }) {
             transform: winnerIsA ? undefined : "rotateY(180deg)",
           }}
         >
-          <div className="absolute inset-0 grid place-items-center rounded-full bg-secondary p-4 text-center font-display text-xl font-extrabold chunky" style={{ backfaceVisibility: "hidden" }}>
+          <div className="absolute inset-0 grid place-items-center rounded-full bg-secondary p-4 text-center font-display text-xl font-extrabold text-secondary-foreground chunky" style={{ backfaceVisibility: "hidden" }}>
             {a.name}
           </div>
           <div className="absolute inset-0 grid place-items-center rounded-full bg-primary p-4 text-center font-display text-xl font-extrabold text-primary-foreground chunky" style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}>
@@ -81,7 +81,7 @@ function Wheel({ result, onDone }: { result: Result; onDone: () => void }) {
 
 export function Reveal({ result, hasRewards = false }: { result: Result; hasRewards?: boolean }) {
   const [stage, setStage] = useState<"tie" | "win">(result.tie ? "tie" : "win");
-  const dealsByRestaurant = useRestaurantDeals([result.winner.id]);
+  const dealsByRestaurant = useRestaurantDeals([result.winner.id], [result.winner.name]);
   if (stage === "tie") {
     const done = () => setStage("win");
     return result.tie!.method === "coin" ? <CoinFlip result={result} onDone={done} /> : <Wheel result={result} onDone={done} />;
@@ -121,6 +121,9 @@ export function Reveal({ result, hasRewards = false }: { result: Result; hasRewa
           {w.cuisine} · {w.priceUnknown ? "Price unknown" : priceLabel(w.price)}
           {w.address ? ` · ${w.address}` : ""}
         </p>
+        <div className="mx-auto mt-3 max-w-lg text-left">
+          <RestaurantDealIndicators deals={dealsByRestaurant.get(w.id) ?? []} />
+        </div>
         <div className="mt-6 flex flex-wrap justify-center gap-3">
           <ShareWaitButton restaurant={w} />
           {w.websiteUri && (

@@ -11,7 +11,11 @@ export async function googleMapsRequest(
   if (path.startsWith("/maps/api/geocode/json?")) {
     url = new URL(path, "https://maps.googleapis.com");
     url.searchParams.set("key", apiKey);
-  } else if (path === "/v1/places:searchText" || path === "/v1/places:searchNearby") {
+  } else if (
+    path === "/v1/places:searchText" ||
+    path === "/v1/places:searchNearby" ||
+    /^\/v1\/places\/[^/?]+(?:\?languageCode=[A-Za-z-]+)?$/.test(path)
+  ) {
     url = new URL(`https://places.googleapis.com${path}`);
     headers.set("X-Goog-Api-Key", apiKey);
     headers.set("Content-Type", "application/json");

@@ -6,7 +6,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { authMember, db, getRoomByCode, hashToken, newCode, newToken } from "./room.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { googleMapsRequest as gmaps } from "./google-maps.server";
 import {
   buildPool,
   distanceKm,
@@ -390,6 +389,22 @@ const restaurantDiscoveryCache = new Map<
   string,
   { expiresAt: number; results: Promise<Restaurant[]> }
 >();
+const DEFAULT_LOCAL_SPOT_COUNT = 7;
+
+function limitLocalRestaurants(
+  nearby: Restaurant[],
+  nominations: Restaurant[],
+  center: RoomSettings["center"],
+) {
+  const nominationIds = new Set(nominations.map((restaurant) => restaurant.id));
+  const localSpots = nearby
+    .filter((restaurant) => !nominationIds.has(restaurant.id))
+    .sort((a, b) => distanceKm(center, a) - distanceKm(center, b))
+    .slice(0, DEFAULT_LOCAL_SPOT_COUNT);
+  const pool = new Map(localSpots.map((restaurant) => [restaurant.id, restaurant] as const));
+  nominations.forEach((restaurant) => pool.set(restaurant.id, restaurant));
+  return [...pool.values()];
+}
 
 const CUISINE_TYPES: Record<string, string> = {
   american_restaurant: "American",
@@ -413,7 +428,7 @@ async function loadRestaurantPool(
   nominations: Restaurant[],
 ): Promise<Restaurant[]> {
   if (!process.env["GOOGLE_MAPS_API_KEY"] && !process.env["MAPS_API"]) {
-    return buildPool(room.settings, nominations);
+    return limitLocalRestaurants(buildPool(room.settings, []), nominations, room.settings.center);
   }
   if (room.status !== "lobby") {
     const { data, error } = await db()
@@ -475,9 +490,7 @@ async function loadRestaurantPool(
   }
 
   const nearby = await entry.results;
-  const pool = new Map(nearby.map((restaurant) => [restaurant.id, restaurant]));
-  nominations.forEach((restaurant) => pool.set(restaurant.id, restaurant));
-  return [...pool.values()];
+  return limitLocalRestaurants(nearby, nominations, settings.center);
 }
 
 async function discoverRestaurants(

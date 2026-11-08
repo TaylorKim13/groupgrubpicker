@@ -52,7 +52,6 @@ export function AccountSettings({
   const [avatar, setAvatar] = useState(profile.avatar);
   const [rewardRestaurants, setRewardRestaurants] = useState(initialRewardRestaurants);
   const [rewardQuery, setRewardQuery] = useState("");
-  const [rewardBrandName, setRewardBrandName] = useState("");
   const [rewardResults, setRewardResults] = useState<RewardPlaceSearchResult[]>([]);
   const [selectedReward, setSelectedReward] = useState<RewardPlaceSearchResult | null>(null);
   const [searchingRewards, setSearchingRewards] = useState(false);
@@ -143,7 +142,7 @@ export function AccountSettings({
                 id="profile-photo"
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
-                className="block w-full text-sm file:mr-3 file:rounded-lg file:border-2 file:bg-secondary file:px-3 file:py-2 file:font-bold"
+                className="block w-full text-sm file:mr-3 file:rounded-lg file:border-2 file:bg-secondary file:px-3 file:py-2 file:font-bold file:text-secondary-foreground"
                 aria-describedby="photo-help"
                 onChange={async (e) => {
                   const file = e.currentTarget.files?.[0];
@@ -209,7 +208,6 @@ export function AccountSettings({
             setSearchingRewards(true);
             setRewardSearchComplete(false);
             setSelectedReward(null);
-            setRewardBrandName(query);
             try {
               setRewardResults(await findRewardPlaces({ data: { query } }));
               setRewardSearchComplete(true);
@@ -253,9 +251,9 @@ export function AccountSettings({
               {rewardResults.map((place) => {
                 const alreadyLinked = rewardRestaurants.some(
                   (reward) =>
-                    reward.placeId &&
+                    reward.placeId === place.placeId ||
                     normalizeRestaurantName(reward.brandName) ===
-                      normalizeRestaurantName(rewardQuery),
+                      normalizeRestaurantName(place.name),
                 );
                 return (
                   <li key={place.placeId} className="py-3 first:pt-0 last:pb-0">
@@ -315,21 +313,10 @@ export function AccountSettings({
                 </a>
                 <p className="mt-3 text-sm">
                   This Google Maps listing confirms the restaurant. Place IDs are location-specific,
-                  so choose the brand name below to match its other locations.
+                  so its name from Google Maps will be used to match other locations.
                 </p>
-                <label className="mt-3 block text-sm font-bold">
-                  Brand name to match across locations
-                  <input
-                    className="mt-2 w-full rounded-lg border-2 bg-card px-4 py-3"
-                    value={rewardBrandName}
-                    onChange={(event) => setRewardBrandName(event.target.value)}
-                    maxLength={120}
-                    autoComplete="off"
-                  />
-                </label>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Use the name you expect to see on restaurant listings. This label is saved with
-                  the Google Place ID.
+                <p className="mt-3 text-sm font-bold">
+                  Saved name: <span className="font-extrabold">{selectedReward.name}</span>
                 </p>
               </div>
             </div>
@@ -338,34 +325,32 @@ export function AccountSettings({
                 type="button"
                 disabled={
                   busy ||
-                  rewardBrandName.trim().length < 2 ||
                   (rewardRestaurants.length >= 50 &&
                     !rewardRestaurants.some(
                       (reward) =>
                         reward.placeId === selectedReward.placeId ||
                         normalizeRestaurantName(reward.brandName) ===
-                          normalizeRestaurantName(rewardBrandName),
+                          normalizeRestaurantName(selectedReward.name),
                     ))
                 }
                 onClick={() =>
                   void act(async () => {
                     const linkedReward = {
                       placeId: selectedReward.placeId,
-                      brandName: rewardBrandName.trim(),
+                      brandName: selectedReward.name,
                     };
                     const next = [
                       ...rewardRestaurants.filter(
                         (reward) =>
                           reward.placeId !== selectedReward.placeId &&
                           normalizeRestaurantName(reward.brandName) !==
-                            normalizeRestaurantName(rewardBrandName),
+                            normalizeRestaurantName(selectedReward.name),
                       ),
                       linkedReward,
                     ];
                     const saved = await saveRewards({ data: { restaurants: next } });
                     setRewardRestaurants(saved.restaurants);
                     setSelectedReward(null);
-                    setRewardBrandName("");
                     setRewardResults([]);
                     await queryClient.invalidateQueries({
                       queryKey: ["account-reward-restaurants"],

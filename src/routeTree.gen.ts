@@ -15,6 +15,7 @@ import { Route as HealthRouteImport } from './routes/health'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as WaitRouteImport } from './routes/wait'
 import { Route as WaitCardDotpngRouteImport } from './routes/wait-card[.]png'
+import { Route as DealsSubmitRouteImport } from './routes/deals.submit'
 import { Route as InviteCodeRouteImport } from './routes/invite.$code'
 import { Route as RoomCodeRouteImport } from './routes/room.$code'
 
@@ -48,6 +49,11 @@ const WaitCardDotpngRoute = WaitCardDotpngRouteImport.update({
   path: '/wait-card.png',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DealsSubmitRoute = DealsSubmitRouteImport.update({
+  id: '/deals/submit',
+  path: '/deals/submit',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const InviteCodeRoute = InviteCodeRouteImport.update({
   id: '/invite/$code',
   path: '/invite/$code',
@@ -66,6 +72,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/wait': typeof WaitRoute
   '/wait-card.png': typeof WaitCardDotpngRoute
+  '/deals/submit': typeof DealsSubmitRoute
   '/invite/$code': typeof InviteCodeRoute
   '/room/$code': typeof RoomCodeRoute
 }
@@ -76,6 +83,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/wait': typeof WaitRoute
   '/wait-card.png': typeof WaitCardDotpngRoute
+  '/deals/submit': typeof DealsSubmitRoute
   '/invite/$code': typeof InviteCodeRoute
   '/room/$code': typeof RoomCodeRoute
 }
@@ -87,6 +95,7 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/wait': typeof WaitRoute
   '/wait-card.png': typeof WaitCardDotpngRoute
+  '/deals/submit': typeof DealsSubmitRoute
   '/invite/$code': typeof InviteCodeRoute
   '/room/$code': typeof RoomCodeRoute
 }
@@ -99,6 +108,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/wait'
     | '/wait-card.png'
+    | '/deals/submit'
     | '/invite/$code'
     | '/room/$code'
   fileRoutesByTo: FileRoutesByTo
@@ -109,6 +119,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/wait'
     | '/wait-card.png'
+    | '/deals/submit'
     | '/invite/$code'
     | '/room/$code'
   id:
@@ -119,6 +130,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/wait'
     | '/wait-card.png'
+    | '/deals/submit'
     | '/invite/$code'
     | '/room/$code'
   fileRoutesById: FileRoutesById
@@ -130,6 +142,7 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   WaitRoute: typeof WaitRoute
   WaitCardDotpngRoute: typeof WaitCardDotpngRoute
+  DealsSubmitRoute: typeof DealsSubmitRoute
   InviteCodeRoute: typeof InviteCodeRoute
   RoomCodeRoute: typeof RoomCodeRoute
 }
@@ -178,6 +191,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WaitCardDotpngRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/deals/submit': {
+      id: '/deals/submit'
+      path: '/deals/submit'
+      fullPath: '/deals/submit'
+      preLoaderRoute: typeof DealsSubmitRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/invite/$code': {
       id: '/invite/$code'
       path: '/invite/$code'
@@ -202,6 +222,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   WaitRoute: WaitRoute,
   WaitCardDotpngRoute: WaitCardDotpngRoute,
+  DealsSubmitRoute: DealsSubmitRoute,
   InviteCodeRoute: InviteCodeRoute,
   RoomCodeRoute: RoomCodeRoute,
 }

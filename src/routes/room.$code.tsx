@@ -8,7 +8,6 @@ import { RoomSettingsFields } from "@/components/RoomSettingsFields";
 import { DiningPanel } from "@/components/DiningPanel";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { roomJoinUrl } from "@/lib/room-access";
 import { Button } from "@/components/ui/button";
 import { useDistanceUnit } from "@/lib/distance-context";
 import { formatDistance, SettingsSchema } from "@/lib/settings";
@@ -17,7 +16,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Gift } from "lucide-react";
+import { ArrowLeft, ChevronDown, Gift } from "lucide-react";
 import { ProfilePicker } from "@/components/ProfilePicker";
 import { RestaurantMap } from "@/components/RestaurantMap";
 import { GooglePopularTimes } from "@/components/GooglePopularTimes";
@@ -26,7 +25,10 @@ import { ShareWaitButton } from "@/components/ShareWaitButton";
 import { RestaurantDealIndicators } from "@/components/RestaurantDeals";
 import { ShareInviteButton } from "@/components/ShareInviteButton";
 import type { Result } from "@/lib/room.functions";
-import { useRestaurantDeals, type RestaurantDeal } from "@/lib/restaurant-deals";
+import {
+  useRestaurantDeals,
+  type RestaurantDeal,
+} from "@/lib/restaurant-deals";
 import { getRewardRestaurants } from "@/lib/account.functions";
 import { hasRewardMatch, type RewardRestaurant } from "@/lib/restaurant-rewards";
 import {
@@ -205,7 +207,7 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
         </p>
         <button
           onClick={onLeave}
-          className="mt-4 rounded-xl bg-secondary px-4 py-2 font-bold chunky"
+          className="mt-4 rounded-xl bg-secondary px-4 py-2 font-bold text-secondary-foreground chunky"
         >
           Join again
         </button>
@@ -267,16 +269,16 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
 function TopBar({ s, onLeave }: { s: State; onLeave: () => void }) {
   const phase = { lobby: "Lobby", voting: "Voting open", closed: "Winner!" }[s.status];
   return (
-    <header className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-card p-4 chunky">
+    <header className="rounded-2xl bg-card p-4 chunky">
       <div className="flex items-center gap-4">
         <Link to="/" className="font-display text-2xl font-extrabold leading-none">
           GROUP<span className="text-primary"> GRUB</span>
         </Link>
-        <span className="rounded-full bg-secondary px-3 py-1 text-xs font-bold uppercase">
+        <span className="rounded-full bg-secondary px-3 py-1 text-xs font-bold uppercase text-secondary-foreground">
           {phase}
         </span>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="mt-3 grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-start">
         <button
           onClick={onLeave}
           className="rounded-lg border-2 bg-background px-3 py-2 text-sm font-bold"
@@ -284,17 +286,9 @@ function TopBar({ s, onLeave }: { s: State; onLeave: () => void }) {
           <ArrowLeft /> Back
         </button>
         <RoomInvite code={s.code} />
-        <span className="font-display text-3xl tracking-[0.25em]">{s.code}</span>
-        <button
-          onClick={() => {
-            navigator.clipboard.writeText(roomJoinUrl(window.location.origin, s.code));
-            toast.success("Invite link copied");
-          }}
-          className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground chunky"
-        >
-          Copy invite link
-        </button>
-        <ShareInviteButton code={s.code} />
+        <div className="sm:justify-self-end">
+          <ShareInviteButton code={s.code} />
+        </div>
       </div>
     </header>
   );
@@ -339,7 +333,7 @@ function Members({ s, session, refresh }: { s: State; session: Session; refresh:
               {m.nickname}
               {m.id === s.me.id && <span className="text-muted-foreground"> (you)</span>}
               {m.isHost && (
-                <span className="ml-1 rounded bg-secondary px-1.5 text-[10px] font-bold uppercase">
+                <span className="ml-1 rounded bg-secondary px-1.5 text-[10px] font-bold uppercase text-secondary-foreground">
                   host
                 </span>
               )}
@@ -480,7 +474,7 @@ function RoomFriends({ s, session, refresh }: { s: State; session: Session; refr
                 key={c.id}
                 disabled={!ids.length}
                 onClick={() => send(ids)}
-                className="rounded-lg bg-secondary px-3 py-1.5 text-sm font-bold chunky disabled:opacity-50"
+                className="rounded-lg bg-secondary px-3 py-1.5 text-sm font-bold text-secondary-foreground chunky disabled:opacity-50"
               >
                 👥 {c.name}
               </button>
@@ -644,7 +638,7 @@ function HostSettings({
               />
               <button
                 disabled={addr.trim().length < 2}
-                className="rounded-lg bg-secondary px-3 text-sm font-bold disabled:opacity-50"
+                className="rounded-lg bg-secondary px-3 text-sm font-bold text-secondary-foreground disabled:opacity-50"
               >
                 Set
               </button>
@@ -727,7 +721,7 @@ function HostSettings({
                       })
                     }
                     className={`rounded-full border-2 px-2.5 py-0.5 text-xs font-bold ${
-                      on ? "bg-secondary" : "bg-background"
+                      on ? "bg-secondary text-secondary-foreground" : "bg-background"
                     }`}
                   >
                     {d}
@@ -786,7 +780,7 @@ function HostSettings({
           <button
             type="button"
             onClick={() => setStep(step + 1)}
-            className="rounded-lg bg-secondary px-4 py-1.5 text-sm font-extrabold chunky"
+            className="rounded-lg bg-secondary px-4 py-1.5 text-sm font-extrabold text-secondary-foreground chunky"
           >
             Next →
           </button>
@@ -868,7 +862,8 @@ function Pool({
   const voting = s.status === "voting";
   const pool = s.pool;
   const dealsByRestaurant = useRestaurantDeals(
-    voting ? pool.map((restaurant) => restaurant.id) : [],
+    pool.map((restaurant) => restaurant.id),
+    pool.map((restaurant) => restaurant.name),
   );
   const filteredPool = useMemo(() => {
     const query = restaurantSearch.trim().toLocaleLowerCase();
@@ -921,7 +916,7 @@ function Pool({
       )}
 
       {voting && (
-        <div className="sticky top-2 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-secondary p-4 chunky">
+        <div className="sticky top-2 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-secondary p-4 text-secondary-foreground chunky">
           <div className="text-sm">
             <b>Want</b> (2 pts): {pool.find((r) => r.id === want)?.name ?? "—"} · <b>Could</b> (1
             pt): {pool.find((r) => r.id === could)?.name ?? "—"}
@@ -948,6 +943,9 @@ function Pool({
         <h2 className="mb-3 text-2xl font-extrabold">
           The pool <span className="text-base font-normal text-muted-foreground">({filteredPool.length === pool.length ? `${pool.length}` : `${filteredPool.length} of ${pool.length}`} spots)</span>
         </h2>
+        <p className="mb-3 text-sm text-muted-foreground">
+          Showing up to 7 nearby spots. Each person can add one restaurant with a wildcard pick.
+        </p>
         {pool.length > 0 && (
           <label className="mb-3 block">
             <span className="sr-only">Search restaurants in the pool</span>
@@ -961,11 +959,6 @@ function Pool({
             />
           </label>
         )}
-        <p className="mb-3 text-sm text-muted-foreground">
-          Live restaurant listings from Google. Known prices are filtered; places without price data
-          are included and marked. Popular-times data varies, and wait times and dietary or allergy
-          suitability are not verified, so confirm directly with the restaurant.
-        </p>
         {pool.length === 0 && (
           <p className="rounded-xl border-2 border-dashed p-6 text-center text-muted-foreground">
             Nothing matches these filters. Widen the radius or price range — or nominate a spot.
@@ -998,6 +991,11 @@ function Pool({
             />
           ))}
         </div>
+        <p className="mt-4 text-sm text-muted-foreground">
+          Live restaurant listings from Google. Known prices are filtered; places without price data
+          are included and marked. Popular-times data varies, and wait times and dietary or allergy
+          suitability are not verified, so confirm directly with the restaurant.
+        </p>
       </div>
     </>
   );
@@ -1029,6 +1027,24 @@ function RestaurantCard({
   hasRewards: boolean;
 }) {
   const unit = useDistanceUnit();
+  const [showDeals, setShowDeals] = useState(false);
+  const dealsPanelId = `restaurant-deals-${r.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+  const dealButton = deals.length > 0 && (
+    <button
+      type="button"
+      className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      title="Show this restaurant's deal"
+      aria-expanded={showDeals}
+      aria-controls={dealsPanelId}
+      onClick={() => setShowDeals((visible) => !visible)}
+    >
+      Deal
+      <ChevronDown
+        className={`h-3.5 w-3.5 transition-transform ${showDeals ? "rotate-180" : ""}`}
+        aria-hidden="true"
+      />
+    </button>
+  );
   return (
     <div
       onMouseEnter={onFocus}
@@ -1040,12 +1056,12 @@ function RestaurantCard({
             {r.name}
             {hasRewards && (
               <span
-                className="shrink-0 text-primary"
-                role="img"
+                className="inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs font-bold text-secondary-foreground"
                 title="Your rewards account matches this restaurant"
                 aria-label="Your rewards account matches this restaurant"
               >
-                <Gift className="h-4 w-4" aria-hidden="true" />
+                <Gift className="h-3.5 w-3.5" aria-hidden="true" />
+                Your rewards
               </span>
             )}
           </h3>
@@ -1059,15 +1075,25 @@ function RestaurantCard({
           <a href={directionsUrl(r)} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs font-semibold underline">Get directions</a>
           {r.address && <p className="mt-1 text-xs text-muted-foreground">{r.address}</p>}
           {r.websiteUri && <a href={r.websiteUri} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs font-semibold underline">Restaurant website</a>}
-<RestaurantDealIndicators deals={deals} />
+{showDeals && (
+  <div id={dealsPanelId}>
+    <RestaurantDealIndicators deals={deals} />
+  </div>
+)}
+
 {r.google && r.id.startsWith("g_") && (
   <GooglePopularTimes placeId={r.id.slice(2)} />
 )}
         </div>
-        {r.custom && (
-          <span className="shrink-0 rounded bg-success px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary-foreground">
-            by {r.nominatedBy}
-          </span>
+        {(r.custom || dealButton) && (
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            {dealButton}
+            {r.custom && (
+              <span className="rounded bg-success px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary-foreground">
+                by {r.nominatedBy}
+              </span>
+            )}
+          </div>
         )}
       </div>
       {r.diets.length > 0 && (
@@ -1098,7 +1124,7 @@ function RestaurantCard({
           </button>
           <button
             onClick={() => onPick("could")}
-            className={`rounded-lg border-2 py-1.5 text-sm font-bold ${could ? "bg-secondary" : "bg-background"}`}
+            className={`rounded-lg border-2 py-1.5 text-sm font-bold ${could ? "bg-secondary text-secondary-foreground" : "bg-background"}`}
           >
             {could ? "☆ Could" : "Could"}
           </button>
@@ -1180,7 +1206,7 @@ function Nominate({
             />
             <button
               disabled={busy || q.trim().length < 2}
-              className="rounded-lg bg-secondary px-4 font-bold chunky disabled:opacity-50"
+              className="rounded-lg bg-secondary px-4 font-bold text-secondary-foreground chunky disabled:opacity-50"
             >
               {busy ? "…" : "Search"}
             </button>
@@ -1201,12 +1227,12 @@ function Nominate({
                         r.id.startsWith("g_") ? r.id.slice(2) : null,
                       ) && (
                         <span
-                          className="shrink-0 text-primary"
-                          role="img"
+                          className="inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold text-secondary-foreground"
                           aria-label="Your rewards account matches this restaurant"
                           title="Your rewards account matches this restaurant"
                         >
-                          <Gift className="h-4 w-4" aria-hidden="true" />
+                          <Gift className="h-3 w-3" aria-hidden="true" />
+                          Rewards
                         </span>
                       )}
                     </p>

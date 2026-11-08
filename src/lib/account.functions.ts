@@ -10,6 +10,7 @@ import {
   parseRewardRestaurants,
   RewardPlaceSearchResultSchema,
   RewardRestaurantsSchema,
+  type RewardRestaurant,
 } from "./restaurant-rewards";
 import {
   AvatarSchema,
@@ -18,6 +19,49 @@ import {
   PROFILE_PHOTO_BUCKET,
   MAX_STORED_PHOTO_BYTES,
 } from "./profile-avatar";
+
+const rewardPlaceNameCache = new Map<string, { name: string; expiresAt: number }>();
+const REWARD_PLACE_NAME_CACHE_MS = 6 * 60 * 60 * 1000;
+
+async function getRewardPlaceName(placeId: string): Promise<string | null> {
+  const cached = rewardPlaceNameCache.get(placeId);
+  if (cached && cached.expiresAt > Date.now()) return cached.name;
+
+  try {
+    const place = await googleMapsRequest(
+      `/v1/places/${encodeURIComponent(placeId)}?languageCode=en`,
+      {
+        method: "GET",
+        fieldMask: "id,displayName",
+      },
+    );
+    const name = typeof place.displayName?.text === "string" ? place.displayName.text.trim() : "";
+    if (!name) return null;
+    rewardPlaceNameCache.set(placeId, {
+      name,
+      expiresAt: Date.now() + REWARD_PLACE_NAME_CACHE_MS,
+    });
+    return name;
+  } catch {
+    return null;
+  }
+}
+
+async function refreshRewardPlaceNames(rewards: RewardRestaurant[]) {
+  const refreshed = [...rewards];
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(5, rewards.length) }, async () => {
+    while (nextIndex < rewards.length) {
+      const index = nextIndex++;
+      const reward = rewards[index];
+      if (!reward?.placeId) continue;
+      const name = await getRewardPlaceName(reward.placeId);
+      if (name && refreshed[index]) refreshed[index] = { ...refreshed[index]!, brandName: name };
+    }
+  });
+  await Promise.all(workers);
+  return refreshed;
+}
 
 export const getAccount = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -53,6 +97,17 @@ export const getAccount = createServerFn({ method: "GET" })
     if (!rewardColumnUnavailable) {
       if (rewardError || !rewardData) throw new Error("Could not load your restaurant rewards");
       rewardRestaurants = parseRewardRestaurants(rewardData.reward_restaurants);
+      const refreshedRewards = await refreshRewardPlaceNames(rewardRestaurants);
+      const namesChanged = refreshedRewards.some(
+        (reward, index) => reward.brandName !== rewardRestaurants[index]?.brandName,
+      );
+      if (namesChanged) {
+        rewardRestaurants = refreshedRewards;
+        await context.supabase
+          .from("profiles")
+          .update({ reward_restaurants: rewardRestaurants })
+          .eq("id", context.userId);
+      }
     }
     const { data: preset, error: presetError } = await context.supabase
       .from("preset_filters")
