@@ -1075,14 +1075,15 @@ function RestaurantCard({
           <a href={directionsUrl(r)} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs font-semibold underline">Get directions</a>
           {r.address && <p className="mt-1 text-xs text-muted-foreground">{r.address}</p>}
           {r.websiteUri && <a href={r.websiteUri} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs font-semibold underline">Restaurant website</a>}
-          {showDeals && (
-            <div id={dealsPanelId}>
-              <RestaurantDealIndicators deals={deals} />
-            </div>
-          )}
-          <GooglePopularTimes
-            {...(r.google && r.id.startsWith("g_") ? { placeId: r.id.slice(2) } : {})}
-          />
+{showDeals && (
+  <div id={dealsPanelId}>
+    <RestaurantDealIndicators deals={deals} />
+  </div>
+)}
+
+{r.google && r.id.startsWith("g_") && (
+  <GooglePopularTimes placeId={r.id.slice(2)} />
+)}
         </div>
         {(r.custom || dealButton) && (
           <div className="flex shrink-0 flex-col items-end gap-2">
