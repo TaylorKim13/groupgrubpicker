@@ -1,5 +1,6 @@
-import { ArrowUpRight, ChevronRight, Clock3, Info, MapPin, Sparkles } from "lucide-react";
+import { ArrowUpRight, ChevronRight, Clock3, Gift, Info, MapPin, Sparkles } from "lucide-react";
 import type { DiningSuggestion } from "@/lib/dining";
+import { hasRewardMatch, type RewardRestaurant } from "@/lib/restaurant-rewards";
 import { priceLabel } from "@/lib/restaurants";
 import { Button } from "./ui/button";
 import {
@@ -36,9 +37,11 @@ const backdrops = ["bg-secondary/35", "bg-primary/10", "bg-success/15"];
 export function SuggestionCards({
   suggestions,
   historical = false,
+  rewardRestaurants,
 }: {
   suggestions: DiningSuggestion[];
   historical?: boolean;
+  rewardRestaurants: RewardRestaurant[];
 }) {
   return (
     <ol className="grid gap-4 sm:grid-cols-3">
@@ -72,7 +75,19 @@ export function SuggestionCards({
                     </span>
                   </div>
                   <div className="flex w-full flex-1 flex-col p-4">
-                    <h3 className="text-lg font-extrabold leading-tight">{r.name}</h3>
+                    <h3 className="flex items-center gap-2 text-lg font-extrabold leading-tight">
+                      {r.name}
+                      {hasRewardMatch(rewardRestaurants, r.name) && (
+                        <span
+                          className="shrink-0 text-primary"
+                          role="img"
+                          aria-label="Your rewards account matches this restaurant"
+                          title="Your rewards account matches this restaurant"
+                        >
+                          <Gift className="h-4 w-4" aria-hidden="true" />
+                        </span>
+                      )}
+                    </h3>
                     <p className="mt-1.5 text-sm text-muted-foreground">
                       {r.cuisine} · {price}
                     </p>
