@@ -95,6 +95,7 @@ export function RestaurantMap({
   useEffect(() => {
     if (!ready) return;
     const g = window.google.maps;
+    info.current?.close();
     overlays.current.forEach((o) => o.setMap(null));
     overlays.current = [];
     restaurantMarkers.current.clear();
@@ -153,7 +154,7 @@ export function RestaurantMap({
         position: { lat: r.lat, lng: r.lng },
         title: r.name,
         icon: iconFor(false),
-        label: faviconUrl ? undefined : { text: priceLabel(r.price), color: "#fff", fontSize: "10px", fontWeight: "700" },
+        label: faviconUrl ? undefined : { text: r.priceUnknown ? "?" : priceLabel(r.price), color: "#fff", fontSize: "10px", fontWeight: "700" },
       });
       restaurantMarkers.current.set(r.id, mk);
       restaurantIcons.current.set(r.id, { normal: iconFor(false), selected: iconFor(true) });

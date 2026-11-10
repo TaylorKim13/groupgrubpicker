@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { DIETS, priceLabel, type Center, type RoomSettings } from "@/lib/restaurants";
+import { DIETS, priceLabel, priceRangeLabel, type Center, type RoomSettings } from "@/lib/restaurants";
 import { fromKm, toKm, type DistanceUnit, type RoomPreferences } from "@/lib/settings";
 import { Button } from "./ui/button";
 
@@ -19,7 +19,7 @@ export function RoomSettingsFields({
 }) {
   const [address, setAddress] = useState("");
   const [locating, setLocating] = useState(false);
-  const input = "mt-2 w-full rounded-lg border-2 bg-background px-3 py-2";
+  const input = "mt-2 w-full rounded-lg border bg-background px-3 py-2";
   return (
     <fieldset disabled={disabled} className="space-y-5 disabled:opacity-60">
       {geocode && value.center && (
@@ -122,13 +122,14 @@ export function RoomSettingsFields({
             >
               {[1, 2, 3, 4].map((n) => (
                 <option key={n} value={n}>
-                  {priceLabel(n)}
+                  {priceLabel(n)} ({priceRangeLabel(n)})
                 </option>
               ))}
             </select>
           </label>
         ))}
       </div>
+      <p className="text-xs text-muted-foreground">Approximate USD per person, before tax and tip. Actual menu prices vary.</p>
       <fieldset>
         <legend className="mb-2 font-bold">Dietary / allergy needs</legend>
         <div className="flex flex-wrap gap-2">

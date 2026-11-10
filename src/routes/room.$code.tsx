@@ -1,3 +1,5 @@
+import { useRoomPresence } from "@/components/useRoomPresence";
+import { PhotoBanner } from "@/components/PhotoBanner";
 import { googlePriceLabel, directionsUrl } from "@/lib/restaurant-info";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { ThemeControl } from "@/components/ThemeControl";
@@ -49,7 +51,7 @@ import {
   AVATARS,
   DIETS,
   distanceKm,
-  priceLabel,
+  priceLabel, priceRangeLabel,
   type Restaurant,
   type RoomSettings,
 } from "@/lib/restaurants";
@@ -97,7 +99,8 @@ function JoinGate({ code, onJoined }: { code: string; onJoined: (s: Session) => 
   const validCode = RoomCodeSchema.safeParse(code).success;
   return (
     <main className="mx-auto max-w-md px-5 py-14">
-      <Link to="/" className="font-display text-2xl font-extrabold">
+      <PhotoBanner title="There is a seat for you." photo="join" />
+      <Link to="/" className="font-display text-2xl font-semibold">
         GROUP<span className="text-primary"> GRUB</span>
       </Link>
       <div className="mt-6 rounded-2xl bg-card p-6 chunky">
@@ -177,6 +180,7 @@ type State = {
 };
 
 function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
+  const [requestedRestaurant, setRequestedRestaurant] = useState<{ id: string } | null>(null);
   const fetchState = useServerFn(getRoomState);
   const accountUser = useAccount();
   const fetchRewardRestaurants = useServerFn(getRewardRestaurants);
@@ -189,6 +193,7 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
       (query.state.data as State | undefined)?.status === "closed" ? false : 2500,
     retry: 1,
   });
+  useRoomPresence(session, q.data?.status !== "closed" && !q.error);
   const rewardQuery = useQuery({
     queryKey: ["account-reward-restaurants", accountUser?.id],
     queryFn: () => fetchRewardRestaurants(),
@@ -200,6 +205,7 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
   if (q.error && (!q.data || q.error.message === "Not a member of this room"))
     return (
       <main className="mx-auto max-w-md px-5 py-20 text-center">
+        <PhotoBanner title="Back to the table" photo="join" />
         <p className="text-lg">
           {q.error.message === "Not a member of this room"
             ? "You no longer have access to this table. The host may have removed you."
@@ -216,20 +222,37 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
   const s = q.data;
   if (!s)
     return (
-      <main className="grid min-h-screen place-items-center font-display text-2xl">
+      <main className="photo-state grid min-h-screen place-items-center font-display text-2xl">
         Setting the table…
       </main>
     );
 
+  if (s.status === "closed" && !s.result) return (
+    <main className="mx-auto max-w-2xl px-5 py-8">
+      <Link to="/" className="brand-wordmark text-4xl">GROUP<span className="text-primary"> GRUB</span></Link>
+      <PhotoBanner title="This table has closed" subtitle="Nobody was viewing the table. Start a new one when your group is ready." photo="help" />
+      <Button asChild><Link to="/">Start a new table</Link></Button>
+    </main>
+  );
+
   return (
-    <main className="mx-auto max-w-6xl px-4 py-6">
+    <main className={s.status === "closed" && s.result ? "winner-page" : "mx-auto max-w-6xl px-4 py-6"}>
+      {!(s.status === "closed" && s.result) && <>
       <TopBar s={s} onLeave={onLeave} />
+      <PhotoBanner
+        title={s.status === "closed" ? "The crew has spoken." : s.status === "voting" ? "Your next meal. Your vote." : "A great meal starts here."}
+        subtitle={s.status === "lobby" ? "Gather your people and find your flavor." : "Good food. One group decision."}
+        photo="fresh"
+      />
+      </>}
       {s.status === "closed" && s.result ? (
-        <div className="py-10">
+        <div>
           <Reveal
             result={s.result}
             hasRewards={hasRewardMatch(rewardRestaurants, s.result.winner.name)}
           />
+          <div className="mx-auto max-w-6xl px-4 py-8">
+          <TopBar s={s} onLeave={onLeave} />
           <DiningPanel
             session={session}
             status={s.status}
@@ -238,6 +261,7 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
             pool={s.pool}
             rewardRestaurants={rewardRestaurants}
           />
+          </div>
         </div>
       ) : (
         <div className="mt-6 grid gap-6 lg:grid-cols-[320px_1fr]">
@@ -251,6 +275,10 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
           </aside>
           <section className="space-y-6">
             <DiningPanel
+              onViewRestaurant={(id) => {
+                if (s.pool.some((restaurant) => restaurant.id === id)) setRequestedRestaurant({ id });
+                else toast.info("This restaurant is no longer in the Melting Pot.");
+              }}
               session={session}
               status={s.status}
               isHost={s.me.isHost}
@@ -258,7 +286,7 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
               pool={s.pool}
               rewardRestaurants={rewardRestaurants}
             />
-            <Pool s={s} session={session} refresh={refresh} rewardRestaurants={rewardRestaurants} />
+            <Pool s={s} session={session} refresh={refresh} rewardRestaurants={rewardRestaurants} requestedRestaurant={requestedRestaurant} />
           </section>
         </div>
       )}
@@ -269,27 +297,23 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
 function TopBar({ s, onLeave }: { s: State; onLeave: () => void }) {
   const phase = { lobby: "Lobby", voting: "Voting open", closed: "Winner!" }[s.status];
   return (
-    <header className="rounded-2xl bg-card p-4 chunky">
-      <div className="flex items-center gap-4">
-        <Link to="/" className="font-display text-2xl font-extrabold leading-none">
-          GROUP<span className="text-primary"> GRUB</span>
-        </Link>
-        <span className="rounded-full bg-secondary px-3 py-1 text-xs font-bold uppercase text-secondary-foreground">
-          {phase}
-        </span>
-      </div>
-      <div className="mt-3 grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-start">
-        <button
-          onClick={onLeave}
-          className="rounded-lg border-2 bg-background px-3 py-2 text-sm font-bold"
-        >
-          <ArrowLeft /> Back
-        </button>
-        <RoomInvite code={s.code} />
-        <div className="sm:justify-self-end">
-          <ShareInviteButton code={s.code} />
+    <header className="space-y-6 pb-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <Link to="/" className="font-display text-2xl font-semibold leading-none">
+            GROUP<span className="text-primary"> GRUB</span>
+          </Link>
+          <span className="rounded-full bg-secondary px-3 py-1 text-xs font-bold uppercase text-secondary-foreground">
+            {phase}
+          </span>
         </div>
+        <Button variant="ghost" onClick={onLeave}>
+          <ArrowLeft aria-hidden="true" /> Back
+        </Button>
       </div>
+      <RoomInvite code={s.code}>
+        <ShareInviteButton code={s.code} />
+      </RoomInvite>
     </header>
   );
 }
@@ -314,7 +338,7 @@ function Members({ s, session, refresh }: { s: State; session: Session; refresh:
   return (
     <div className="rounded-2xl bg-card p-5 chunky">
       <div className="flex items-baseline justify-between">
-        <h2 className="text-xl font-extrabold">At the table ({s.members.length})</h2>
+        <h2 className="text-xl font-semibold">At the table ({s.members.length})</h2>
         {s.status === "voting" && (
           <span className="text-sm font-bold">
             {votedCount}/{s.members.length} voted
@@ -327,7 +351,7 @@ function Members({ s, session, refresh }: { s: State; session: Session; refresh:
             <ProfileAvatar
               avatar={m.avatar}
               name={m.nickname}
-              className="h-9 w-9 border-2 bg-background text-lg"
+              className="h-9 w-9 border bg-background text-lg"
             />
             <span className="flex-1 font-medium">
               {m.nickname}
@@ -356,7 +380,7 @@ function Members({ s, session, refresh }: { s: State; session: Session; refresh:
                     toast.error(e.message);
                   }
                 }}
-                className="rounded-md border-2 px-2 py-0.5 text-xs font-bold disabled:opacity-50"
+                className="rounded-md border px-2 py-0.5 text-xs font-bold disabled:opacity-50"
               >
                 {asked.has(m.id) ? "Sent" : "+ Friend"}
               </button>
@@ -366,7 +390,7 @@ function Members({ s, session, refresh }: { s: State; session: Session; refresh:
                 type="button"
                 disabled={removing !== null}
                 aria-label={`Remove ${m.nickname} from the table`}
-                className="rounded-md border-2 px-2 py-0.5 text-xs font-bold text-destructive disabled:opacity-50"
+                className="rounded-md border px-2 py-0.5 text-xs font-bold text-destructive disabled:opacity-50"
                 onClick={async () => {
                   if (
                     !window.confirm(
@@ -393,7 +417,7 @@ function Members({ s, session, refresh }: { s: State; session: Session; refresh:
             )}
             {s.status === "voting" && (
               <span
-                className={`h-3 w-3 rounded-full border-2 ${m.voted ? "bg-success" : "bg-muted"}`}
+                className={`h-3 w-3 rounded-full border ${m.voted ? "bg-success" : "bg-muted"}`}
                 title={m.voted ? "Voted" : "Still deciding"}
               />
             )}
@@ -454,7 +478,11 @@ function RoomFriends({ s, session, refresh }: { s: State; session: Session; refr
   const send = async (ids: string[]) => {
     try {
       const r = await invite({ data: { ...session, userIds: ids } });
-      toast.success(`Invited ${r.sent}`);
+      if (r.sent === 0) {
+        toast.info("No invitations sent. Recipients must be accepted friends or members of one of your groups.");
+      } else {
+        toast.success(`Invited ${r.sent} ${r.sent === 1 ? "person" : "people"}${r.skipped ? `. ${r.skipped} not eligible.` : ""}`);
+      }
     } catch (e: any) {
       toast.error(e.message);
     }
@@ -462,7 +490,7 @@ function RoomFriends({ s, session, refresh }: { s: State; session: Session; refr
   const groups = d.crews.filter((c) => c.myStatus === "member");
   return (
     <div className="rounded-2xl bg-card p-5 chunky">
-      <h2 className="text-xl font-extrabold">Invite friends</h2>
+      <h2 className="text-xl font-semibold">Invite friends</h2>
       {groups.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-2">
           {groups.map((c) => {
@@ -502,7 +530,7 @@ function SettingsSummary({ settings: st }: { settings: RoomSettings }) {
   const unit = useDistanceUnit();
   return (
     <div className="rounded-2xl bg-card p-5 text-sm chunky">
-      <h2 className="mb-2 text-xl font-extrabold">House rules</h2>
+      <h2 className="mb-2 text-xl font-semibold">House rules</h2>
       <p>📍 {st.center.label}</p>
       <p>📏 Within {formatDistance(st.radiusKm, unit)}</p>
       <p>
@@ -577,20 +605,20 @@ function HostSettings({
 
   return (
     <div className="space-y-5 rounded-2xl bg-card p-5 chunky">
-      <h2 className="text-xl font-extrabold">Host controls</h2>
+      <h2 className="text-xl font-semibold">Host controls</h2>
       <div className="flex flex-wrap gap-1.5 text-xs font-bold">
-        <span className="rounded-full border-2 bg-background px-2.5 py-0.5">
+        <span className="rounded-full border bg-background px-2.5 py-0.5">
           📍 {st.center.label.split(",")[0]} · {st.radiusKm} km
         </span>
-        <span className="rounded-full border-2 bg-background px-2.5 py-0.5">
+        <span className="rounded-full border bg-background px-2.5 py-0.5">
           {priceLabel(st.priceMin)}–{priceLabel(st.priceMax)} · ≤{st.maxWait} min
         </span>
         {st.diets.length > 0 && (
-          <span className="rounded-full border-2 bg-background px-2.5 py-0.5">
+          <span className="rounded-full border bg-background px-2.5 py-0.5">
             {st.diets.join(", ")}
           </span>
         )}
-        <span className="rounded-full border-2 bg-background px-2.5 py-0.5">
+        <span className="rounded-full border bg-background px-2.5 py-0.5">
           {st.visibility === "public" ? "Public" : "Private"} ·{" "}
           {st.anonymous ? "Secret votes" : "Open votes"}
         </span>
@@ -604,7 +632,7 @@ function HostSettings({
             role="tab"
             aria-selected={step === i}
             onClick={() => setStep(i)}
-            className={`rounded-lg border-2 px-1 py-2 text-xs font-extrabold ${
+            className={`rounded-lg border px-1 py-2 text-xs font-semibold ${
               step === i ? "bg-primary text-primary-foreground" : "bg-background"
             }`}
           >
@@ -634,7 +662,7 @@ function HostSettings({
                 value={addr}
                 onChange={(e) => setAddr(e.target.value)}
                 placeholder="Address or neighborhood"
-                className="min-w-0 flex-1 rounded-lg border-2 bg-background px-3 py-2 text-sm"
+                className="min-w-0 flex-1 rounded-lg border bg-background px-3 py-2 text-sm"
               />
               <button
                 disabled={addr.trim().length < 2}
@@ -689,21 +717,24 @@ function HostSettings({
                   <button
                     key={p}
                     type="button"
+                    aria-pressed={on}
                     onClick={() => {
                       if (p < st.priceMin) set({ priceMin: p });
                       else if (p > st.priceMax) set({ priceMax: p });
                       else if (p === st.priceMin && p < st.priceMax) set({ priceMin: p + 1 });
                       else if (p === st.priceMax && p > st.priceMin) set({ priceMax: p - 1 });
                     }}
-                    className={`rounded-md border-2 py-1.5 text-sm font-bold ${
+                    className={`rounded-md border py-1.5 text-sm font-bold ${
                       on ? "bg-primary text-primary-foreground" : "bg-background"
                     }`}
                   >
-                    {priceLabel(p)}
+                    <span className="block">{priceLabel(p)}</span>
+                    <span className="block text-xs font-normal">{priceRangeLabel(p)}</span>
                   </button>
                 );
               })}
             </div>
+            <p className="mt-2 text-xs text-muted-foreground">Approximate USD per person, before tax and tip. Actual menu prices vary.</p>
           </div>
 
           <div>
@@ -720,7 +751,7 @@ function HostSettings({
                         diets: on ? st.diets.filter((x) => x !== d) : [...st.diets, d],
                       })
                     }
-                    className={`rounded-full border-2 px-2.5 py-0.5 text-xs font-bold ${
+                    className={`rounded-full border px-2.5 py-0.5 text-xs font-bold ${
                       on ? "bg-secondary text-secondary-foreground" : "bg-background"
                     }`}
                   >
@@ -780,7 +811,7 @@ function HostSettings({
           <button
             type="button"
             onClick={() => setStep(step + 1)}
-            className="rounded-lg bg-secondary px-4 py-1.5 text-sm font-extrabold text-secondary-foreground chunky"
+            className="rounded-lg bg-secondary px-4 py-1.5 text-sm font-semibold text-secondary-foreground chunky"
           >
             Next →
           </button>
@@ -843,11 +874,13 @@ function HostSettings({
 }
 
 function Pool({
+  requestedRestaurant,
   s,
   session,
   refresh,
   rewardRestaurants,
 }: {
+  requestedRestaurant: { id: string } | null;
   s: State;
   session: Session;
   refresh: () => void;
@@ -859,6 +892,17 @@ function Pool({
   const [could, setCould] = useState<string | null>(s.myVote?.could ?? null);
   const [focus, setFocus] = useState<string | null>(null);
   const [restaurantSearch, setRestaurantSearch] = useState("");
+  useEffect(() => {
+    if (!requestedRestaurant) return;
+    setRestaurantSearch("");
+    setFocus(requestedRestaurant.id);
+    const frame = requestAnimationFrame(() => {
+      const card = document.getElementById(`restaurant-${requestedRestaurant.id}`);
+      card?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth", block: "center" });
+      card?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [requestedRestaurant]);
   const voting = s.status === "voting";
   const pool = s.pool;
   const dealsByRestaurant = useRestaurantDeals(
@@ -900,7 +944,7 @@ function Pool({
         <RestaurantMap
           center={s.settings.center}
           radiusKm={s.settings.radiusKm}
-          pool={pool}
+          pool={filteredPool}
           highlight={focus ?? want}
           onSelect={(r) => setFocus(r.id)}
         />
@@ -940,32 +984,32 @@ function Pool({
       )}
 
       <div>
-        <h2 className="mb-3 text-2xl font-extrabold">
-          The pool <span className="text-base font-normal text-muted-foreground">({filteredPool.length === pool.length ? `${pool.length}` : `${filteredPool.length} of ${pool.length}`} spots)</span>
+        <h2 className="mb-3 text-2xl font-semibold">
+          The Melting Pot <span className="text-base font-normal text-muted-foreground">({filteredPool.length === pool.length ? `${pool.length}` : `${filteredPool.length} of ${pool.length}`} spots)</span>
         </h2>
         <p className="mb-3 text-sm text-muted-foreground">
           Showing up to 7 nearby spots. Each person can add one restaurant with a wildcard pick.
         </p>
         {pool.length > 0 && (
           <label className="mb-3 block">
-            <span className="sr-only">Search restaurants in the pool</span>
+            <span className="sr-only">Search restaurants in the Melting Pot</span>
             <input
               type="search"
               value={restaurantSearch}
               onChange={(event) => setRestaurantSearch(event.target.value)}
               placeholder="Search by restaurant, cuisine, or address"
-              className="w-full rounded-xl border-2 bg-background px-4 py-3 text-base"
-              aria-label="Search restaurants in the pool"
+              className="w-full rounded-xl border bg-background px-4 py-3 text-base"
+              aria-label="Search restaurants in the Melting Pot"
             />
           </label>
         )}
         {pool.length === 0 && (
-          <p className="rounded-xl border-2 border-dashed p-6 text-center text-muted-foreground">
+          <p className="rounded-xl border border-dashed p-6 text-center text-muted-foreground">
             Nothing matches these filters. Widen the radius or price range — or nominate a spot.
           </p>
         )}
         {pool.length > 0 && filteredPool.length === 0 && (
-          <p className="mb-3 rounded-xl border-2 border-dashed p-6 text-center text-muted-foreground">
+          <p className="mb-3 rounded-xl border border-dashed p-6 text-center text-muted-foreground">
             No restaurants match “{restaurantSearch}”. Try another name, cuisine, or address.
           </p>
         )}
@@ -992,8 +1036,7 @@ function Pool({
           ))}
         </div>
         <p className="mt-4 text-sm text-muted-foreground">
-          Live restaurant listings from Google. Known prices are filtered; places without price data
-          are included and marked. Popular-times data varies, and wait times and dietary or allergy
+          Live restaurant listings from Google. Places without price data are included at every price setting and marked as unknown. Wildcard picks must also match the room filters. Popular-times data varies, and wait times and dietary or allergy
           suitability are not verified, so confirm directly with the restaurant.
         </p>
       </div>
@@ -1047,12 +1090,14 @@ function RestaurantCard({
   );
   return (
     <div
+      id={`restaurant-${r.id}`}
+      tabIndex={-1}
       onMouseEnter={onFocus}
-      className={`min-w-0 rounded-xl border-2 bg-card p-4 transition ${want ? "ring-4 ring-primary" : could ? "ring-4 ring-secondary" : ""} ${focused ? "chunky" : ""}`}
+      className={`min-w-0 rounded-xl border bg-card p-4 transition ${want ? "ring-4 ring-primary" : could ? "ring-4 ring-blue-500" : ""} ${focused ? "chunky" : ""}`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <h3 className="flex items-center gap-2 text-lg font-extrabold leading-tight">
+          <h3 className="flex items-center gap-2 text-lg font-semibold leading-tight">
             {r.name}
             {hasRewards && (
               <span
@@ -1117,14 +1162,16 @@ function RestaurantCard({
       {voting && (
         <div className="mt-3 grid grid-cols-2 gap-2">
           <button
+            aria-pressed={want}
             onClick={() => onPick("want")}
-            className={`rounded-lg border-2 py-1.5 text-sm font-bold ${want ? "bg-primary text-primary-foreground" : "bg-background"}`}
+            className={`rounded-lg border py-1.5 text-sm font-bold ${want ? "bg-primary text-primary-foreground" : "bg-background"}`}
           >
             {want ? "★ Want" : "Want"}
           </button>
           <button
+            aria-pressed={could}
             onClick={() => onPick("could")}
-            className={`rounded-lg border-2 py-1.5 text-sm font-bold ${could ? "bg-secondary text-secondary-foreground" : "bg-background"}`}
+            className={`rounded-lg border py-1.5 text-sm font-bold ${could ? "border-blue-700 bg-blue-700 text-white" : "bg-background"}`}
           >
             {could ? "☆ Could" : "Could"}
           </button>
@@ -1165,7 +1212,7 @@ function Nominate({
 
   return (
     <div className="rounded-2xl bg-card p-5 chunky">
-      <h2 className="text-xl font-extrabold">Your wildcard pick</h2>
+      <h2 className="text-xl font-semibold">Your wildcard pick</h2>
       {s.myNomination ? (
         <div className="mt-2 flex items-center justify-between gap-3">
           <p className="text-sm">
@@ -1182,7 +1229,7 @@ function Nominate({
       ) : (
         <>
           <p className="text-sm text-muted-foreground">
-            Add one real restaurant to the group pool.
+            Add one real restaurant to the Melting Pot.
           </p>
           <form
             className="mt-3 flex gap-2"
@@ -1202,7 +1249,7 @@ function Nominate({
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search a restaurant…"
-              className="min-w-0 flex-1 rounded-lg border-2 bg-background px-3 py-2"
+              className="min-w-0 flex-1 rounded-lg border bg-background px-3 py-2"
             />
             <button
               disabled={busy || q.trim().length < 2}
@@ -1212,7 +1259,7 @@ function Nominate({
             </button>
           </form>
           {results && (
-            <ul className="mt-3 divide-y-2 rounded-lg border-2">
+            <ul className="mt-3 divide-y rounded-lg border">
               {results.length === 0 && (
                 <li className="p-3 text-sm text-muted-foreground">No matches.</li>
               )}

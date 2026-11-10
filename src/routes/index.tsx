@@ -13,6 +13,7 @@ import { createRoom, joinRoom, listPublicRooms } from "@/lib/room.functions";
 import { saveSession } from "@/lib/session";
 import { AVATARS, DEFAULT_SETTINGS } from "@/lib/restaurants";
 import { ProfilePicker } from "@/components/ProfilePicker";
+import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { ThemeControl } from "@/components/ThemeControl";
 import { Button } from "@/components/ui/button";
 import { Onboarding } from "@/components/Onboarding";
@@ -104,54 +105,53 @@ function Home() {
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-5 py-8">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b-2 pb-5">
-        <Link to="/" className="font-display text-2xl font-extrabold">
+    <main className={`home-shell${mode ? ` home-shell-create${mode === "join" ? " home-shell-join" : ""}` : ""}`}>
+      <div className={mode ? "create-photo-area" : "contents"}>
+      <header className="home-header">
+        <Link to="/" className="brand-wordmark text-4xl" onClick={() => setMode(null)}>
           GROUP<span className="text-primary"> GRUB</span>{" "}
-          <span className="text-xs text-muted-foreground">v1</span>
+          <span className="sr-only">Group dining, simplified</span>
         </Link>
         <div className="flex flex-wrap items-center gap-3">
           <ThemeControl />
-          <Button variant="ghost" asChild>
+          <Button variant="ghost" className={user ? "h-auto min-h-14 gap-3 px-3 py-2" : undefined} asChild>
             <Link to="/account">
-              <UserRound />
-              {user ? "Your table" : "Sign in"}
+              {user && "Your Account"}
+              {user ? (
+                <ProfileAvatar
+                  avatar={account.data?.profile.avatar ?? avatar}
+                  name={account.data?.profile.display_name ?? "Your"}
+                  className="h-10 w-10 bg-muted text-2xl"
+                />
+              ) : <UserRound />}
+              {!user && "Sign in"}
             </Link>
           </Button>
         </div>
       </header>
-      <div className="pt-12 pb-8">
-        <p className="text-sm font-bold uppercase text-primary">Good food. Group decision.</p>
-        <h1 className="mt-3 text-4xl font-extrabold leading-tight">
-          {mode ? "Who’s coming to the table?" : "Where are we eating?"}
-        </h1>
-      </div>
       {!mode ? (
-        <section className="space-y-4">
-          <Button
-            className="h-auto w-full justify-between whitespace-normal rounded-lg px-6 py-6 text-left text-xl font-bold chunky"
-            onClick={() => setMode("host")}
-          >
-            <span className="flex items-center gap-3">
-              <Plus />
-              Start a new table
-            </span>
-            <ArrowRight />
-          </Button>
-          <Button
-            variant="secondary"
-            className="h-auto w-full justify-between whitespace-normal rounded-lg px-6 py-6 text-left text-xl font-bold chunky"
-            onClick={() => setMode("join")}
-          >
-            <span className="flex items-center gap-3">
-              <Users />
-              Join friends
-            </span>
-            <ArrowRight />
-          </Button>
+        <section className="home-hero" aria-labelledby="home-title">
+          <div className="home-hero-copy">
+            <p className="home-eyebrow">Good food. Your people.</p>
+            <h1 id="home-title" className="home-headline">Big appetites.<br />One decision.</h1>
+            <p className="home-hero-description">Find your next great meal. Together.</p>
+            <div className="home-hero-actions">
+              <Button className="home-start-button" onClick={() => setMode("host")}>
+                <Plus /> Start a table
+              </Button>
+              <Button className="home-join-button" variant="outline" onClick={() => setMode("join")}>
+                <Users /> Join friends
+              </Button>
+            </div>
+            <div className="home-hero-walkthrough">
+              <Onboarding discreet />
+            </div>
+          </div>
         </section>
-      ) : (
-        <section>
+      ) : null}
+      {mode && (
+        <section className="home-form">
+          <h1 className="mb-4 text-3xl font-semibold">{mode === "host" ? "Create your table" : "Join your friends"}</h1>
           <Button variant="ghost" className="mb-4" onClick={() => setMode(null)}>
             <ArrowLeft />
             Back
@@ -188,7 +188,7 @@ function Home() {
                     value={code}
                     onChange={(e) => setCode(normalizeRoomCode(e.target.value).slice(0, 6))}
                     placeholder="6-character code"
-                    className="mt-2 w-full rounded-lg border-2 bg-card px-4 py-3 font-display text-xl uppercase"
+                    className="mt-2 w-full rounded-lg border bg-card px-4 py-3 font-display text-xl uppercase"
                   />
                 </div>
               )}
@@ -202,13 +202,35 @@ function Home() {
               </Button>
             </fieldset>
           </form>
+          {mode && (
+            <div className="mt-4 flex justify-center">
+              <Onboarding discreet />
+            </div>
+          )}
         </section>
       )}
-      <details className="mt-10 border-t-2 pt-5">
+      </div>
+      {!mode && (
+        <section className="home-steps" aria-label="How Group Grub works">
+          {[
+            ["01", "Get together", "Start a table and send your friends the room code."],
+            ["02", "Find your flavor", "Set your budget and distance. Browse nearby spots."],
+            ["03", "Let the crew choose", "Everyone votes. One winner. Time to eat."],
+          ].map(([number, title, description]) => (
+            <div key={number}>
+              <span className="home-step-number" aria-hidden="true">{number}</span>
+              <h3 className="home-step-title">{title}</h3>
+              <p>{description}</p>
+            </div>
+          ))}
+        </section>
+      )}
+      {!mode && (
+      <details className="mt-8 border-b pb-6">
         <summary className="cursor-pointer font-bold">
           Browse open tables {rooms.data?.length ? `(${rooms.data.length})` : ""}
         </summary>
-        <ul className="mt-4 divide-y-2">
+        <ul className="mt-4 divide-y">
           {rooms.data?.length ? (
             rooms.data.map(
               (r: { code: string; label: string; status: string; members: number }) => (
@@ -247,18 +269,22 @@ function Home() {
           )}
         </ul>
       </details>
-      <section className="mt-8 rounded-xl border-2 border-black bg-transparent p-5 text-center text-black dark:border-white dark:bg-black dark:text-white">
-        <h2 className="text-lg font-extrabold">Know about any restaurant deals?</h2>
-        <p className="mt-2 text-sm text-black/75 dark:text-white/80">
-          Enter a deal into the database and share it with the community.
+      )}
+      {!mode && (
+        <>
+      <section className="home-community">
+        <div>
+        <h2 className="text-3xl uppercase">Good food. Better deals.</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Help the group find a great meal for a little less. Share an offer you found.
         </p>
-        <Button className="mt-4 font-bold" asChild>
+        </div>
+        <Button className="shrink-0 font-bold" asChild>
           <Link to="/deals/submit">Share a deal</Link>
         </Button>
       </section>
-      <footer className="mt-8 flex justify-center">
-        <Onboarding />
-      </footer>
+        </>
+      )}
     </main>
   );
 }

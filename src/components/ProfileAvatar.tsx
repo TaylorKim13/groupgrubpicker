@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { isProfilePhoto } from "@/lib/profile-avatar";
+import { avatarEmoji, isProfilePhoto } from "@/lib/profile-avatar";
 
 export function ProfileAvatar({
   avatar,
@@ -16,7 +16,7 @@ export function ProfileAvatar({
   const photo = isProfilePhoto(avatar) || (preview && avatar.startsWith("data:image/jpeg;base64,"));
   return (
     <span
-      className={`inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full align-middle ${className}`}
+      className={`inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full align-middle ${className} ${!photo || failed === avatar ? "emoji-avatar" : ""}`}
     >
       {photo && failed !== avatar ? (
         <img
@@ -28,7 +28,7 @@ export function ProfileAvatar({
         />
       ) : (
         <span role="img" aria-label={`${name}'s avatar`}>
-          {photo ? "🍕" : avatar}
+          {photo ? "🍕" : avatarEmoji(avatar)}
         </span>
       )}
     </span>

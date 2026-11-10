@@ -38,7 +38,9 @@ export function SuggestionCards({
   suggestions,
   historical = false,
   rewardRestaurants,
+  onViewRestaurant,
 }: {
+  onViewRestaurant?: (id: string) => void;
   suggestions: DiningSuggestion[];
   historical?: boolean;
   rewardRestaurants: RewardRestaurant[];
@@ -54,17 +56,17 @@ export function SuggestionCards({
         const mapsQuery = r.address ? `${r.name} ${r.address}` : `${r.lat},${r.lng}`;
         return (
           <li key={r.id} className="min-w-0">
-            <Dialog>
+            <Dialog onOpenChange={(open) => { if (open && onViewRestaurant) onViewRestaurant(r.id); }} open={onViewRestaurant ? false : undefined}>
               <DialogTrigger asChild>
                 <button
                   type="button"
-                  aria-label={`View details for ${r.name}`}
-                  className="group flex h-full w-full cursor-pointer flex-col overflow-hidden rounded-2xl border-2 bg-background text-left transition-shadow hover:shadow-[4px_4px_0_var(--color-border)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  aria-label={`${onViewRestaurant ? "View in the Melting Pot" : "View details"} for ${r.name}`}
+                  className="group flex h-full w-full cursor-pointer flex-col overflow-hidden rounded-2xl border bg-background text-left transition-shadow hover:shadow-[4px_4px_0_var(--color-border)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                   <div
                     className={`relative flex h-32 w-full items-center justify-center ${backdrop}`}
                   >
-                    <span className="absolute left-3 top-3 rounded-full border border-border/15 bg-background/90 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider">
+                    <span className="absolute left-3 top-3 rounded-full border border-border/15 bg-background/90 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider">
                       {historical ? `Past pick ${index + 1}` : `Pick ${index + 1}`}
                     </span>
                     <span
@@ -75,7 +77,7 @@ export function SuggestionCards({
                     </span>
                   </div>
                   <div className="flex w-full flex-1 flex-col p-4">
-                    <h3 className="flex items-center gap-2 text-lg font-extrabold leading-tight">
+                    <h3 className="flex items-center gap-2 text-lg font-semibold leading-tight">
                       {r.name}
                       {hasRewardMatch(rewardRestaurants, r.name) && (
                         <span
@@ -104,13 +106,13 @@ export function SuggestionCards({
                         )}
                       </span>
                       <span className="inline-flex items-center gap-0.5 text-primary">
-                        Details <ChevronRight className="size-4" aria-hidden="true" />
+                        {onViewRestaurant ? "View in Melting Pot" : "Details"} <ChevronRight className="size-4" aria-hidden="true" />
                       </span>
                     </div>
                   </div>
                 </button>
               </DialogTrigger>
-              <DialogContent className="max-h-[90dvh] w-[calc(100%-2rem)] gap-0 overflow-y-auto rounded-2xl border-2 bg-card p-0 sm:rounded-2xl">
+              <DialogContent className="max-h-[90dvh] w-[calc(100%-2rem)] gap-0 overflow-y-auto rounded-2xl border bg-card p-0 sm:rounded-2xl">
                 <div className={`flex h-36 items-center justify-center ${backdrop}`}>
                   <span aria-hidden="true" className="text-7xl drop-shadow-sm">
                     {emoji}
@@ -118,7 +120,7 @@ export function SuggestionCards({
                 </div>
                 <div className="space-y-5 p-5 sm:p-6">
                   <DialogHeader className="text-left">
-                    <DialogTitle className="pr-4 text-2xl font-extrabold">{r.name}</DialogTitle>
+                    <DialogTitle className="pr-4 text-2xl font-semibold">{r.name}</DialogTitle>
                     <DialogDescription>
                       {r.cuisine} · {price}
                     </DialogDescription>
@@ -140,7 +142,7 @@ export function SuggestionCards({
                     </p>
                   </div>
                   <div>
-                    <h4 className="flex items-center gap-2 text-sm font-extrabold">
+                    <h4 className="flex items-center gap-2 text-sm font-semibold">
                       <Sparkles className="size-4 text-primary" aria-hidden="true" /> Why it made
                       the list
                     </h4>
@@ -150,7 +152,7 @@ export function SuggestionCards({
                   </div>
                   {r.diets.length > 0 && (
                     <div>
-                      <h4 className="text-sm font-extrabold">
+                      <h4 className="text-sm font-semibold">
                         Dietary options{demo ? " (sample)" : ""}
                       </h4>
                       <div className="mt-2 flex flex-wrap gap-1.5">
@@ -196,7 +198,7 @@ export function SuggestionCards({
                   )}
                   {!historical && (
                     <p className="text-center text-xs text-muted-foreground">
-                      Vote for this spot in the restaurant pool below.
+                      Vote for this spot in the Melting Pot below.
                     </p>
                   )}
                 </div>

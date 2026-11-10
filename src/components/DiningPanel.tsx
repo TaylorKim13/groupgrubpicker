@@ -27,7 +27,9 @@ export function DiningPanel({
   linked,
   pool,
   rewardRestaurants,
+  onViewRestaurant,
 }: {
+  onViewRestaurant?: (id: string) => void;
   session: Session;
   status: "lobby" | "voting" | "closed";
   isHost: boolean;
@@ -81,7 +83,7 @@ export function DiningPanel({
   if (q.error || !q.data)
     return (
       <section className="rounded-2xl bg-card p-5 chunky">
-        <h2 className="text-xl font-extrabold">Suggestions for your table</h2>
+        <h2 className="text-xl font-semibold">Suggestions for your table</h2>
         <p className="my-3 text-sm" role="alert">
           {q.error?.message ?? "Could not load suggestions."}
         </p>
@@ -95,7 +97,7 @@ export function DiningPanel({
   return (
     <section className="space-y-5 rounded-2xl bg-card p-5 chunky">
       <div>
-        <h2 className="text-xl font-extrabold">Suggestions for your table</h2>
+        <h2 className="text-xl font-semibold">Suggestions for your table</h2>
         <p className="mt-2 text-sm text-muted-foreground">{data.ranking.message}</p>
         <p className="mt-1 text-xs text-muted-foreground">
           {data.ranking.participants} sharing preferences. Personal histories and votes stay
@@ -143,15 +145,15 @@ export function DiningPanel({
         )}
       </div>
       <Tabs defaultValue="current">
+        <div className="flex flex-wrap items-center justify-between gap-3">
         <TabsList>
           <TabsTrigger value="current">Current suggestions</TabsTrigger>
           <TabsTrigger value="history">History (up to 3)</TabsTrigger>
         </TabsList>
-        <TabsContent value="current" className="space-y-4">
           {isHost && status === "lobby" && (
-            <div className="space-y-2">
               <Button
                 variant="outline"
+                className="border-primary/40 bg-transparent text-primary shadow-none hover:border-primary hover:bg-primary/10 hover:text-primary"
                 disabled={
                   refreshing ||
                   generation.isFetching ||
@@ -163,12 +165,15 @@ export function DiningPanel({
               >
                 {refreshing || data.pending ? "Refreshing..." : "Refresh suggestions"}
               </Button>
+          )}
+        </div>
+        <TabsContent value="current" className="space-y-4">
+          {isHost && status === "lobby" && (
               <p className="text-xs text-muted-foreground">
                 {data.generated && data.remaining === 0
                   ? "You've seen all matching options. Check History or adjust the group filters."
                   : `${data.remaining} more places to explore. No repeats.`}
               </p>
-            </div>
           )}
           {!isHost && status === "lobby" && (
             <p className="text-xs text-muted-foreground">
@@ -176,6 +181,7 @@ export function DiningPanel({
             </p>
           )}
           <SuggestionCards
+            onViewRestaurant={onViewRestaurant}
             suggestions={data.ranking.suggestions}
             rewardRestaurants={rewardRestaurants}
           />
@@ -239,7 +245,7 @@ function PreferenceForm({
   const unit = useDistanceUnit();
   const change = (patch: Partial<DiningPreferences>) =>
     setPreferences((current) => ({ ...current, ...patch }));
-  const input = "mt-1 w-full rounded-lg border-2 bg-background px-3 py-2";
+  const input = "mt-1 w-full rounded-lg border bg-background px-3 py-2";
   async function persist(participating: boolean) {
     setBusy(true);
     try {
@@ -403,7 +409,7 @@ function PreferenceForm({
                 <button
                   key={id}
                   type="button"
-                  className="rounded-full border-2 px-3 py-1 text-xs"
+                  className="rounded-full border px-3 py-1 text-xs"
                   onClick={() =>
                     change({
                       favoriteRestaurantIds: preferences.favoriteRestaurantIds.filter(
@@ -492,8 +498,8 @@ function VisitFeedback({
     }
   }
   return (
-    <section className="mx-auto mt-8 max-w-2xl space-y-3 rounded-2xl bg-card p-5 chunky">
-      <h2 className="text-xl font-extrabold">Did you eat at the winning restaurant?</h2>
+    <section className="mx-auto mt-8 max-w-2xl space-y-3 rounded-2xl border-2 border-input bg-card p-5 text-card-foreground shadow-sm dark:border-neutral-500 dark:bg-neutral-800">
+      <h2 className="text-xl font-semibold">Did you eat at the winning restaurant?</h2>
       <p className="text-sm text-muted-foreground">
         A winning vote isn't a confirmed visit. Your private feedback can improve future suggestions
         when you choose to use history.

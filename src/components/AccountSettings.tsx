@@ -71,7 +71,7 @@ export function AccountSettings({
   const queryClient = useQueryClient();
   const providers = [...new Set(user.identities?.map((i) => i.provider) ?? [])];
   const hasPassword = providers.includes("email");
-  const input = "mt-2 w-full rounded-lg border-2 bg-card px-4 py-3";
+  const input = "mt-2 w-full rounded-lg border bg-card px-4 py-3";
   async function act(work: () => Promise<void>) {
     setBusy(true);
     try {
@@ -83,7 +83,7 @@ export function AccountSettings({
     }
   }
   return (
-    <div className="divide-y-2">
+    <div className="divide-y">
       <section className="py-6">
         <h2 className="mb-4 text-2xl font-bold">Your profile</h2>
         <form
@@ -133,7 +133,7 @@ export function AccountSettings({
                 avatar={photo ? `data:image/jpeg;base64,${photo}` : avatar}
                 name={nickname || "Your"}
                 preview
-                className="h-24 w-24 border-2 bg-card text-4xl"
+                className="h-24 w-24 border bg-card text-4xl"
               />
               <label className="block text-sm font-bold" htmlFor="profile-photo">
                 Upload or replace photo
@@ -142,7 +142,7 @@ export function AccountSettings({
                 id="profile-photo"
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
-                className="block w-full text-sm file:mr-3 file:rounded-lg file:border-2 file:bg-secondary file:px-3 file:py-2 file:font-bold file:text-secondary-foreground"
+                className="block w-full text-sm file:mr-3 file:rounded-lg file:border file:bg-secondary file:px-3 file:py-2 file:font-bold file:text-secondary-foreground"
                 aria-describedby="photo-help"
                 onChange={async (e) => {
                   const file = e.currentTarget.files?.[0];
@@ -223,7 +223,7 @@ export function AccountSettings({
           </label>
           <input
             id="reward-restaurant"
-            className="mt-0 min-w-0 flex-1 rounded-lg border-2 bg-card px-4 py-3"
+            className="mt-0 min-w-0 flex-1 rounded-lg border bg-card px-4 py-3"
             value={rewardQuery}
             onChange={(e) => {
               setRewardQuery(e.target.value);
@@ -245,9 +245,9 @@ export function AccountSettings({
           </Button>
         </form>
         {rewardResults.length > 0 && !selectedReward && (
-          <div className="mt-4 rounded-xl border-2 p-4">
+          <div className="mt-4 rounded-xl border p-4">
             <p className="mb-3 text-sm font-bold">Choose the right Google Maps listing</p>
-            <ul className="divide-y-2">
+            <ul className="divide-y">
               {rewardResults.map((place) => {
                 const alreadyLinked = rewardRestaurants.some(
                   (reward) =>
@@ -291,14 +291,14 @@ export function AccountSettings({
           </p>
         )}
         {selectedReward && (
-          <div className="mt-4 rounded-xl border-2 bg-secondary/40 p-4">
+          <div className="mt-4 rounded-xl border bg-secondary/40 p-4">
             <div className="flex items-start gap-3">
               <div className="rounded-full bg-primary/15 p-2 text-primary">
                 <Gift className="h-5 w-5" aria-hidden="true" />
               </div>
               <div className="min-w-0 flex-1">
                 <h3 className="font-bold">Confirm this restaurant</h3>
-                <p className="mt-2 text-lg font-extrabold">{selectedReward.name}</p>
+                <p className="mt-2 text-lg font-semibold">{selectedReward.name}</p>
                 <p className="mt-1 flex items-start gap-1 text-sm text-muted-foreground">
                   <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
                   {selectedReward.address ?? "Address not listed"}
@@ -316,7 +316,7 @@ export function AccountSettings({
                   so its name from Google Maps will be used to match other locations.
                 </p>
                 <p className="mt-3 text-sm font-bold">
-                  Saved name: <span className="font-extrabold">{selectedReward.name}</span>
+                  Saved name: <span className="font-semibold">{selectedReward.name}</span>
                 </p>
               </div>
             </div>
@@ -377,7 +377,7 @@ export function AccountSettings({
           <ul className="mt-4 flex flex-wrap gap-2">
             {rewardRestaurants.map((reward, index) => (
               <li key={`${reward.placeId ?? "legacy"}:${reward.brandName}:${index}`}>
-                <span className="inline-flex items-center gap-2 rounded-full border-2 bg-card px-3 py-1.5 text-sm font-medium">
+                <span className="inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1.5 text-sm font-medium">
                   <Gift
                     className={`h-4 w-4 ${reward.placeId ? "text-primary" : "text-muted-foreground"}`}
                     aria-hidden="true"
