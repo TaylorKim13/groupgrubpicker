@@ -76,7 +76,7 @@ export function WinnerDealLinks({ deals }: { deals: RestaurantDeal[] }) {
             target="_blank"
             rel="noreferrer"
             aria-label={`View deal: ${deal.title}`}
-            className="rounded-xl border-2 bg-background px-5 py-3 font-bold chunky"
+            className="rounded-xl border bg-background px-5 py-3 font-bold chunky"
           >
             View deal
           </a>

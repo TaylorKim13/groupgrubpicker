@@ -59,10 +59,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 export function ThemeControl() {
   const theme = useContext(ThemeContext);
   return (
-    <label className="flex items-center gap-2 text-sm font-medium">
+    <label className="flex items-center gap-2 text-sm font-bold">
       Appearance
       <select
-        className="rounded-lg border-2 bg-card px-3 py-2 text-foreground"
+        className="rounded-lg border bg-card px-3 py-2 text-foreground"
         value={theme}
         onChange={(event) => {
           const next = event.target.value as Theme;

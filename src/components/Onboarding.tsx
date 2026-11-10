@@ -7,7 +7,7 @@ const steps = [
   { title: 'Find your kind of food', text: 'The host sets the area and budget. Everyone can suggest one extra restaurant.', icon: Utensils },
   { title: 'Two picks. One winner.', text: 'You get two votes for different restaurants: your top pick is worth 2 points, and your second choice is worth 1 point. The host reveals the result.', icon: Star },
 ];
-export function Onboarding() {
+export function Onboarding({ discreet = false }: { discreet?: boolean }) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
   const finish = () => setOpen(false);
@@ -16,6 +16,7 @@ export function Onboarding() {
     return (
       <Button
         variant="link"
+        className={discreet ? "walkthrough-link h-auto px-0 py-1 text-xs font-bold text-primary" : "walkthrough-link font-bold text-primary"}
         onClick={() => {
           setStep(0);
           setOpen(true);
@@ -44,7 +45,7 @@ export function Onboarding() {
         </Button>
         <Icon className="mb-5 size-10 text-primary" />
         <p className="text-sm font-bold text-muted-foreground">{step + 1} of 3</p>
-        <h2 id="onboarding-title" className="mt-2 text-3xl font-extrabold">
+        <h2 id="onboarding-title" className="mt-2 text-3xl font-semibold">
           {item.title}
         </h2>
         <p className="mt-3 text-muted-foreground">{item.text}</p>

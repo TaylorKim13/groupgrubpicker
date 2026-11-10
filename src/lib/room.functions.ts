@@ -8,6 +8,7 @@ import { authMember, db, getRoomByCode, hashToken, newCode, newToken } from "./r
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
   buildPool,
+  matchesFilters,
   distanceKm,
   DEFAULT_SETTINGS,
   type Restaurant,
@@ -48,6 +49,17 @@ export const recordGroupCreationClicks = createServerFn({ method: "POST" })
       .eq("host_member_id", member.id)
       .is("click_count", null);
     if (error) throw new Error("Could not record creation clicks");
+    return { ok: true };
+  });
+
+export const recordRoomPresence = createServerFn({ method: "POST" })
+  .inputValidator((input) => Auth.extend({ tabId: z.string().uuid(), visible: z.boolean() }).parse(input))
+  .handler(async ({ data }) => {
+    const { room, member } = await authMember(data.code, data.memberId, data.token);
+    const { error } = await db().rpc("record_room_presence", {
+      p_room_id: room.id, p_member_id: member.id, p_tab_id: data.tabId, p_visible: data.visible,
+    });
+    if (error) throw new Error("Could not update table presence");
     return { ok: true };
   });
 
@@ -234,7 +246,7 @@ export const getRoomState = createServerFn({ method: "POST" })
         hasAccount: !!m.user_id,
         voted: voted.has(m.id),
       })),
-      pool: await loadRestaurantPool(
+      pool: room.status === "closed" && !room.result ? [] : await loadRestaurantPool(
         room,
         noms.map((n) => n.restaurant),
       ),
@@ -394,8 +406,11 @@ const DEFAULT_LOCAL_SPOT_COUNT = 7;
 function limitLocalRestaurants(
   nearby: Restaurant[],
   nominations: Restaurant[],
-  center: RoomSettings["center"],
+  settings: RoomSettings,
 ) {
+  const center = settings.center;
+  nearby = nearby.filter((restaurant) => matchesFilters(restaurant, settings));
+  nominations = nominations.filter((restaurant) => matchesFilters(restaurant, settings));
   const nominationIds = new Set(nominations.map((restaurant) => restaurant.id));
   const localSpots = nearby
     .filter((restaurant) => !nominationIds.has(restaurant.id))
@@ -428,7 +443,7 @@ async function loadRestaurantPool(
   nominations: Restaurant[],
 ): Promise<Restaurant[]> {
   if (!process.env["GOOGLE_MAPS_API_KEY"] && !process.env["MAPS_API"]) {
-    return limitLocalRestaurants(buildPool(room.settings, []), nominations, room.settings.center);
+    return limitLocalRestaurants(buildPool(room.settings, []), nominations, room.settings);
   }
   if (room.status !== "lobby") {
     const { data, error } = await db()
@@ -441,7 +456,7 @@ async function loadRestaurantPool(
         data.map((row: { restaurant: Restaurant }) => [row.restaurant.id, row.restaurant] as const),
       );
       nominations.forEach((restaurant) => pool.set(restaurant.id, restaurant));
-      return [...pool.values()];
+      return [...pool.values()].filter((restaurant) => matchesFilters(restaurant, room.settings));
     }
   }
 
@@ -490,7 +505,7 @@ async function loadRestaurantPool(
   }
 
   const nearby = await entry.results;
-  return limitLocalRestaurants(nearby, nominations, settings.center);
+  return limitLocalRestaurants(nearby, nominations, settings);
 }
 
 async function discoverRestaurants(
@@ -949,12 +964,12 @@ export const getGroupHistory = createServerFn({ method: "GET" })
   .handler(async ({ context }): Promise<GroupHistoryEntry[]> => {
     const { data, error } = await db()
       .from("members")
-      .select("created_at, rooms(code, settings, status, result, voting_started_at, closed_at)")
+      .select("created_at, rooms!members_room_id_fkey(code, settings, status, result, voting_started_at, closed_at)")
       .eq("user_id", context.userId)
       .order("created_at", { ascending: false })
       .limit(30);
     if (error) throw new Error("Could not load group history");
-    return (data ?? []).map((row: any) => ({
+    return (data ?? []).filter((row: any) => row.rooms).map((row: any) => ({
       joinedAt: row.created_at as string,
       code: row.rooms.code as string,
       label: row.rooms.settings?.center?.label as string,

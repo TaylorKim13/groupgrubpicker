@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import type { Result } from "@/lib/room.functions";
 import { priceLabel } from "@/lib/restaurants";
@@ -26,10 +27,10 @@ function CoinFlip({ result, onDone }: { result: Result; onDone: () => void }) {
             transform: winnerIsA ? undefined : "rotateY(180deg)",
           }}
         >
-          <div className="absolute inset-0 grid place-items-center rounded-full bg-secondary p-4 text-center font-display text-xl font-extrabold text-secondary-foreground chunky" style={{ backfaceVisibility: "hidden" }}>
+          <div className="absolute inset-0 grid place-items-center rounded-full bg-secondary p-4 text-center font-display text-xl font-semibold text-secondary-foreground chunky" style={{ backfaceVisibility: "hidden" }}>
             {a.name}
           </div>
-          <div className="absolute inset-0 grid place-items-center rounded-full bg-primary p-4 text-center font-display text-xl font-extrabold text-primary-foreground chunky" style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}>
+          <div className="absolute inset-0 grid place-items-center rounded-full bg-primary p-4 text-center font-display text-xl font-semibold text-primary-foreground chunky" style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}>
             {b.name}
           </div>
         </div>
@@ -82,6 +83,9 @@ function Wheel({ result, onDone }: { result: Result; onDone: () => void }) {
 export function Reveal({ result, hasRewards = false }: { result: Result; hasRewards?: boolean }) {
   const [stage, setStage] = useState<"tie" | "win">(result.tie ? "tie" : "win");
   const dealsByRestaurant = useRestaurantDeals([result.winner.id], [result.winner.name]);
+  useEffect(() => {
+    if (stage === "win") document.getElementById("winner-hero")?.scrollIntoView({ block: "start", behavior: "instant" });
+  }, [stage]);
   if (stage === "tie") {
     const done = () => setStage("win");
     return result.tie!.method === "coin" ? <CoinFlip result={result} onDone={done} /> : <Wheel result={result} onDone={done} />;
@@ -102,9 +106,12 @@ export function Reveal({ result, hasRewards = false }: { result: Result; hasRewa
           </span>
         ))}
       </div>
-      <div className="relative z-10 text-center" style={{ animation: "pop .6s ease-out" }}>
-        <p className="font-bold uppercase tracking-widest text-primary">We're eating at</p>
-        <h2 className="mt-2 flex flex-wrap items-center justify-center gap-3 text-5xl font-extrabold md:text-7xl">
+      <section id="winner-hero" className="winner-hero relative z-10 text-center" aria-labelledby="winner-title">
+        <Link to="/" className="winner-home-link brand-wordmark text-4xl" aria-label="Group Grub home">
+          GROUP<span className="text-primary"> GRUB</span>
+        </Link>
+        <p className="font-bold uppercase tracking-widest">We're eating at</p>
+        <h1 id="winner-title" className="mt-4 flex flex-wrap items-center justify-center gap-3 text-5xl font-semibold md:text-7xl">
           {w.name}
           {hasRewards && (
             <span
@@ -116,45 +123,58 @@ export function Reveal({ result, hasRewards = false }: { result: Result; hasRewa
               <Gift className="h-8 w-8 md:h-10 md:w-10" aria-hidden="true" />
             </span>
           )}
-        </h2>
-        <p className="mt-3 text-lg text-muted-foreground">
+        </h1>
+        <p className="mt-4 max-w-2xl text-lg text-white/90">
           {w.cuisine} · {w.priceUnknown ? "Price unknown" : priceLabel(w.price)}
           {w.address ? ` · ${w.address}` : ""}
         </p>
-        <div className="mx-auto mt-3 max-w-lg text-left">
-          <RestaurantDealIndicators deals={dealsByRestaurant.get(w.id) ?? []} />
-        </div>
-        <div className="mt-6 flex flex-wrap justify-center gap-3">
-          <ShareWaitButton restaurant={w} />
+        <div className="mt-8 flex flex-wrap justify-center gap-3">
+          <a href={directions} target="_blank" rel="noreferrer" className="rounded-full bg-white px-5 py-3 font-semibold text-black hover:bg-white/90">
+            Get directions
+          </a>
           {w.websiteUri && (
             <a
               href={w.websiteUri}
               target="_blank"
               rel="noreferrer"
-              className="rounded-xl border-2 bg-background px-5 py-3 font-bold chunky"
+              className="rounded-full border border-white bg-black/30 px-5 py-3 font-semibold text-white hover:bg-white/15"
             >
               Restaurant website
             </a>
           )}
+        </div>
+      </section>
+      <div id="winner-details" className="winner-details relative z-10 text-center">
+        <div className="mx-auto mt-3 max-w-lg text-left">
+          <RestaurantDealIndicators deals={dealsByRestaurant.get(w.id) ?? []} />
+        </div>
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          <ShareWaitButton restaurant={w} />
           <WinnerDealLinks deals={dealsByRestaurant.get(w.id) ?? []} />
-          <a href={directions} target="_blank" rel="noreferrer" className="rounded-xl bg-primary px-5 py-3 font-bold text-primary-foreground chunky">
-            Get directions
-          </a>
         </div>
       </div>
       <div className="relative z-10 mx-auto mt-10 max-w-xl rounded-2xl bg-card p-5 chunky">
-        <h3 className="mb-3 text-xl font-extrabold">Score breakdown</h3>
-        <ul className="space-y-2">
+        <h3 className="mb-3 text-xl font-semibold">Score breakdown</h3>
+        <div className="mb-5 flex flex-wrap gap-4 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-red-600" aria-hidden="true" />Want · 2 points</span>
+          <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-blue-600" aria-hidden="true" />Could · 1 point</span>
+        </div>
+        <ul className="space-y-4">
           {result.scores.map((s) => (
             <li key={s.id}>
-              <div className="flex justify-between text-sm">
-                <span className="font-bold">{s.name}</span>
+              <div className="flex flex-wrap justify-between gap-2 text-sm">
+                <span className="font-bold">{s.name}{s.id === w.id && <span className="ml-2 inline-flex rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">★ Winner</span>}</span>
                 <span>
                   {s.points} pts · {s.wants} want · {s.coulds} could
                 </span>
               </div>
-              <div className="mt-1 h-3 rounded-full border-2 bg-muted">
-                <div className={`h-full rounded-full ${s.id === w.id ? "bg-primary" : "bg-secondary"}`} style={{ width: `${(s.points / max) * 100}%` }} />
+              <div
+                className={`mt-2 flex h-4 overflow-hidden rounded-full bg-muted ${s.id === w.id ? "ring-2 ring-primary ring-offset-2 ring-offset-card" : ""}`}
+                role="img"
+                aria-label={`${s.name}: ${s.wants} Want votes (${s.wants * 2} points), ${s.coulds} Could votes (${s.coulds} points), ${s.points} total points${s.id === w.id ? ", winner" : ""}`}
+              >
+                <div className="h-full bg-red-600" style={{ width: `${(s.wants * 2 / max) * 100}%` }} />
+                <div className="h-full bg-blue-600" style={{ width: `${(s.coulds / max) * 100}%` }} />
               </div>
             </li>
           ))}

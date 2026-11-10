@@ -28,7 +28,7 @@ function SubmitDealPage() {
   const [busy, setBusy] = useState(false);
   const [submittedName, setSubmittedName] = useState<string | null>(null);
   const [submissionPolished, setSubmissionPolished] = useState<boolean | null>(null);
-  const inputClass = "mt-2 w-full rounded-lg border-2 bg-card px-4 py-3";
+  const inputClass = "mt-2 w-full rounded-lg border bg-card px-4 py-3";
 
   async function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -85,9 +85,9 @@ function SubmitDealPage() {
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-5 py-8">
-      <header className="flex items-center justify-between gap-3 border-b-2 pb-5">
-        <Link to="/" className="font-display text-2xl font-extrabold">
+    <main className="deal-submit-page">
+      <header className="deal-submit-header">
+        <Link to="/" className="brand-wordmark text-4xl" aria-label="Group Grub home">
           GROUP<span className="text-primary"> GRUB</span>
         </Link>
         <Button variant="ghost" asChild>
@@ -98,9 +98,9 @@ function SubmitDealPage() {
         </Button>
       </header>
 
-      <section className="py-8">
+      <section className="deal-submit-panel">
         <p className="text-sm font-bold uppercase text-primary">Good deals are better shared</p>
-        <h1 className="mt-2 text-3xl font-extrabold">Share a restaurant deal</h1>
+        <h1 className="mt-2 text-3xl font-semibold">Share a restaurant deal</h1>
         <p className="mt-3 text-muted-foreground">
           Add a current offer for a restaurant. Community deals appear on matching restaurant cards
           while they are active.
@@ -109,7 +109,7 @@ function SubmitDealPage() {
         {submittedName && (
           <div
             role="status"
-            className="mt-6 rounded-xl border-2 bg-secondary p-4 text-secondary-foreground"
+            className="mt-6 rounded-xl border bg-secondary p-4 text-secondary-foreground"
           >
             <p className="font-bold">Thanks for sharing a deal for {submittedName}.</p>
             <p className="mt-1 text-sm text-secondary-foreground/80">
@@ -121,7 +121,7 @@ function SubmitDealPage() {
           </div>
         )}
 
-        <section className="mt-6 rounded-xl border-2 p-4">
+        <section className="mt-6 rounded-xl border p-4">
           <h2 className="font-bold">1. Choose the restaurant on Google Maps</h2>
           <form className="mt-3 flex gap-2" onSubmit={(event) => void search(event)}>
             <label className="sr-only" htmlFor="deal-restaurant-search">
@@ -129,7 +129,7 @@ function SubmitDealPage() {
             </label>
             <input
               id="deal-restaurant-search"
-              className="min-w-0 flex-1 rounded-lg border-2 bg-card px-4 py-3"
+              className="min-w-0 flex-1 rounded-lg border bg-card px-4 py-3"
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value);
@@ -153,7 +153,7 @@ function SubmitDealPage() {
 
           {results.length > 0 && !place && (
             <>
-              <ul className="mt-3 divide-y-2 rounded-lg border-2 px-3">
+              <ul className="mt-3 divide-y rounded-lg border px-3">
                 {results.map((result) => (
                   <li key={result.placeId} className="py-2">
                     <button
@@ -200,7 +200,7 @@ function SubmitDealPage() {
 
         <form className="mt-6 space-y-5" onSubmit={(event) => void submit(event)}>
           <fieldset disabled={busy} className="space-y-5">
-            <fieldset className="rounded-xl border-2 p-4">
+            <fieldset className="rounded-xl border p-4">
               <legend className="px-1 font-bold">2. Where does the deal apply?</legend>
               <label className="flex cursor-pointer items-start gap-3 py-2">
                 <input

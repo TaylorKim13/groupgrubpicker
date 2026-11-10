@@ -18,7 +18,7 @@ import { ThemeControl } from "@/components/ThemeControl";
 export const Route = createFileRoute("/account")({
   head: () => ({
     meta: [
-      { title: "Your table - GROUP GRUB" },
+      { title: "Your Account - GROUP GRUB" },
       {
         name: "description",
         content: "Your account, hosting preferences, friends, and group history.",
@@ -62,24 +62,27 @@ function AccountPage() {
     await navigate({ to: "/account", replace: true });
   }
   return (
-    <main className="mx-auto max-w-2xl px-5 py-8">
+    <main className={user ? "account-shell" : "login-shell"}>
       <div className="flex items-center justify-between gap-3">
-        <Button asChild variant="ghost">
-          <Link to="/">Home</Link>
-        </Button>
+        <Link to="/" className="brand-wordmark text-4xl" aria-label="Group Grub home">
+          GROUP<span className="text-primary"> GRUB</span>
+        </Link>
         <ThemeControl />
       </div>
-      <h1 className="my-6 text-4xl font-extrabold">Your table</h1>
       {!user ? (
-        <section className="border-y-2 py-8">
-          <h2 className="text-2xl font-bold">Keep your favorites for next time</h2>
+        <section className="login-form-panel">
+          <h1 className="text-3xl font-semibold">Your Account</h1>
           <p className="mt-3 text-muted-foreground">
-            Save hosting preferences, add friends, and revisit your picks. You can always join a
-            room as a guest.
+            Save your preferences, connect with friends, and revisit your picks.
           </p>
           <SignInPanel />
         </section>
       ) : (
+        <section className="account-content-panel">
+        <div className="mb-6">
+          <h1 className="text-3xl font-semibold">Your Account</h1>
+          <p className="mt-2 text-sm text-muted-foreground">Your people, preferences, and favorite places.</p>
+        </div>
         <Tabs defaultValue="overview">
           <TabsList className={`grid w-full ${isAdmin ? "grid-cols-4" : "grid-cols-3"}`}>
             <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -110,7 +113,7 @@ function AccountPage() {
                   Your groups will appear here after you join while signed in.
                 </p>
               ) : (
-                <ul className="mt-4 divide-y-2">
+                <ul className="mt-4 divide-y">
                   {history.data.map((r, i) => (
                     <li key={`${r.code}-${i}`} className="py-4">
                       <div className="flex items-start justify-between gap-3">
@@ -179,6 +182,7 @@ function AccountPage() {
             </TabsContent>
           ))}
         </Tabs>
+        </section>
       )}
     </main>
   );

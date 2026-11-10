@@ -281,18 +281,21 @@ export function mockRestaurants(center: Center): Restaurant[] {
 }
 
 export function matchesFilters(r: Restaurant, s: RoomSettings) {
-  if (r.price < s.priceMin || r.price > s.priceMax) return false;
+  // A missing price is allowed at any budget, without treating the fallback as known.
+  if (!r.priceUnknown && (r.price < s.priceMin || r.price > s.priceMax)) return false;
   if (r.wait > s.maxWait) return false;
   if (distanceKm(s.center, r) > s.radiusKm) return false;
   if (!s.diets.every((d) => r.diets.includes(d))) return false;
   return true;
 }
 
-/** Full pool: filtered mock list + all custom nominations (always included). */
+/** Apply room filters to both discovered restaurants and nominations. */
 export function buildPool(s: RoomSettings, nominations: Restaurant[]): Restaurant[] {
-  return [...mockRestaurants(s.center).filter((r) => matchesFilters(r, s)), ...nominations];
+  return [...mockRestaurants(s.center), ...nominations].filter((r) => matchesFilters(r, s));
 }
 
 export const priceLabel = (p: number) => "$".repeat(Math.max(1, Math.min(4, p)));
 
-export const AVATARS = ["🍕", "🌮", "🍣", "🍔", "🥟", "🍜", "🥗", "🍩", "🌶️", "🥑", "🍗", "🧋"];
+export const AVATARS = ["🍕", "🌮", "🍣", "🍔", "🥟", "🍜", "🥗", "🍩", "🥑", "🍗", "🧋"];
+
+export const priceRangeLabel = (p: number) => ["Under $15", "$15\u201330", "$30\u201360", "$60+"][p - 1] ?? "Unknown";

@@ -1,3 +1,4 @@
+import { MetricTrends } from "./MetricTrends";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getMetrics, getVotingDurationMetrics } from "@/lib/metrics.functions";
@@ -19,7 +20,7 @@ export function MetricsDashboard({ userId }: { userId: string }) {
   });
   const data = query.data;
   return (
-    <section className="space-y-5 py-6">
+    <section className="metrics-dashboard space-y-5 py-6">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-2xl font-bold">Tracking metrics</h2>
         <Button
@@ -27,6 +28,7 @@ export function MetricsDashboard({ userId }: { userId: string }) {
           disabled={query.isFetching}
           onClick={() => {
             void query.refetch();
+            void queryClient.invalidateQueries({ queryKey: ["admin-metric-trends", userId] });
             void queryClient.invalidateQueries({ queryKey: ["admin-voting-duration", userId] });
           }}
         >
@@ -40,10 +42,11 @@ export function MetricsDashboard({ userId }: { userId: string }) {
       {query.error && <p role="alert">Could not load metrics. Try refreshing.</p>}
       {data && (
         <>
+          <MetricTrends userId={userId} />
           <VotingDurationCard userId={userId} />
-          <article className="space-y-2 rounded-lg border-2 bg-card p-5">
+          <article className="space-y-2 rounded-lg border bg-card p-5">
             <h3 className="text-lg font-bold">Location and price filters</h3>
-            <p className="text-3xl font-extrabold">
+            <p className="text-3xl font-semibold">
               {number(data.filters.filter_usage_rate_percent, "%")}
             </p>
             <p>
@@ -56,9 +59,9 @@ export function MetricsDashboard({ userId }: { userId: string }) {
             </p>
             <p className="font-bold">{status(data.filters.target_met)} · Goal: at least 60%</p>
           </article>
-          <article className="space-y-2 rounded-lg border-2 bg-card p-5">
+          <article className="space-y-2 rounded-lg border bg-card p-5">
             <h3 className="text-lg font-bold">Selection abandonment</h3>
-            <p className="text-3xl font-extrabold">
+            <p className="text-3xl font-semibold">
               {number(data.abandonment.abandonment_rate_percent, "%")}
             </p>
             <p>
@@ -75,9 +78,9 @@ export function MetricsDashboard({ userId }: { userId: string }) {
               vote. Pending participants make this rate provisional.
             </p>
           </article>
-          <article className="space-y-2 rounded-lg border-2 bg-card p-5">
+          <article className="space-y-2 rounded-lg border bg-card p-5">
             <h3 className="text-lg font-bold">Room creation clicks</h3>
-            <p className="text-3xl font-extrabold">
+            <p className="text-3xl font-semibold">
               {number(data.clicks.average_clicks)}{" "}
               <span className="text-base font-medium">average clicks</span>
             </p>
@@ -114,7 +117,7 @@ function VotingDurationCard({ userId }: { userId: string }) {
   if (query.isPending) return <p role="status">Loading five-minute selection report...</p>;
   if (query.error)
     return (
-      <article className="space-y-2 rounded-lg border-2 bg-card p-5">
+      <article className="space-y-2 rounded-lg border bg-card p-5">
         <h3 className="text-lg font-bold">Restaurant selected within 5 minutes</h3>
         <p role="alert">{query.error.message}</p>
         <Button variant="outline" onClick={() => void query.refetch()}>
@@ -124,9 +127,9 @@ function VotingDurationCard({ userId }: { userId: string }) {
     );
   if (!data) return null;
   return (
-    <article className="space-y-2 rounded-lg border-2 bg-card p-5">
+    <article className="space-y-2 rounded-lg border bg-card p-5">
       <h3 className="text-lg font-bold">Restaurant selected within 5 minutes</h3>
-      <p className="text-3xl font-extrabold">
+      <p className="text-3xl font-semibold">
         {data.duration.sessions_within_five_minutes} of {data.duration.total_voting_sessions}{" "}
         sessions
       </p>

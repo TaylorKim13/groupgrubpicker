@@ -38,7 +38,7 @@ export const getSocial = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const me = context.userId;
-    const { data: profile } = await db().from("profiles").select("friend_code").eq("id", me).single();
+    const { data: profile } = await db().from("profiles").select("id, friend_code, display_name, avatar").eq("id", me).single();
     const { data: fs } = await db()
       .from("friendships")
       .select("id, status, requester_id, addressee_id, created_at")
@@ -62,12 +62,13 @@ export const getSocial = createServerFn({ method: "GET" })
     (crewMembers ?? []).forEach((m: any) => ids.add(m.user_id));
     (crews ?? []).forEach((c: any) => ids.add(c.owner_id));
     (invites ?? []).forEach((i: any) => ids.add(i.from_user));
-    const { data: people } = ids.size
+    const { data: people, error: peopleError } = ids.size
       ? await db().from("profiles").select("id, display_name, avatar").in("id", [...ids])
-      : { data: [] };
+      : { data: [], error: null };
+    if (peopleError) throw new Error("Could not load group member profiles. Please try again.");
     const person = (id: string) => {
-      const p = (people ?? []).find((x: any) => x.id === id);
-      return { id, name: (p?.display_name as string) || "Friend", avatar: (p?.avatar as string) ?? "🍕" };
+      const p = id === me ? profile : (people ?? []).find((x: any) => x.id === id);
+      return { id, name: (p?.display_name as string)?.trim() || (id === me ? "You" : "Unnamed member"), avatar: (p?.avatar as string) ?? "🍕" };
     };
     const statusOf = new Map((myCrewRows ?? []).map((r: any) => [r.crew_id, r.status]));
     return {
@@ -142,13 +143,32 @@ export const inviteFriendsToTable = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { room } = await linkSeat(data, context.userId);
     if (room.status === "closed") throw new Error("This table is already decided");
-    let sent = 0;
-    for (const id of data.userIds) {
-      if (!(await areFriends(context.userId, id))) continue;
-      const { error } = await db().from("table_invites").upsert({ room_id: room.id, from_user: context.userId, to_user: id }, { onConflict: "room_id,to_user" });
-      if (!error) sent++;
+    // Accepted group membership also authorizes an invitation; group members
+    // do not need a separate direct friendship with the sender.
+    const { data: memberships, error: membershipError } = await db()
+      .from("crew_members").select("crew_id")
+      .eq("user_id", context.userId).eq("status", "member");
+    if (membershipError) throw new Error("Could not check your groups. Please try again.");
+    const crewIds = (memberships ?? []).map((m: any) => m.crew_id);
+    const groupUserIds = new Set<string>();
+    if (crewIds.length) {
+      const { data: members, error } = await db().from("crew_members")
+        .select("user_id").in("crew_id", crewIds).eq("status", "member");
+      if (error) throw new Error("Could not check group members. Please try again.");
+      (members ?? []).forEach((m: any) => groupUserIds.add(m.user_id));
     }
-    return { sent };
+    let sent = 0;
+    let skipped = 0;
+    for (const id of new Set(data.userIds)) {
+      if (id === context.userId || (!groupUserIds.has(id) && !(await areFriends(context.userId, id)))) {
+        skipped++;
+        continue;
+      }
+      const { error } = await db().from("table_invites").upsert({ room_id: room.id, from_user: context.userId, to_user: id }, { onConflict: "room_id,to_user" });
+      if (error) throw new Error("Could not save the invitation. Please try again.");
+      sent++;
+    }
+    return { sent, skipped };
   });
 
 export const dismissTableInvite = createServerFn({ method: "POST" })

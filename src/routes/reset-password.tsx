@@ -1,3 +1,4 @@
+import { PhotoBanner } from "@/components/PhotoBanner";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -54,7 +55,7 @@ function ResetPassword() {
   }, []);
   return (
     <main className="mx-auto max-w-md space-y-5 px-5 py-12">
-      <h1 className="text-3xl font-extrabold">Reset your password</h1>
+      <PhotoBanner title="Reset your password" photo="reset" />
       {checking ? (
         <p>Checking your reset link…</p>
       ) : done ? (
@@ -101,7 +102,7 @@ function ResetPassword() {
           <label className="block font-bold">
             New password
             <input
-              className="mt-2 w-full rounded-lg border-2 bg-card px-4 py-3"
+              className="mt-2 w-full rounded-lg border bg-card px-4 py-3"
               type="password"
               required
               minLength={8}
@@ -113,7 +114,7 @@ function ResetPassword() {
           <label className="block font-bold">
             Confirm password
             <input
-              className="mt-2 w-full rounded-lg border-2 bg-card px-4 py-3"
+              className="mt-2 w-full rounded-lg border bg-card px-4 py-3"
               type="password"
               required
               minLength={8}

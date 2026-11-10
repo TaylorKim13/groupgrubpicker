@@ -38,7 +38,7 @@ export function OfflineGame() {
   if (!offline && !playing) return null;
   return (
     <section className="mx-auto max-w-2xl space-y-3 px-5 pt-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border-2 bg-card p-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-3">
         <p role="status" className="text-sm font-medium">
           {offline
             ? "Connection lost. Grab a snack break while we reconnect."
@@ -52,7 +52,7 @@ export function OfflineGame() {
         <iframe
           src="/offline.html"
           title="Snack Dash food game"
-          className="h-[650px] w-full rounded-lg border-2 bg-card"
+          className="h-[650px] w-full rounded-lg border bg-card"
         />
       )}
     </section>
