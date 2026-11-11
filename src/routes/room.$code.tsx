@@ -6,6 +6,7 @@ import { ThemeControl } from "@/components/ThemeControl";
 import { useSelectionTracking } from "@/components/useSelectionTracking";
 import { RoomInvite } from "@/components/RoomInvite";
 import { VotingWaitGame } from "@/components/VotingWaitGame";
+import { completeCreationClickTracking } from "@/lib/creation-click-tracking";
 import { RoomCodeSchema, normalizeRoomCode } from "@/lib/room-access";
 import { RoomSettingsFields } from "@/components/RoomSettingsFields";
 import { DiningPanel } from "@/components/DiningPanel";
@@ -14,10 +15,10 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { useDistanceUnit } from "@/lib/distance-context";
 import { formatDistance, SettingsSchema } from "@/lib/settings";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { ArrowLeft, ArrowRight, ChevronDown, Gift, UserRound } from "lucide-react";
 import { ProfilePicker } from "@/components/ProfilePicker";
@@ -40,8 +41,11 @@ import {
   closeVoting,
   geocodeCenter,
   getRoomState,
+  finalizeRoomSetup,
   joinRoom,
   nominate,
+  addRestaurantToPool,
+  removeRestaurantFromPool,
   searchPlaces,
   startVoting,
   updateSettings,
@@ -52,7 +56,8 @@ import {
   AVATARS,
   DIETS,
   distanceKm,
-  priceLabel, priceRangeLabel,
+  priceLabel,
+  priceRangeLabel,
   type Restaurant,
   type RoomSettings,
 } from "@/lib/restaurants";
@@ -67,6 +72,9 @@ import {
 
 export const Route = createFileRoute("/room/$code")({
   ssr: false,
+  validateSearch: (search: Record<string, unknown>) => ({
+    setup: search["setup"] === "pool" ? "pool" as const : undefined,
+  }),
   head: ({ params }) => ({
     meta: [
       { title: `Room ${params.code} — GROUP GRUB` },
@@ -85,11 +93,12 @@ export const Route = createFileRoute("/room/$code")({
 
 function RoomPage() {
   const { code } = Route.useParams();
+  const { setup } = Route.useSearch();
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   useEffect(() => setSession(loadSession(code)), [code]);
   if (session === undefined) return null;
   if (!session) return <JoinGate code={code} onJoined={setSession} />;
-  return <Room session={session} onLeave={() => (clearSession(code), setSession(null))} />;
+  return <Room session={session} onLeave={() => (clearSession(code), setSession(null))} setupFlow={setup === "pool"} />;
 }
 
 function JoinGate({ code, onJoined }: { code: string; onJoined: (s: Session) => void }) {
@@ -188,13 +197,24 @@ type State = {
     voted: boolean;
   }[];
   pool: Restaurant[];
+  candidates: Restaurant[];
   myNomination: Restaurant | null;
   myVote: { want: string; could: string } | null;
   publicVotes: { memberId: string; want: string; could: string }[] | null;
   result: Result | null;
 };
 
-function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
+function Room({
+  session,
+  onLeave,
+  setupFlow: requestedSetupFlow,
+}: {
+  session: Session;
+  onLeave: () => void;
+  setupFlow: boolean;
+}) {
+  const navigate = useNavigate();
+  const finalizeSetup = useServerFn(finalizeRoomSetup);
   const [requestedRestaurant, setRequestedRestaurant] = useState<{ id: string } | null>(null);
   const fetchState = useServerFn(getRoomState);
   const accountUser = useAccount();
@@ -216,11 +236,20 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
   });
   const rewardRestaurants: RewardRestaurant[] = rewardQuery.data?.restaurants ?? [];
   const refresh = () => qc.invalidateQueries({ queryKey: key });
+  const addToPool = useServerFn(addRestaurantToPool);
+  const addRestaurant = async (restaurant: Restaurant) => {
+    try {
+      await addToPool({ data: { ...session, restaurant } });
+      toast.success(`${restaurant.name} added to the voting pool`);
+      await refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not add restaurant");
+    }
+  };
 
   if (q.error && (!q.data || q.error.message === "Not a member of this room"))
     return (
       <main className="mx-auto max-w-md px-5 py-20 text-center">
-        <PhotoBanner title="Back to the table" photo="join" />
         <p className="text-lg">
           {q.error.message === "Not a member of this room"
             ? "You no longer have access to this table. The host may have removed you."
@@ -237,37 +266,49 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
   const s = q.data;
   if (!s)
     return (
-      <main className="photo-state grid min-h-screen place-items-center font-display text-2xl">
+      <main className="grid min-h-screen place-items-center font-display text-2xl">
         Setting the table…
       </main>
     );
 
-  if (s.status === "closed" && !s.result) return (
-    <main className="mx-auto max-w-2xl px-5 py-8">
-      <Link to="/" className="brand-wordmark text-4xl">GROUP<span className="text-primary"> GRUB</span></Link>
-      <PhotoBanner title="This table has closed" subtitle="Nobody was viewing the table. Start a new one when your group is ready." photo="help" />
-      <Button asChild><Link to="/">Start a new table</Link></Button>
-    </main>
-  );
+  const setupFlow = requestedSetupFlow && s.me.isHost && s.status === "lobby";
+  const createRoom = async () => {
+    try {
+      await finalizeSetup({ data: session });
+      completeCreationClickTracking(session);
+      await navigate({ to: "/room/$code", params: { code: session.code }, search: {} });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not create the room");
+    }
+  };
 
   return (
-    <main className={s.status === "closed" && s.result ? "winner-page" : "mx-auto max-w-6xl px-4 py-6"}>
-      {!(s.status === "closed" && s.result) && <>
-      <TopBar s={s} />
-      <PhotoBanner
-        title={s.status === "closed" ? "The crew has spoken." : s.status === "voting" ? "Your next meal. Your vote." : "A great meal starts here."}
-        subtitle={s.status === "lobby" ? "Gather your people and find your flavor." : "Good food. One group decision."}
-        photo="fresh"
-      />
-      </>}
+    <main className="mx-auto max-w-2xl px-5 py-8">
+      {setupFlow ? <PoolSetupHeader /> : <TopBar s={s} onLeave={onLeave} />}
+      {s.status !== "closed" && (
+        <div className="pb-2 pt-4">
+          <h1 className="mt-3 text-4xl font-extrabold leading-tight">
+            {s.status === "lobby"
+              ? setupFlow
+                ? "Build the voting pool"
+                : "Your table is ready"
+              : "Cast your vote"}
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {s.status === "lobby" && setupFlow
+              ? "Add restaurant suggestions, search nearby, and choose the places your group can vote on."
+              : s.status === "lobby"
+                ? "Share the room code, invite everyone to add restaurants, then open voting when your table is ready."
+              : "Choose the restaurants you most want the group to try."}
+          </p>
+        </div>
+      )}
       {s.status === "closed" && s.result ? (
-        <div>
+        <div className="py-10">
           <Reveal
             result={s.result}
             hasRewards={hasRewardMatch(rewardRestaurants, s.result.winner.name)}
           />
-          <div className="mx-auto max-w-6xl px-4 py-8">
-          <TopBar s={s} />
           <DiningPanel
             session={session}
             status={s.status}
@@ -276,59 +317,88 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
             pool={s.pool}
             rewardRestaurants={rewardRestaurants}
           />
-          </div>
         </div>
       ) : (
-        <div className="mt-6 grid gap-6 lg:grid-cols-[320px_1fr]">
-          <aside className="space-y-6">
+        <div className="mt-6 space-y-6">
+          {!setupFlow && (s.status === "lobby" || s.status === "voting") && (
             <Members s={s} session={session} refresh={refresh} />
-            <RoomFriends s={s} session={session} refresh={refresh} />
-            {s.me.isHost && s.status === "lobby" && (
-              <HostSettings s={s} session={session} refresh={refresh} />
-            )}
-            {s.status === "lobby" && !s.me.isHost && <SettingsSummary settings={s.settings} />}
-          </aside>
-          <section className="space-y-6">
-            <DiningPanel
-              onViewRestaurant={(id) => {
-                if (s.pool.some((restaurant) => restaurant.id === id)) setRequestedRestaurant({ id });
-                else toast.info("This restaurant is no longer in the Melting Pot.");
-              }}
-              session={session}
-              status={s.status}
-              isHost={s.me.isHost}
-              linked={s.me.linked}
-              pool={s.pool}
-              rewardRestaurants={rewardRestaurants}
-            />
-            <Pool s={s} session={session} refresh={refresh} rewardRestaurants={rewardRestaurants} requestedRestaurant={requestedRestaurant} />
-          </section>
+          )}
+          <Pool
+            requestedRestaurant={requestedRestaurant}
+              setupFlow={setupFlow}
+              onCreateRoom={() => void createRoom()}
+            s={s}
+            session={session}
+            refresh={refresh}
+            rewardRestaurants={rewardRestaurants}
+            addRestaurant={addRestaurant}
+            suggestionsPanel={
+              <DiningPanel
+                session={session}
+                status={s.status}
+                isHost={s.me.isHost}
+                linked={s.me.linked}
+                pool={s.pool}
+                selectedPool={s.pool}
+                onAddToPool={addRestaurant}
+                onViewRestaurant={(id) => {
+                  if (s.candidates.some((restaurant) => restaurant.id === id)) {
+                    setRequestedRestaurant({ id });
+                  } else {
+                    toast.info("This recommendation is not on the nearby map. You can still add it to the pool.");
+                  }
+                }}
+                rewardRestaurants={rewardRestaurants}
+              />
+            }
+          />
+          {!setupFlow && s.status === "lobby" && (
+            <section className="space-y-6">
+              <RoomFriends s={s} session={session} refresh={refresh} />
+              {!s.me.isHost && <SettingsSummary settings={s.settings} />}
+            </section>
+          )}
         </div>
       )}
     </main>
   );
 }
 
-function TopBar({ s }: { s: State }) {
-  const phase = { lobby: "Lobby", voting: "Voting open", closed: "Winner!" }[s.status];
+function PoolSetupHeader() {
   return (
-    <header className="space-y-6 pb-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Link to="/" className="font-display text-2xl font-semibold leading-none">
-            GROUP<span className="text-primary"> GRUB</span>
-          </Link>
-          <span className="rounded-full bg-secondary px-3 py-1 text-xs font-bold uppercase text-secondary-foreground">
-            {phase}
-          </span>
-        </div>
-        <Button variant="ghost" asChild>
-          <Link to="/"><ArrowLeft aria-hidden="true" /> Back</Link>
-        </Button>
+    <header className="flex flex-wrap items-center justify-between gap-3 border-b-2 pb-5">
+      <Link to="/" className="font-display text-2xl font-extrabold">
+        GROUP<span className="text-primary"> GRUB</span>
+      </Link>
+      <ThemeControl />
+    </header>
+  );
+}
+
+function TopBar({ s, onLeave }: { s: State; onLeave: () => void }) {
+  const phase = { lobby: "Build your pool", voting: "Voting open", closed: "Winner!" }[s.status];
+  return (
+    <header className="border-b-2 pb-5">
+      <div className="flex items-center gap-4">
+        <Link to="/" className="font-display text-2xl font-extrabold leading-none">
+          GROUP<span className="text-primary"> GRUB</span>
+        </Link>
+        <span className="rounded-full bg-secondary px-3 py-1 text-xs font-bold uppercase text-secondary-foreground">
+          {phase}
+        </span>
       </div>
-      <RoomInvite code={s.code}>
-        <ShareInviteButton code={s.code} />
-      </RoomInvite>
+      <div className="mt-3 grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-start">
+        <button
+          onClick={onLeave}
+          className="rounded-lg border-2 bg-background px-3 py-2 text-sm font-bold"
+        >
+          <ArrowLeft /> Back
+        </button>
+        <RoomInvite code={s.code} />
+        <div className="sm:justify-self-end">
+          <ShareInviteButton code={s.code} />
+        </div>
+      </div>
     </header>
   );
 }
@@ -336,37 +406,32 @@ function TopBar({ s }: { s: State }) {
 function Members({ s, session, refresh }: { s: State; session: Session; refresh: () => void }) {
   const kick = useServerFn(kickMember);
   const [removing, setRemoving] = useState<string | null>(null);
-  const start = useServerFn(startVoting);
-  const close = useServerFn(closeVoting);
   const votedCount = s.members.filter((m) => m.voted).length;
   const user = useAccount();
   const addFriend = useServerFn(addFriendFromRoom);
   const [asked, setAsked] = useState<Set<string>>(new Set());
-  const run = async (fn: any) => {
-    try {
-      await fn({ data: session });
-      refresh();
-    } catch (e: any) {
-      toast.error(e.message);
-    }
-  };
   return (
     <div className="rounded-2xl bg-card p-5 chunky">
       <div className="flex items-baseline justify-between">
-        <h2 className="text-xl font-semibold">At the table ({s.members.length})</h2>
+        <h2 className="text-xl font-extrabold">At the table ({s.members.length})</h2>
         {s.status === "voting" && (
           <span className="text-sm font-bold">
             {votedCount}/{s.members.length} voted
           </span>
         )}
       </div>
+      {s.status === "lobby" && (
+        <p className="mt-1 text-sm text-muted-foreground">
+          Everyone here can add restaurant options to the pool below before voting opens.
+        </p>
+      )}
       <ul className="mt-3 space-y-2">
         {s.members.map((m) => (
           <li key={m.id} className="flex items-center gap-3">
             <ProfileAvatar
               avatar={m.avatar}
               name={m.nickname}
-              className="h-9 w-9 border bg-background text-lg"
+              className="h-9 w-9 border-2 bg-background text-lg"
             />
             <span className="flex-1 font-medium">
               {m.nickname}
@@ -377,6 +442,13 @@ function Members({ s, session, refresh }: { s: State; session: Session; refresh:
                 </span>
               )}
             </span>
+            {s.status === "voting" && (
+              <span
+                className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${m.voted ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}`}
+              >
+                {m.voted ? "Voted" : "Not voted yet"}
+              </span>
+            )}
             {user && m.id !== s.me.id && m.hasAccount && (
               <button
                 disabled={asked.has(m.id)}
@@ -395,7 +467,7 @@ function Members({ s, session, refresh }: { s: State; session: Session; refresh:
                     toast.error(e.message);
                   }
                 }}
-                className="rounded-md border px-2 py-0.5 text-xs font-bold disabled:opacity-50"
+                className="rounded-md border-2 px-2 py-0.5 text-xs font-bold disabled:opacity-50"
               >
                 {asked.has(m.id) ? "Sent" : "+ Friend"}
               </button>
@@ -405,7 +477,7 @@ function Members({ s, session, refresh }: { s: State; session: Session; refresh:
                 type="button"
                 disabled={removing !== null}
                 aria-label={`Remove ${m.nickname} from the table`}
-                className="rounded-md border px-2 py-0.5 text-xs font-bold text-destructive disabled:opacity-50"
+                className="rounded-md border-2 px-2 py-0.5 text-xs font-bold text-destructive disabled:opacity-50"
                 onClick={async () => {
                   if (
                     !window.confirm(
@@ -432,33 +504,13 @@ function Members({ s, session, refresh }: { s: State; session: Session; refresh:
             )}
             {s.status === "voting" && (
               <span
-                className={`h-3 w-3 rounded-full border ${m.voted ? "bg-success" : "bg-muted"}`}
+                className={`h-3 w-3 rounded-full border-2 ${m.voted ? "bg-success" : "bg-muted"}`}
                 title={m.voted ? "Voted" : "Still deciding"}
               />
             )}
           </li>
         ))}
       </ul>
-      {s.me.isHost && s.status === "lobby" && (
-        <button
-          onClick={() => run(start)}
-          className="mt-5 w-full rounded-xl bg-primary py-3 font-bold text-primary-foreground chunky"
-        >
-          Open voting
-        </button>
-      )}
-      {s.me.isHost && s.status === "voting" && (
-        <button
-          disabled={votedCount === 0}
-          onClick={() => run(close)}
-          className="mt-5 w-full rounded-xl bg-primary py-3 font-bold text-primary-foreground chunky disabled:opacity-50"
-        >
-          Close voting & reveal
-        </button>
-      )}
-      {!s.me.isHost && s.status === "lobby" && (
-        <p className="mt-4 text-sm text-muted-foreground">Waiting for the host to open voting…</p>
-      )}
     </div>
   );
 }
@@ -890,36 +942,57 @@ function HostSettings({
 
 function Pool({
   requestedRestaurant,
+  setupFlow,
+  onCreateRoom,
   s,
   session,
   refresh,
   rewardRestaurants,
+  addRestaurant,
+  suggestionsPanel,
 }: {
   requestedRestaurant: { id: string } | null;
+  setupFlow: boolean;
+  onCreateRoom: () => void;
   s: State;
   session: Session;
   refresh: () => void;
   rewardRestaurants: RewardRestaurant[];
+  addRestaurant: (restaurant: Restaurant) => Promise<void>;
+  suggestionsPanel: ReactNode;
 }) {
   useSelectionTracking(session, s.status !== "closed" && !s.myVote);
   const vote = useServerFn(castVote);
+  const start = useServerFn(startVoting);
+  const close = useServerFn(closeVoting);
   const [want, setWant] = useState<string | null>(s.myVote?.want ?? null);
   const [could, setCould] = useState<string | null>(s.myVote?.could ?? null);
   const [focus, setFocus] = useState<string | null>(null);
   const [restaurantSearch, setRestaurantSearch] = useState("");
+  const [addSearch, setAddSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<Restaurant[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const voting = s.status === "voting";
+  const votedCount = s.members.filter((member) => member.voted).length;
+  const pool = s.pool;
+  const candidates = s.candidates;
+  const searchPlacesFn = useServerFn(searchPlaces);
+  const removeFromPool = useServerFn(removeRestaurantFromPool);
   useEffect(() => {
     if (!requestedRestaurant) return;
-    setRestaurantSearch("");
     setFocus(requestedRestaurant.id);
     const frame = requestAnimationFrame(() => {
-      const card = document.getElementById(`restaurant-${requestedRestaurant.id}`);
-      card?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth", block: "center" });
-      card?.focus({ preventScroll: true });
+      document
+        .getElementById(`restaurant-candidate-${requestedRestaurant.id}`)
+        ?.scrollIntoView({
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+            ? "instant"
+            : "smooth",
+          block: "center",
+        });
     });
     return () => cancelAnimationFrame(frame);
   }, [requestedRestaurant]);
-  const voting = s.status === "voting";
-  const pool = s.pool;
   const dealsByRestaurant = useRestaurantDeals(
     pool.map((restaurant) => restaurant.id),
     pool.map((restaurant) => restaurant.name),
@@ -953,25 +1026,198 @@ function Pool({
     }
   };
 
+  const runRoomAction = async (action: (args: { data: Session }) => Promise<unknown>) => {
+    try {
+      await action({ data: session });
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update the room");
+    }
+  };
+
   return (
     <>
-      <div className="h-80 overflow-hidden rounded-2xl chunky md:h-96">
-        <RestaurantMap
-          center={s.settings.center}
-          radiusKm={s.settings.radiusKm}
-          pool={filteredPool}
-          highlight={focus ?? want}
-          onSelect={(r) => setFocus(r.id)}
-        />
-      </div>
+      {s.status === "lobby" && (
+        <section className="rounded-2xl border-2 border-primary bg-card p-5 chunky">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-2xl font-extrabold">Voting pool ({pool.length})</h2>
+            {s.me.isHost && (
+              <p className="text-sm font-semibold text-muted-foreground">
+                Select at least 2 restaurants before opening voting.
+              </p>
+            )}
+          </div>
+          {pool.length === 0 ? (
+            <p className="mt-3 rounded-xl border-2 border-dashed p-5 text-center text-muted-foreground">
+              No restaurants selected yet. Add places from search or AI suggestions below.
+            </p>
+          ) : (
+            <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+              {pool.map((restaurant) => (
+                <li key={restaurant.id} className="flex items-center justify-between gap-3 rounded-xl border-2 bg-background p-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-bold">{restaurant.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {restaurant.cuisine} · {restaurant.address ?? "Address unavailable"}
+                    </p>
+                  </div>
+                  {s.me.isHost && (
+                    <button
+                      type="button"
+                      className="shrink-0 rounded-lg border-2 px-3 py-1.5 text-sm font-bold"
+                      aria-label={`Remove ${restaurant.name} from voting pool`}
+                      onClick={async () => {
+                        try {
+                          await removeFromPool({ data: { ...session, restaurantId: restaurant.id } });
+                          toast.success(`${restaurant.name} removed from the voting pool`);
+                          refresh();
+                        } catch (error) {
+                          toast.error(error instanceof Error ? error.message : "Could not remove restaurant");
+                        }
+                      }}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {setupFlow ? (
+            <div className="mt-4 border-t pt-4">
+              <Button
+                type="button"
+                className="w-full rounded-xl py-3 font-bold chunky"
+                disabled={pool.length < 2}
+                onClick={onCreateRoom}
+              >
+                Create Room
+              </Button>
+              {pool.length < 2 && (
+                <p className="mt-2 text-center text-xs text-muted-foreground">
+                  Add {2 - pool.length} more restaurant{pool.length === 1 ? "" : "s"} before creating the room.
+                </p>
+              )}
+            </div>
+          ) : s.me.isHost ? (
+            <div className="mt-4 border-t pt-4">
+              <Button
+                type="button"
+                className="w-full rounded-xl py-3 font-bold chunky"
+                disabled={pool.length < 2}
+                onClick={() => void runRoomAction(start)}
+              >
+                {pool.length < 2
+                  ? `Choose at least 2 places (${pool.length} selected)`
+                  : "Open voting"}
+              </Button>
+              {pool.length < 2 && (
+                <p className="mt-2 text-center text-xs text-muted-foreground">
+                  Add {2 - pool.length} more restaurant{pool.length === 1 ? "" : "s"} to the pool.
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-muted-foreground">
+              Waiting for the host to open voting…
+            </p>
+          )}
+        </section>
+      )}
 
-      {s.status !== "closed" && (
-        <Nominate
-          s={s}
-          session={session}
-          refresh={refresh}
-          rewardRestaurants={rewardRestaurants}
-        />
+      {s.status === "lobby" && suggestionsPanel}
+
+      {s.status === "lobby" && (
+        <section className="space-y-4 rounded-2xl bg-card p-5 chunky">
+          <div>
+            <h2 className="text-xl font-extrabold">Add a restaurant</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Search around the group’s location, or add one of the nearby places shown on the map.</p>
+          </div>
+          <form
+            className="flex flex-col gap-2 sm:flex-row"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              setSearching(true);
+              try {
+                setSearchResults(await searchPlacesFn({ data: { ...session, query: addSearch } }));
+              } catch (error) {
+                toast.error(error instanceof Error ? error.message : "Restaurant search failed");
+              } finally {
+                setSearching(false);
+              }
+            }}
+          >
+            <input
+              type="search"
+              minLength={2}
+              value={addSearch}
+              onChange={(event) => setAddSearch(event.target.value)}
+              placeholder="Restaurant name, cuisine, or neighborhood"
+              aria-label="Search for a restaurant to add"
+              className="min-w-0 flex-1 rounded-xl border-2 bg-background px-4 py-3"
+            />
+            <Button type="submit" disabled={searching || addSearch.trim().length < 2}>
+              {searching ? "Searching…" : "Search restaurants"}
+            </Button>
+          </form>
+          {searchResults && (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {searchResults.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No matches found. Try another search.</p>
+              ) : searchResults.map((restaurant) => {
+                const added = pool.some((item) => item.id === restaurant.id);
+                return (
+                  <div key={restaurant.id} className="flex items-center justify-between gap-3 rounded-xl border-2 bg-background p-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-bold">{restaurant.name}</p>
+                      <p className="truncate text-xs text-muted-foreground">{restaurant.cuisine} · {restaurant.address ?? "Address unavailable"} · {restaurant.priceUnknown ? "Price unknown" : priceLabel(restaurant.price)}</p>
+                    </div>
+                    <Button type="button" size="sm" disabled={added} onClick={() => void addRestaurant(restaurant)}>
+                      {added ? "Added" : "+ Add to pool"}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div className="h-72 overflow-hidden rounded-xl border-2 md:h-96">
+            <RestaurantMap
+              center={s.settings.center}
+              radiusKm={s.settings.radiusKm}
+              pool={candidates}
+              highlight={focus}
+              onSelect={(restaurant) => setFocus(restaurant.id)}
+              onAdd={addRestaurant}
+            />
+          </div>
+          <div>
+            <h3 className="mb-2 font-bold">Nearby restaurants</h3>
+            {candidates.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No nearby listings are available right now. Search for a restaurant by name.</p>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {candidates.map((restaurant) => {
+                  const added = pool.some((item) => item.id === restaurant.id);
+                  return (
+                    <div
+                      id={`restaurant-candidate-${restaurant.id}`}
+                      key={restaurant.id}
+                      className={`flex items-center justify-between gap-3 rounded-xl border-2 bg-background p-3 ${focus === restaurant.id ? "border-primary ring-2 ring-primary/30" : ""}`}
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-bold">{restaurant.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">{restaurant.cuisine} · {restaurant.priceUnknown ? "Price unknown" : priceLabel(restaurant.price)}</p>
+                      </div>
+                      <Button type="button" size="sm" disabled={added} onClick={() => void addRestaurant(restaurant)}>
+                        {added ? "Added" : "+ Add to pool"}
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
       )}
 
       {voting && (
@@ -998,33 +1244,51 @@ function Pool({
         </div>
       )}
 
-      <div>
-        <h2 className="mb-3 text-2xl font-semibold">
-          The Melting Pot <span className="text-base font-normal text-muted-foreground">({filteredPool.length === pool.length ? `${pool.length}` : `${filteredPool.length} of ${pool.length}`} spots)</span>
+      {s.me.isHost && voting && (
+        <div className="flex flex-col items-end gap-2">
+          <Button
+            type="button"
+            className="rounded-xl px-5 py-3 font-bold chunky"
+            disabled={votedCount === 0}
+            onClick={() => void runRoomAction(close)}
+          >
+            End voting & reveal the winner
+          </Button>
+          {votedCount === 0 && (
+            <p className="text-right text-xs text-muted-foreground">
+              At least one vote is needed before revealing the winner.
+            </p>
+          )}
+        </div>
+      )}
+
+      {voting && <div>
+        <h2 className="mb-3 text-2xl font-extrabold">
+          The pool <span className="text-base font-normal text-muted-foreground">({filteredPool.length === pool.length ? `${pool.length}` : `${filteredPool.length} of ${pool.length}`} spots)</span>
         </h2>
         <p className="mb-3 text-sm text-muted-foreground">
-          Showing up to 7 nearby spots. Each person can add one restaurant with a wildcard pick.
+          Choose two different restaurants: your top pick is worth 2 points and your second choice is worth 1.
         </p>
         {pool.length > 0 && (
           <label className="mb-3 block">
-            <span className="sr-only">Search restaurants in the Melting Pot</span>
+            <span className="sr-only">Search restaurants in the pool</span>
             <input
               type="search"
               value={restaurantSearch}
               onChange={(event) => setRestaurantSearch(event.target.value)}
               placeholder="Search by restaurant, cuisine, or address"
-              className="w-full rounded-xl border bg-background px-4 py-3 text-base"
-              aria-label="Search restaurants in the Melting Pot"
+              className="w-full rounded-xl border-2 bg-background px-4 py-3 text-base"
+              aria-label="Search restaurants in the pool"
             />
           </label>
         )}
-        {pool.length === 0 && (
-          <p className="rounded-xl border border-dashed p-6 text-center text-muted-foreground">
-            Nothing matches these filters. Widen the radius or price range — or nominate a spot.
+        {pool.length === 0 && s.status !== "lobby" && (
+          <p className="rounded-xl border-2 border-dashed p-6 text-center text-muted-foreground">
+            The voting pool is empty. Ask the host to add restaurants before voting.
           </p>
         )}
         {pool.length > 0 && filteredPool.length === 0 && (
-          <p className="mb-3 rounded-xl border border-dashed p-6 text-center text-muted-foreground">
+          <p className="mb-3 rounded-xl border-2 border-dashed p-6 text-center text-muted-foreground">
             No restaurants match “{restaurantSearch}”. Try another name, cuisine, or address.
           </p>
         )}
@@ -1051,11 +1315,11 @@ function Pool({
           ))}
         </div>
         <p className="mt-4 text-sm text-muted-foreground">
-          Live restaurant listings from Google. Places without price data are included at every price setting and marked as unknown. Wildcard picks must also match the room filters. Popular-times data varies, and wait times and dietary or allergy
+          Live restaurant listings from Google. Known prices are filtered; places without price data
+          are included and marked. Popular-times data varies, and wait times and dietary or allergy
           suitability are not verified, so confirm directly with the restaurant.
         </p>
-      </div>
-      {voting && s.myVote && <VotingWaitGame />}
+      </div>}
     </>
   );
 }
@@ -1106,14 +1370,12 @@ function RestaurantCard({
   );
   return (
     <div
-      id={`restaurant-${r.id}`}
-      tabIndex={-1}
       onMouseEnter={onFocus}
-      className={`min-w-0 rounded-xl border bg-card p-4 transition ${want ? "ring-4 ring-primary" : could ? "ring-4 ring-blue-500" : ""} ${focused ? "chunky" : ""}`}
+      className={`min-w-0 rounded-xl border-2 bg-card p-4 transition ${want ? "ring-4 ring-primary" : could ? "ring-4 ring-secondary" : ""} ${focused ? "chunky" : ""}`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <h3 className="flex items-center gap-2 text-lg font-semibold leading-tight">
+          <h3 className="flex items-center gap-2 text-lg font-extrabold leading-tight">
             {r.name}
             {hasRewards && (
               <span
@@ -1178,16 +1440,14 @@ function RestaurantCard({
       {voting && (
         <div className="mt-3 grid grid-cols-2 gap-2">
           <button
-            aria-pressed={want}
             onClick={() => onPick("want")}
-            className={`rounded-lg border py-1.5 text-sm font-bold ${want ? "bg-primary text-primary-foreground" : "bg-background"}`}
+            className={`rounded-lg border-2 py-1.5 text-sm font-bold ${want ? "bg-primary text-primary-foreground" : "bg-background"}`}
           >
             {want ? "★ Want" : "Want"}
           </button>
           <button
-            aria-pressed={could}
             onClick={() => onPick("could")}
-            className={`rounded-lg border py-1.5 text-sm font-bold ${could ? "border-blue-700 bg-blue-700 text-white" : "bg-background"}`}
+            className={`rounded-lg border-2 py-1.5 text-sm font-bold ${could ? "bg-secondary text-secondary-foreground" : "bg-background"}`}
           >
             {could ? "☆ Could" : "Could"}
           </button>

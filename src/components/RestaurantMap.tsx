@@ -56,12 +56,14 @@ export function RestaurantMap({
   pool,
   highlight,
   onSelect,
+  onAdd,
 }: {
   center: Center;
   radiusKm: number;
   pool: Restaurant[];
   highlight?: string | null;
   onSelect?: (r: Restaurant) => void;
+  onAdd?: (r: Restaurant) => void | Promise<void>;
 }) {
   const unit = useDistanceUnit();
   const el = useRef<HTMLDivElement>(null);
@@ -167,6 +169,14 @@ export function RestaurantMap({
         const p = document.createElement("div");
         p.textContent = `${r.cuisine} · ${r.priceUnknown ? "Price unknown" : priceLabel(r.price)} · ${d} · ${r.google ? "Wait unknown" : `~${r.wait} min wait`}`;
         div.append(h, p);
+        if (onAdd) {
+          const add = document.createElement("button");
+          add.type = "button";
+          add.textContent = "Add to voting pool";
+          add.style.cssText = "display:block;margin-top:8px;padding:6px 10px;border:0;border-radius:8px;background:#e0442c;color:#fff;font-weight:700;cursor:pointer";
+          add.addEventListener("click", () => void onAdd(r));
+          div.append(add);
+        }
         if (r.websiteUri) {
           const website = document.createElement("a");
           website.href = r.websiteUri;

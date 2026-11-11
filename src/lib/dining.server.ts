@@ -184,12 +184,14 @@ export async function loadDiningContext(
     });
   }
   const orderedPool = [...pool].sort((a, b) => a.id.localeCompare(b.id));
+  const settingsForSuggestions = { ...room.settings };
+  delete settingsForSuggestions.setupPending;
   const contextFingerprint = createHash("sha256")
     .update(
       JSON.stringify({
         version: 4,
         day: new Date().toISOString().slice(0, 10),
-        settings: room.settings,
+        settings: settingsForSuggestions,
         members: members.map((m) => [m.id, m.user_id]),
         inputs,
         pool: orderedPool,

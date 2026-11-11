@@ -1,7 +1,6 @@
 import { normalizeRoomCode, RoomCodeSchema } from "@/lib/room-access";
 import {
   beginCreationClickTracking,
-  completeCreationClickTracking,
   resetCreationClickTracking,
 } from "@/lib/creation-click-tracking";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -9,9 +8,9 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { createRoom, joinRoom, listPublicRooms } from "@/lib/room.functions";
+import { createRoom, geocodeSearchCenter, joinRoom, listPublicRooms } from "@/lib/room.functions";
 import { loadSession, saveSession } from "@/lib/session";
-import { AVATARS } from "@/lib/restaurants";
+import { AVATARS, DEFAULT_SETTINGS, DIETS, type Center, type Diet } from "@/lib/restaurants";
 import { ProfilePicker } from "@/components/ProfilePicker";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { ThemeControl } from "@/components/ThemeControl";
@@ -19,7 +18,9 @@ import { Button } from "@/components/ui/button";
 import { Onboarding } from "@/components/Onboarding";
 import { useAccount } from "@/components/AccountProvider";
 import { getAccount } from "@/lib/account.functions";
-import { ArrowLeft, ArrowRight, Plus, Users, UserRound } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
+import { fromKm, toKm, type DistanceUnit } from "@/lib/settings";
+import { ArrowLeft, ArrowRight, MapPin, Plus, Users, UserRound } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -55,6 +56,7 @@ function Home() {
     enabled: !!user,
   });
   const [mode, setMode] = useState<"host" | "join" | null>(null);
+  const [hostStep, setHostStep] = useState<"profile" | "area" | "group">("profile");
   useEffect(() => {
     if (account.data) {
       setNickname(account.data.profile.display_name);
@@ -68,6 +70,18 @@ function Home() {
   const [avatar, setAvatar] = useState<string>(AVATARS[0] ?? "🍕");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
+  const geocode = useServerFn(geocodeSearchCenter);
+  const [areaBusy, setAreaBusy] = useState(false);
+  const [address, setAddress] = useState("");
+  const [center, setCenter] = useState<Center>(DEFAULT_SETTINGS.center);
+  const [radiusKm, setRadiusKm] = useState(DEFAULT_SETTINGS.radiusKm);
+  const [priceLevels, setPriceLevels] = useState<number[]>([]);
+  const [diets, setDiets] = useState<Diet[]>([]);
+  const [maxWait, setMaxWait] = useState(DEFAULT_SETTINGS.maxWait);
+  const unit: DistanceUnit = account.data?.distanceUnit ?? "mi";
+  const radiusValue = Math.max(0.5, Number(fromKm(radiusKm, unit).toFixed(1)));
+  const priceMin = priceLevels.length ? Math.min(...priceLevels) : 1;
+  const priceMax = priceLevels.length ? Math.max(...priceLevels) : 4;
   const rooms = useQuery({
     queryKey: ["public-rooms"],
     queryFn: () => list(),
@@ -97,20 +111,72 @@ function Home() {
     try {
       const s =
   kind === "host"
-    ? await create({ data: { nickname, avatar } })
+    ? await create({ data: { nickname, avatar, center, radiusKm, priceMin, priceMax, priceLevels, diets, maxWait, setupPending: true } })
     : await join({
         data: { nickname, avatar, code: normalizeRoomCode(joinCode ?? code) },
       });
       saveSession(s);
-      if (kind === "host") completeCreationClickTracking(s);
-      else resetCreationClickTracking();
-      navigate({ to: "/room/$code", params: { code: s.code } });
+      if (kind === "join") resetCreationClickTracking();
+      if (kind === "host") {
+        navigate({ to: "/room/$code", params: { code: s.code }, search: { setup: "pool" } });
+      } else {
+        navigate({ to: "/room/$code", params: { code: s.code } });
+      }
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Something went wrong");
       if (kind === "join") void rooms.refetch();
     } finally {
       setBusy(false);
     }
+  }
+
+  async function setSearchAddress() {
+    if (address.trim().length < 2 || areaBusy) return;
+    setAreaBusy(true);
+    try {
+      setCenter(await geocode({ data: { address } }));
+      setAddress("");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Location lookup failed");
+    } finally {
+      setAreaBusy(false);
+    }
+  }
+
+  async function continueFromArea() {
+    if (address.trim().length >= 2) {
+      if (areaBusy) return;
+      setAreaBusy(true);
+      try {
+        setCenter(await geocode({ data: { address } }));
+        setAddress("");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Location lookup failed");
+        return;
+      } finally {
+        setAreaBusy(false);
+      }
+    }
+    setHostStep("group");
+  }
+
+  function useMyLocation() {
+    if (!navigator.geolocation) {
+      toast.error("Location is unavailable in this browser");
+      return;
+    }
+    setAreaBusy(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setCenter({ lat: position.coords.latitude, lng: position.coords.longitude, label: "My location" });
+        setAreaBusy(false);
+      },
+      () => {
+        toast.error("Couldn't get your location");
+        setAreaBusy(false);
+      },
+      { timeout: 15000 },
+    );
   }
 
   return (
@@ -145,7 +211,7 @@ function Home() {
             <h1 id="home-title" className="home-headline">Big appetites.<br />One decision.</h1>
             <p className="home-hero-description">Find your next great meal. Together.</p>
             <div className="home-hero-actions">
-              <Button className="home-start-button" onClick={() => setMode("host")}>
+              <Button className="home-start-button" onClick={() => { setHostStep("profile"); setMode("host"); }}>
                 <Plus /> Start a table
               </Button>
               <Button className="home-join-button" variant="outline" onClick={() => setMode("join")}>
@@ -160,27 +226,85 @@ function Home() {
       ) : null}
       {mode && (
         <section className="home-form">
-          <h1 className="mb-4 text-3xl font-semibold">{mode === "host" ? "Create your table" : "Join your friends"}</h1>
-          <Button variant="ghost" className="mb-4" onClick={() => setMode(null)}>
+          <h1 className="mb-4 text-3xl font-semibold">
+            {mode === "host"
+              ? hostStep === "profile" ? "Create your table" : hostStep === "area" ? "Choose an area" : "Group settings"
+              : "Join your friends"}
+          </h1>
+          <Button variant="ghost" className="mb-4" onClick={() => {
+            if (mode === "host" && hostStep === "group") setHostStep("area");
+            else if (mode === "host" && hostStep === "area") setHostStep("profile");
+            else setMode(null);
+          }}>
             <ArrowLeft />
             Back
           </Button>
           <p className="mb-4 text-sm text-muted-foreground">
-            No account needed. Pick a nickname to{" "}
-            {mode === "host" ? "start your table" : "join your friends"}.
+            {mode === "host" && hostStep === "area"
+              ? "Set where restaurant search should start and how far it should reach."
+              : mode === "host" && hostStep === "group"
+                ? "Choose the price range, dietary needs, and wait time for your group."
+                : `No account needed. Pick a nickname to ${mode === "host" ? "start your table" : "join your friends"}.`}
           </p>
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              if (mode) void go(mode);
+              if (mode === "host" && hostStep === "profile") {
+                if (!nickname.trim()) { toast.error("Pick a nickname first"); return; }
+                setHostStep("area");
+              } else if (mode === "host" && hostStep === "area") {
+                void continueFromArea();
+              } else if (mode) {
+                void go(mode);
+              }
             }}
           >
             <fieldset disabled={busy}>
-              <ProfilePicker
-                autoFocus
-                profilePhoto={user ? account.data?.profile.avatar : undefined}
-                {...{ nickname, setNickname, avatar, setAvatar }}
-              />
+              {mode === "host" && hostStep === "area" ? (
+                <div className="space-y-6">
+                  <div>
+                    <label htmlFor="search-center" className="font-bold">Search center</label>
+                    <p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground"><MapPin className="h-4 w-4" />{center.label}</p>
+                    <div className="mt-2 flex gap-2">
+                      <input id="search-center" value={address} maxLength={200} onChange={(event) => setAddress(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void setSearchAddress(); } }} placeholder="Address or neighborhood" className="min-w-0 flex-1 rounded-lg border bg-background px-3 py-2" />
+                      <Button type="button" variant="secondary" disabled={areaBusy || address.trim().length < 2} onClick={() => void setSearchAddress()}>{areaBusy ? "Finding…" : "Set"}</Button>
+                    </div>
+                    <Button type="button" variant="link" disabled={areaBusy} className="mt-1 px-0" onClick={useMyLocation}>Use my location</Button>
+                  </div>
+                  <div>
+                    <label className="font-bold">Search radius: {radiusValue} {unit}</label>
+                    <Slider className="mt-4" min={0.5} max={Number(fromKm(toKm(100, "mi"), unit).toFixed(1))} step={0.5} value={[radiusValue]} onValueChange={([value]) => { if (value !== undefined) setRadiusKm(toKm(value, unit)); }} />
+                  </div>
+                </div>
+              ) : mode === "host" && hostStep === "group" ? (
+                <div className="space-y-6">
+                  <div>
+                    <p className="font-bold">Price range</p>
+                    <div className="mt-2 grid grid-cols-4 gap-2">
+                      {[1, 2, 3, 4].map((price) => {
+                        const selected = priceLevels.includes(price);
+                        return <button key={price} type="button" aria-pressed={selected} onClick={() => setPriceLevels(selected ? priceLevels.filter((level) => level !== price) : [...priceLevels, price].sort((a, b) => a - b))} className={`rounded-lg border py-2 text-sm font-bold ${selected ? "bg-primary text-primary-foreground" : "bg-background"}`}>{"$".repeat(price)}</button>;
+                      })}
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">Leave all unselected for any price.</p>
+                  </div>
+                  <div>
+                    <p className="font-bold">Dietary restrictions</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {DIETS.map((diet) => {
+                        const selected = diets.includes(diet);
+                        return <Button key={diet} type="button" aria-pressed={selected} variant={selected ? "secondary" : "outline"} onClick={() => setDiets(selected ? diets.filter((item) => item !== diet) : [...diets, diet])}>{diet}</Button>;
+                      })}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="font-bold">Maximum wait: {maxWait} minutes</label>
+                    <Slider className="mt-4" min={5} max={120} step={5} value={[maxWait]} onValueChange={([value]) => { if (value !== undefined) setMaxWait(value); }} />
+                  </div>
+                </div>
+              ) : (
+                <ProfilePicker autoFocus profilePhoto={user ? account.data?.profile.avatar : undefined} {...{ nickname, setNickname, avatar, setAvatar }} />
+              )}
               {mode === "join" && (
                 <div className="mt-6">
                   <label htmlFor="room-code" className="text-sm font-bold">
@@ -196,11 +320,11 @@ function Home() {
                 </div>
               )}
               <Button
-                disabled={busy || !nickname.trim() || (mode === "join" && code.length !== 6)}
+                disabled={busy || areaBusy || (mode === "host" && hostStep === "profile" && !nickname.trim()) || (mode === "join" && (!nickname.trim() || code.length !== 6))}
                 type="submit"
                 className="mt-6 h-12 w-full text-lg font-bold chunky"
               >
-                {busy ? "Setting the table…" : mode === "host" ? "Create table" : "Join the table"}
+                {busy ? "Setting the table…" : mode === "host" ? hostStep === "profile" ? "Choose an area" : hostStep === "area" ? "Group settings" : "Choose restaurants" : "Join the table"}
                 <ArrowRight />
               </Button>
             </fieldset>

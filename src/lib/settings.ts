@@ -16,6 +16,11 @@ const SettingsFields = z.object({
   radiusKm: z.number().min(0.5).max(toKm(100, "mi")),
   priceMin: z.number().int().min(1).max(4),
   priceMax: z.number().int().min(1).max(4),
+  priceLevels: z
+    .array(z.number().int().min(1).max(4))
+    .max(4)
+    .refine((levels) => new Set(levels).size === levels.length, "Price levels must be unique")
+    .optional(),
   diets: z.array(z.enum(DIETS as [(typeof DIETS)[number], ...(typeof DIETS)[number][]])),
   visibility: z.enum(["public", "private"]),
   maxWait: z.number().int().min(5).max(180),
@@ -32,5 +37,14 @@ export const PreferencesSchema = SettingsFields.omit({ center: true }).refine(
 export type RoomPreferences = z.infer<typeof PreferencesSchema>;
 export const getHostingPreferences = (saved: unknown): RoomPreferences =>
   PreferencesSchema.parse({ ...DEFAULT_SETTINGS, ...(saved as object) });
-export const applyHostingPreferences = (current: RoomSettings, saved: unknown): RoomSettings =>
-  SettingsSchema.parse({ ...current, ...getHostingPreferences(saved) });
+export const applyHostingPreferences = (current: RoomSettings, saved: unknown): RoomSettings => {
+  const preferences = getHostingPreferences(saved);
+  const next = { ...current, ...preferences };
+  if (preferences.priceLevels === undefined) {
+    next.priceLevels = Array.from(
+      { length: preferences.priceMax - preferences.priceMin + 1 },
+      (_, index) => preferences.priceMin + index,
+    );
+  }
+  return SettingsSchema.parse(next);
+};

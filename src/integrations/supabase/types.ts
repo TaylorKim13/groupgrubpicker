@@ -299,6 +299,48 @@ export type Database = {
           },
         ]
       }
+      room_pool_selections: {
+        Row: {
+          added_by: string | null
+          created_at: string
+          id: string
+          restaurant: Json
+          restaurant_id: string
+          room_id: string
+        }
+        Insert: {
+          added_by?: string | null
+          created_at?: string
+          id?: string
+          restaurant: Json
+          restaurant_id: string
+          room_id: string
+        }
+        Update: {
+          added_by?: string | null
+          created_at?: string
+          id?: string
+          restaurant?: Json
+          restaurant_id?: string
+          room_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_pool_selections_added_by_fkey"
+            columns: ["added_by"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_pool_selections_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rooms: {
         Row: {
           closed_at: string | null
