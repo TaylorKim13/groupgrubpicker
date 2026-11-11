@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { createRoom, joinRoom, listPublicRooms } from "@/lib/room.functions";
 import { saveSession } from "@/lib/session";
-import { AVATARS, DEFAULT_SETTINGS } from "@/lib/restaurants";
+import { AVATARS } from "@/lib/restaurants";
 import { ProfilePicker } from "@/components/ProfilePicker";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { ThemeControl } from "@/components/ThemeControl";
@@ -172,12 +172,6 @@ function Home() {
                 profilePhoto={user ? account.data?.profile.avatar : undefined}
                 {...{ nickname, setNickname, avatar, setAvatar }}
               />
-              {mode === "host" && (
-                <p className="mt-4 text-sm text-muted-foreground">
-                  Location access is optional. Search starts near {DEFAULT_SETTINGS.center.label};
-                  you can change it in the room settings.
-                </p>
-              )}
               {mode === "join" && (
                 <div className="mt-6">
                   <label htmlFor="room-code" className="text-sm font-bold">

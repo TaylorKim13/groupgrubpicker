@@ -222,6 +222,7 @@
 .home-community a:hover { background: #a6182a; }
 
 .home-form { max-width: 640px; margin: 32px auto; background: var(--card); padding: 28px; border: 1px solid var(--border); border-radius: 6px; }
+.home-form form, .home-form fieldset { min-inline-size: 0; max-inline-size: 100%; }
 @media (max-width: 700px) {
   .home-shell > :not(.home-hero):not(.home-community):not(.create-table-footer):not(.create-photo-area) { width: calc(100% - 32px); }
   .home-hero::before { background-position: center, 55% center; }
