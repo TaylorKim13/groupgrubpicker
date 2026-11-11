@@ -118,7 +118,22 @@ export function RoomSettingsFields({
             <select
               className={input}
               value={value[key]}
-              onChange={(e) => onChange({ [key]: Number(e.target.value) })}
+              onChange={(e) => {
+                const selected = Number(e.target.value);
+                const priceMin = key === "priceMin" ? selected : value.priceMin;
+                const priceMax = key === "priceMax" ? selected : value.priceMax;
+                onChange({
+                  [key]: selected,
+                  ...(priceMin <= priceMax
+                    ? {
+                        priceLevels: Array.from(
+                          { length: priceMax - priceMin + 1 },
+                          (_, index) => priceMin + index,
+                        ),
+                      }
+                    : {}),
+                });
+              }}
             >
               {[1, 2, 3, 4].map((n) => (
                 <option key={n} value={n}>

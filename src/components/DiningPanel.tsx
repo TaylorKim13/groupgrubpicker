@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { ChevronDown } from "lucide-react";
 import { Button } from "./ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { useAccount } from "./AccountProvider";
@@ -28,6 +29,8 @@ export function DiningPanel({
   pool,
   rewardRestaurants,
   onViewRestaurant,
+  selectedPool = pool,
+  onAddToPool,
 }: {
   onViewRestaurant?: (id: string) => void;
   session: Session;
@@ -35,6 +38,8 @@ export function DiningPanel({
   isHost: boolean;
   linked: boolean;
   pool: Restaurant[];
+  selectedPool?: Restaurant[];
+  onAddToPool?: (restaurant: Restaurant) => Promise<void>;
   rewardRestaurants: RewardRestaurant[];
 }) {
   const user = useAccount();
@@ -144,6 +149,16 @@ export function DiningPanel({
           </Button>
         )}
       </div>
+      {status === "lobby" && (
+        <PreferenceForm
+          key={JSON.stringify(data.preferences)}
+          initial={data.preferences}
+          session={session}
+          canRemember={!!user && linked}
+          pool={pool}
+          refresh={refresh}
+        />
+      )}
       <Tabs defaultValue="current">
         <div className="flex flex-wrap items-center justify-between gap-3">
         <TabsList>
@@ -180,11 +195,27 @@ export function DiningPanel({
               The host can refresh suggestions for everyone.
             </p>
           )}
-          <SuggestionCards
-            onViewRestaurant={onViewRestaurant}
-            suggestions={data.ranking.suggestions}
-            rewardRestaurants={rewardRestaurants}
-          />
+          {data.ranking.suggestions.length > 0 ? (
+            <SuggestionCards
+              onViewRestaurant={onViewRestaurant}
+              selectedIds={new Set(selectedPool.map((restaurant) => restaurant.id))}
+              onAddToPool={status === "lobby" ? onAddToPool : undefined}
+              suggestions={data.ranking.suggestions}
+              rewardRestaurants={rewardRestaurants}
+            />
+          ) : (
+            <div className="space-y-3 rounded-xl border border-dashed p-5 text-center">
+              <p className="font-semibold">No suggestions are available yet.</p>
+              <p className="text-sm text-muted-foreground">
+                {data.ranking.message} You can also search for a restaurant below and add it to the pool.
+              </p>
+              {isHost && status === "lobby" && !data.generated && !generation.isFetching && (
+                <Button variant="outline" onClick={() => void generation.refetch()}>
+                  Find suggestions
+                </Button>
+              )}
+            </div>
+          )}
         </TabsContent>
         <TabsContent value="history" className="space-y-5">
           {recentHistory.length === 0 ? (
@@ -209,16 +240,6 @@ export function DiningPanel({
       </Tabs>
       {status === "closed" && (
         <VisitFeedback session={session} initial={data.feedback} refresh={refresh} />
-      )}
-      {status === "lobby" && (
-        <PreferenceForm
-          key={JSON.stringify(data.preferences)}
-          initial={data.preferences}
-          session={session}
-          canRemember={!!user && linked}
-          pool={pool}
-          refresh={refresh}
-        />
       )}
     </section>
   );
@@ -266,12 +287,13 @@ function PreferenceForm({
     }
   }
   return (
-    <details>
-      <summary className="cursor-pointer font-bold">
-        {initial.participating ? "Edit my dining preferences" : "Share my dining preferences"}
+    <details className="group relative isolate rounded-xl border bg-background">
+      <summary className="flex list-none cursor-pointer items-center justify-between gap-3 rounded-xl px-4 py-3 font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <span>{initial.participating ? "Edit my dining preferences" : "Share my dining preferences"}</span>
+        <ChevronDown className="size-4 shrink-0 transition-transform group-open:rotate-180" aria-hidden="true" />
       </summary>
       <form
-        className="mt-4"
+        className="border-t px-4 pb-4 pt-4"
         onSubmit={(event) => {
           event.preventDefault();
           void persist(true);

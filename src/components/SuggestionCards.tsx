@@ -39,14 +39,18 @@ export function SuggestionCards({
   historical = false,
   rewardRestaurants,
   onViewRestaurant,
+  selectedIds = new Set<string>(),
+  onAddToPool,
 }: {
   onViewRestaurant?: (id: string) => void;
+  selectedIds?: Set<string>;
+  onAddToPool?: (restaurant: DiningSuggestion["restaurant"]) => Promise<void>;
   suggestions: DiningSuggestion[];
   historical?: boolean;
   rewardRestaurants: RewardRestaurant[];
 }) {
   return (
-    <ol className="grid gap-4 sm:grid-cols-3">
+    <ol className="grid gap-4 sm:grid-cols-2">
       {suggestions.map((suggestion, index) => {
         const r = suggestion.restaurant;
         const emoji = foodEmoji(r.cuisine);
@@ -55,16 +59,19 @@ export function SuggestionCards({
         const backdrop = backdrops[index % backdrops.length];
         const mapsQuery = r.address ? `${r.name} ${r.address}` : `${r.lat},${r.lng}`;
         return (
-          <li key={r.id} className="min-w-0">
-            <Dialog onOpenChange={(open) => { if (open && onViewRestaurant) onViewRestaurant(r.id); }} open={onViewRestaurant ? false : undefined}>
+          <li
+            key={r.id}
+            className="group flex min-w-0 flex-col overflow-hidden rounded-2xl border bg-background transition-shadow hover:shadow-[4px_4px_0_var(--color-border)]"
+          >
+            <Dialog>
               <DialogTrigger asChild>
                 <button
                   type="button"
-                  aria-label={`${onViewRestaurant ? "View in the Melting Pot" : "View details"} for ${r.name}`}
-                  className="group flex h-full w-full cursor-pointer flex-col overflow-hidden rounded-2xl border bg-background text-left transition-shadow hover:shadow-[4px_4px_0_var(--color-border)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  aria-label={`View details for ${r.name}`}
+                  className="flex h-full w-full cursor-pointer flex-col text-left focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring focus-visible:ring-inset"
                 >
                   <div
-                    className={`relative flex h-32 w-full items-center justify-center ${backdrop}`}
+                    className={`relative flex h-36 w-full items-center justify-center ${backdrop}`}
                   >
                     <span className="absolute left-3 top-3 rounded-full border border-border/15 bg-background/90 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider">
                       {historical ? `Past pick ${index + 1}` : `Pick ${index + 1}`}
@@ -106,7 +113,7 @@ export function SuggestionCards({
                         )}
                       </span>
                       <span className="inline-flex items-center gap-0.5 text-primary">
-                        {onViewRestaurant ? "View in Melting Pot" : "Details"} <ChevronRight className="size-4" aria-hidden="true" />
+                        Details <ChevronRight className="size-4" aria-hidden="true" />
                       </span>
                     </div>
                   </div>
@@ -196,7 +203,16 @@ export function SuggestionCards({
                       </a>
                     </Button>
                   )}
-                  {!historical && (
+                  {onViewRestaurant && (
+                    <Button
+                      variant="outline"
+                      className="w-full rounded-xl"
+                      onClick={() => onViewRestaurant(r.id)}
+                    >
+                      Show on nearby map
+                    </Button>
+                  )}
+                  {!historical && !onAddToPool && (
                     <p className="text-center text-xs text-muted-foreground">
                       Vote for this spot in the Melting Pot below.
                     </p>
@@ -204,6 +220,17 @@ export function SuggestionCards({
                 </div>
               </DialogContent>
             </Dialog>
+            {!historical && onAddToPool && (
+              <div className="mt-auto px-4 pb-4">
+                <Button
+                  className="w-full rounded-xl"
+                  disabled={selectedIds.has(r.id)}
+                  onClick={() => void onAddToPool(r)}
+                >
+                  {selectedIds.has(r.id) ? "Added to voting pool" : "+ Add to voting pool"}
+                </Button>
+              </div>
+            )}
           </li>
         );
       })}

@@ -32,23 +32,26 @@ server key, address and restaurant searches report that search is not configured
 The curated restaurant pool and voting continue to work independently.
 
 After configuring the keys, verify an address in the host controls, search for a
-restaurant by name, nominate it, and check its marker on the map.
+restaurant by name, add it to the voting pool, and check its marker on the map.
 
-With the server key configured, the room pool automatically discovers real Google
-restaurants around the saved group center. Discovery retrieves up to three pages
-(60 candidates), excludes closed businesses, and applies circular distance and
-known price limits. This is a candidate list, not an exhaustive directory. Unknown
-prices stay visible and are labeled. Dietary terms influence the search, but dietary
-and allergy suitability and live wait times are not verified; the UI states this.
-Wait-time filtering applies only to the curated fallback, not unknown Google waits.
+With the server key configured, the room shows nearby restaurant candidates around
+the saved group center. Discovery retrieves up to three pages (60 candidates),
+excludes closed businesses, and applies circular distance and known price limits.
+Members add nearby places, search results, or AI suggestions to the shared voting
+pool. The candidate list is not an exhaustive directory. Unknown prices stay
+visible and are labeled. Dietary terms influence the search, but dietary and allergy
+suitability and live wait times are not verified; the UI states this. Wait-time
+filtering applies only to the curated fallback, not unknown Google waits.
 
 Discovery is shared across participants and cached for five minutes per location,
 radius, price range, and dietary query. Failed searches are retried rather than
-cached. When voting starts, the existing private `room_restaurants` table stores the
-pool; subsequent votes and results use that snapshot so Google changes cannot alter
-the ballot. No new migration is required. Without a server key the curated mock
-pool remains available. Already-started voting sessions keep their original pool;
-test discovery in a lobby or a new table.
+cached. Apply `drizzle/migrations/0016_room_pool_selection.sql` before deploying the
+shared selection flow. It adds a private table for the selected pool. When voting
+starts, the existing private `room_restaurants` table snapshots those selections;
+subsequent votes and results use that snapshot so Google changes cannot alter the
+ballot. Without a server key, nearby curated mock candidates remain available.
+Already-started voting sessions keep their original pool; test discovery in a lobby
+or a new table.
 
 References: [Geocoding](https://developers.google.com/maps/documentation/geocoding/guides-v3/requests-geocoding),
 [Places text search](https://developers.google.com/maps/documentation/places/web-service/text-search),
