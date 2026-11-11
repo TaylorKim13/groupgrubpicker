@@ -5,6 +5,7 @@ import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { ThemeControl } from "@/components/ThemeControl";
 import { useSelectionTracking } from "@/components/useSelectionTracking";
 import { RoomInvite } from "@/components/RoomInvite";
+import { VotingWaitGame } from "@/components/VotingWaitGame";
 import { RoomCodeSchema, normalizeRoomCode } from "@/lib/room-access";
 import { RoomSettingsFields } from "@/components/RoomSettingsFields";
 import { DiningPanel } from "@/components/DiningPanel";
@@ -18,7 +19,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, ChevronDown, Gift } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronDown, Gift, UserRound } from "lucide-react";
 import { ProfilePicker } from "@/components/ProfilePicker";
 import { RestaurantMap } from "@/components/RestaurantMap";
 import { GooglePopularTimes } from "@/components/GooglePopularTimes";
@@ -98,12 +99,24 @@ function JoinGate({ code, onJoined }: { code: string; onJoined: (s: Session) => 
   const [busy, setBusy] = useState(false);
   const validCode = RoomCodeSchema.safeParse(code).success;
   return (
-    <main className="mx-auto max-w-md px-5 py-14">
-      <PhotoBanner title="There is a seat for you." photo="join" />
-      <Link to="/" className="font-display text-2xl font-semibold">
-        GROUP<span className="text-primary"> GRUB</span>
-      </Link>
-      <div className="mt-6 rounded-2xl bg-card p-6 chunky">
+    <main className="home-shell home-shell-create home-shell-join">
+      <div className="create-photo-area">
+      <header className="home-header">
+        <Link to="/" className="brand-wordmark text-4xl">
+          GROUP<span className="text-primary"> GRUB</span>
+        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <ThemeControl />
+          <Button variant="ghost" asChild>
+            <Link to="/account"><UserRound /> Your account</Link>
+          </Button>
+        </div>
+      </header>
+      <section className="home-form" aria-labelledby="invite-title">
+        <h1 id="invite-title" className="mb-4 text-3xl font-semibold">Join your friends</h1>
+        <Button variant="ghost" className="mb-4" asChild>
+          <Link to="/"><ArrowLeft /> Back</Link>
+        </Button>
         <p className="text-sm uppercase tracking-wide text-muted-foreground">
           You're invited to room
         </p>
@@ -145,15 +158,17 @@ function JoinGate({ code, onJoined }: { code: string; onJoined: (s: Session) => 
         >
           <fieldset disabled={busy || !validCode}>
             <ProfilePicker autoFocus {...{ nickname, setNickname, avatar, setAvatar }} />
-            <button
+            <Button
               type="submit"
               disabled={busy || !validCode || !nickname.trim()}
-              className="mt-6 w-full rounded-xl bg-primary py-4 text-lg font-bold text-primary-foreground chunky disabled:opacity-50"
+              className="mt-6 h-12 w-full text-lg font-bold chunky"
             >
               {busy ? "Joining..." : "Join the table"}
-            </button>
+              <ArrowRight />
+            </Button>
           </fieldset>
         </form>
+      </section>
       </div>
     </main>
   );
@@ -1040,6 +1055,7 @@ function Pool({
           suitability are not verified, so confirm directly with the restaurant.
         </p>
       </div>
+      {voting && s.myVote && <VotingWaitGame />}
     </>
   );
 }
