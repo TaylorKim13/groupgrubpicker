@@ -253,7 +253,7 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
   return (
     <main className={s.status === "closed" && s.result ? "winner-page" : "mx-auto max-w-6xl px-4 py-6"}>
       {!(s.status === "closed" && s.result) && <>
-      <TopBar s={s} onLeave={onLeave} />
+      <TopBar s={s} />
       <PhotoBanner
         title={s.status === "closed" ? "The crew has spoken." : s.status === "voting" ? "Your next meal. Your vote." : "A great meal starts here."}
         subtitle={s.status === "lobby" ? "Gather your people and find your flavor." : "Good food. One group decision."}
@@ -267,7 +267,7 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
             hasRewards={hasRewardMatch(rewardRestaurants, s.result.winner.name)}
           />
           <div className="mx-auto max-w-6xl px-4 py-8">
-          <TopBar s={s} onLeave={onLeave} />
+          <TopBar s={s} />
           <DiningPanel
             session={session}
             status={s.status}
@@ -309,7 +309,7 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
   );
 }
 
-function TopBar({ s, onLeave }: { s: State; onLeave: () => void }) {
+function TopBar({ s }: { s: State }) {
   const phase = { lobby: "Lobby", voting: "Voting open", closed: "Winner!" }[s.status];
   return (
     <header className="space-y-6 pb-6">
@@ -322,8 +322,8 @@ function TopBar({ s, onLeave }: { s: State; onLeave: () => void }) {
             {phase}
           </span>
         </div>
-        <Button variant="ghost" onClick={onLeave}>
-          <ArrowLeft aria-hidden="true" /> Back
+        <Button variant="ghost" asChild>
+          <Link to="/"><ArrowLeft aria-hidden="true" /> Back</Link>
         </Button>
       </div>
       <RoomInvite code={s.code}>

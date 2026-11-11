@@ -10,7 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { createRoom, joinRoom, listPublicRooms } from "@/lib/room.functions";
-import { saveSession } from "@/lib/session";
+import { loadSession, saveSession } from "@/lib/session";
 import { AVATARS } from "@/lib/restaurants";
 import { ProfilePicker } from "@/components/ProfilePicker";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
@@ -76,6 +76,15 @@ function Home() {
 
   async function go(kind: "host" | "join", joinCode?: string) {
     if (busy) return;
+    // Returning to a table must reuse its room pass rather than create another seat.
+    if (kind === "join" && RoomCodeSchema.safeParse(joinCode ?? code).success) {
+      const saved = loadSession(normalizeRoomCode(joinCode ?? code));
+      if (saved) {
+        resetCreationClickTracking();
+        await navigate({ to: "/room/$code", params: { code: saved.code } });
+        return;
+      }
+    }
     if (!nickname.trim()) {
       toast.error("Pick a nickname first");
       return;
