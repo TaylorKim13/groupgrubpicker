@@ -559,7 +559,7 @@ function RoomFriends({ s, session, refresh }: { s: State; session: Session; refr
       </div>
     );
   const d = social.data;
-  if (!d || (!d.friends.length && !d.crews.length)) return null;
+  if (!d) return null;
   const send = async (ids: string[]) => {
     try {
       const r = await invite({ data: { ...session, userIds: ids } });
@@ -576,6 +576,11 @@ function RoomFriends({ s, session, refresh }: { s: State; session: Session; refr
   return (
     <div className="rounded-2xl bg-card p-5 chunky">
       <h2 className="text-xl font-semibold">Invite friends</h2>
+      {d.friends.length === 0 && (
+        <p className="mt-3 text-sm text-muted-foreground">
+          Friends will show up here once you've added them.
+        </p>
+      )}
       {groups.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-2">
           {groups.map((c) => {
@@ -1332,7 +1337,7 @@ function Pool({
                 setSubmitting(false);
               }
             }}
-            className="rounded-xl bg-primary px-5 py-2 font-bold text-primary-foreground chunky disabled:opacity-50"
+            className="ml-auto rounded-xl bg-primary px-5 py-2 font-bold text-primary-foreground chunky disabled:opacity-50"
           >
             {submitting ? "Saving vote…" : s.myVote || submissionCount > 0 ? "Update vote" : "Submit vote"}
           </button>
