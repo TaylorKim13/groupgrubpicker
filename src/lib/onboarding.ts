@@ -21,25 +21,19 @@ export const homeTour: readonly TourStep[] = [
     id: "account",
     target: "account",
     title: "Make yourself at home",
-    text: "Choose Sign in to create an account with Google or email. An account saves your hosting preferences, friends, and group history. Already signed in? Your table is where you manage them. You can also host or join as a guest.",
+    text: "Choose Sign in to create an account with Google or email. An account saves your hosting preferences, friends, and group history. Already signed in? Your Account is where you manage them. You can also host or join as a guest.",
   },
   {
     id: "host",
     target: "host",
     title: "Bring everyone to the table",
-    text: "Start a new table with a nickname and avatar. Allow location access to find restaurants nearby. As host, adjust the search area, budget, cuisine, and dietary filters before opening voting.",
+    text: "Start with a nickname and avatar, then choose an area and the group settings. Search an address or optionally use your location. Add at least two restaurants to the voting pool before creating the room and inviting friends.",
   },
   {
     id: "join",
     target: "join",
     title: "Joining friends?",
     text: "Choose Join friends, enter a nickname, and type the 6-character room code from your host. An invite link takes you straight to the join screen. No account is required.",
-  },
-  {
-    id: "join-details",
-    target: "join-details",
-    title: "A nickname and a code",
-    text: "Pick your name and avatar here, then enter the room code and choose Join the table. Once inside, explore the restaurant pool and nominate a wildcard before you vote.",
   },
   {
     id: "browse",
@@ -73,7 +67,7 @@ export const accountTour: readonly TourStep[] = [
     id: "preferences",
     target: "preferences-tab",
     title: "Set your hosting defaults",
-    text: "Preferences lets you choose your usual radius, price range, cuisines, dietary filters, and distance units. These are hosting defaults for future tables; you can adjust each room separately.",
+    text: "Preferences lets you choose your usual radius, price range, dietary filters, and distance units. These are hosting defaults for future tables; you can adjust each room separately.",
   },
   {
     id: "save-preferences",
@@ -85,12 +79,46 @@ export const accountTour: readonly TourStep[] = [
     id: "settings",
     target: "account-settings",
     title: "Make it yours",
-    text: "Settings lets you manage your profile and account. Return Home whenever you are ready to host a table or join friends with a room code.",
+    text: "Settings lets you manage your profile, account, and linked restaurant rewards. Return Home whenever you are ready to host a table or join friends with a room code.",
   },
 ];
+export const hostProfileTour: readonly TourStep[] = [
+  {
+    id: "profile",
+    target: "host-profile",
+    title: "Start with your seat",
+    text: "Choose a nickname and avatar, then continue to choose the search area. Guests can host without making an account.",
+  },
+];
+export const hostAreaTour: readonly TourStep[] = [
+  {
+    id: "area",
+    target: "host-area",
+    title: "Where should we look?",
+    text: "Search for an address or neighborhood, or choose Use my location. Location access is optional. Adjust the search radius, then continue to the group settings.",
+  },
+];
+export const hostGroupTour: readonly TourStep[] = [
+  {
+    id: "group",
+    target: "host-group",
+    title: "Set the table's needs",
+    text: "Choose price levels, dietary restrictions, and a maximum wait. Leave prices unselected for any price. Continue to build the voting pool; nothing is shared with guests until you finish creating the room.",
+  },
+];
+export const homeJoinTour: readonly TourStep[] = [
+  {
+    id: "join-details",
+    target: "join-details",
+    title: "A nickname and a code",
+    text: "Choose your nickname and avatar, then enter the host's 6-character room code and choose Join the table. Returning to a table reuses your saved seat in this browser.",
+  },
+];
+
 export function roomTour(
   isHost: boolean,
   status: "lobby" | "voting" | "closed",
+  setup = false,
 ): readonly TourStep[] {
   if (status === "closed")
     return [
@@ -98,58 +126,86 @@ export function roomTour(
         id: "winner",
         target: "winner",
         title: "The group's pick is in",
-        text: "Here is the winning restaurant and the voting result. Check dietary needs, prices, and availability directly with the restaurant before heading out.",
+        text: "Explore the winning restaurant, directions, and any deals or rewards. Check prices, availability, and dietary needs directly with the restaurant before heading out.",
       },
     ];
+  if (status === "voting")
+    return [
+      {
+        id: "pool",
+        target: "restaurant-pool",
+        title: "Pick Want and Could",
+        text: "On the restaurant cards, choose Want for your top pick (2 points) and Could for a different restaurant (1 point). Both choices are required.",
+      },
+      {
+        id: "submit",
+        target: "submit-vote",
+        title: "Send your two picks",
+        text: "Choose Submit vote after selecting two different restaurants. You can update your vote while voting is open. If the host enabled secret votes, individual choices stay hidden.",
+      },
+      {
+        id: "members",
+        target: "room-members",
+        title: "See who is ready",
+        text: "The member list shows who has voted. After submitting, you can play the waiting game while everyone else decides.",
+      },
+      ...(isHost
+        ? [
+            {
+              id: "reveal",
+              target: "reveal-winner",
+              title: "Bring the group together",
+              text: "When votes have arrived, choose End voting & reveal the winner. At least one vote is required. Closing voting ends the group's chance to update their picks.",
+            },
+          ]
+        : []),
+    ];
   return [
-    {
-      id: "invite",
-      target: "room-invite",
-      title: "A table for your whole group",
-      text: "Share the room code or copy the invite link to bring friends here. Guests only need a nickname. The room updates automatically while everyone gets ready.",
-    },
-    ...(isHost && status === "lobby"
+    ...(!setup
       ? [
           {
-            id: "filters",
-            target: "host-settings",
-            title: "Find food that fits",
-            text: "Adjust the search center, radius, budget, cuisines, and dietary filters here. Room settings save automatically. Restaurant details may be missing; confirm dietary needs directly with the restaurant.",
+            id: "invite",
+            target: "room-invite",
+            title: "A table for your whole group",
+            text: "Share the room code or invite link to bring friends here. Guests only need a nickname. Everyone at the table can add restaurant options before voting opens.",
           },
         ]
       : []),
-    {
-      id: "wildcard",
-      target: "wildcard",
-      title: "Have another spot in mind?",
-      text: "Search for a restaurant and nominate one wildcard for the group. Change your nomination until you submit your vote.",
-    },
     {
       id: "pool",
-      target: "restaurant-pool",
-      title: status === "voting" ? "Pick Want and Could" : "Explore before voting",
-      text:
-        status === "voting"
-          ? "On the restaurant cards, choose Want for your top pick (2 points) and Could for a different restaurant (1 point). Both choices are required."
-          : "Browse the restaurant cards and map. Once the host opens voting, choose Want for your favorite (2 points) and Could for a different restaurant (1 point).",
+      target: "voting-pool",
+      title: "Build the voting pool",
+      text: "This is the list your group will vote on. Add restaurants from suggestions, search, or the map. At least two different places are needed before creating the room or opening voting.",
     },
-    ...(status === "voting"
+    {
+      id: "preferences",
+      target: "dining-preferences",
+      title: "Help the suggestions fit you",
+      text: "Open Share my dining preferences to set cuisines, budget, distance, and dietary needs, then choose Use for this outing. Signed-in members can remember preferences. Each guest can share preferences for this outing too.",
+    },
+    {
+      id: "conversation",
+      target: "dining-conversation",
+      title: "Talk through your options",
+      text: "You can also record a short food discussion and review the detected preferences before using them. Recording is optional and requires microphone access. Suggested restaurants can be added to the voting pool.",
+    },
+    {
+      id: "search",
+      target: "add-restaurant",
+      title: "Have another spot in mind?",
+      text: "Search by restaurant, cuisine, or neighborhood, or explore nearby map listings. Choose Add to pool for any place you want the group to consider. Restaurant details may be missing; verify dietary needs directly.",
+    },
+    ...(isHost
       ? [
           {
-            id: "submit",
-            target: "submit-vote",
-            title: "Send your two picks",
-            text: "Choose Submit vote after selecting two different restaurants. Update your vote while voting is open. If the host enabled secret votes, individual choices stay hidden.",
+            id: "ready",
+            target: "pool-action",
+            title: setup ? "Ready to invite everyone?" : "Ready for the group's picks?",
+            text: setup
+              ? "Choose Create Room once at least two restaurants are in the pool. Then share your room code and invite friends. You can keep adding options before opening voting."
+              : "Choose Open voting once everyone has added their options. Each person picks two different restaurants: Want is worth 2 points and Could is worth 1.",
           },
         ]
       : []),
-    {
-      id: "members",
-      target: "room-members",
-      title: isHost ? "You set the pace" : "Watch the table come together",
-      text: isHost
-        ? "Use the controls here to open voting when the group is ready, then reveal the result after votes arrive. The member list shows who has voted."
-        : "See who is here and who has voted. The host opens voting and reveals the winner. If voting is not open yet, keep exploring the pool.",
-    },
   ];
 }

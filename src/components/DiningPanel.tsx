@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { ChevronDown } from "lucide-react";
 import { Button } from "./ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { useAccount } from "./AccountProvider";
@@ -10,6 +11,7 @@ import { DiningConversation } from "./DiningConversation";
 import { CUISINES, DiningPreferencesSchema, type DiningPreferences } from "@/lib/dining";
 import { DIETS, priceLabel, type Restaurant } from "@/lib/restaurants";
 import { useDistanceUnit } from "@/lib/distance-context";
+import type { RewardRestaurant } from "@/lib/restaurant-rewards";
 import { fromKm, toKm } from "@/lib/settings";
 import {
   getRoomDiningState,
@@ -26,12 +28,20 @@ export function DiningPanel({
   isHost,
   linked,
   pool,
+  rewardRestaurants,
+  onViewRestaurant,
+  selectedPool = pool,
+  onAddToPool,
 }: {
+  onViewRestaurant?: (id: string) => void;
   session: Session;
   status: "lobby" | "voting" | "closed";
   isHost: boolean;
   linked: boolean;
   pool: Restaurant[];
+  selectedPool?: Restaurant[];
+  onAddToPool?: (restaurant: Restaurant) => Promise<void>;
+  rewardRestaurants: RewardRestaurant[];
 }) {
   const user = useAccount();
   const qc = useQueryClient();
@@ -79,7 +89,7 @@ export function DiningPanel({
   if (q.error || !q.data)
     return (
       <section className="rounded-2xl bg-card p-5 chunky">
-        <h2 className="text-xl font-extrabold">Suggestions for your table</h2>
+        <h2 className="text-xl font-semibold">Suggestions for your table</h2>
         <p className="my-3 text-sm" role="alert">
           {q.error?.message ?? "Could not load suggestions."}
         </p>
@@ -89,10 +99,11 @@ export function DiningPanel({
       </section>
     );
   const data = q.data;
+  const recentHistory = data.history.slice(0, 3);
   return (
     <section className="space-y-5 rounded-2xl bg-card p-5 chunky">
       <div>
-        <h2 className="text-xl font-extrabold">Suggestions for your table</h2>
+        <h2 className="text-xl font-semibold">Suggestions for your table</h2>
         <p className="mt-2 text-sm text-muted-foreground">{data.ranking.message}</p>
         <p className="mt-1 text-xs text-muted-foreground">
           {data.ranking.participants} sharing preferences. Personal histories and votes stay
@@ -139,61 +150,6 @@ export function DiningPanel({
           </Button>
         )}
       </div>
-      <Tabs defaultValue="current">
-        <TabsList>
-          <TabsTrigger value="current">Current suggestions</TabsTrigger>
-          <TabsTrigger value="history">History ({data.history.length})</TabsTrigger>
-        </TabsList>
-        <TabsContent value="current" className="space-y-4">
-          {isHost && status === "lobby" && (
-            <div className="space-y-2">
-              <Button
-                variant="outline"
-                disabled={
-                  refreshing ||
-                  generation.isFetching ||
-                  data.pending ||
-                  !data.generated ||
-                  data.remaining === 0
-                }
-                onClick={() => void newSuggestions()}
-              >
-                {refreshing || data.pending ? "Refreshing..." : "Refresh suggestions"}
-              </Button>
-              <p className="text-xs text-muted-foreground">
-                {data.generated && data.remaining === 0
-                  ? "You've seen all matching options. Check History or adjust the group filters."
-                  : `${data.remaining} more places to explore. No repeats.`}
-              </p>
-            </div>
-          )}
-          {!isHost && status === "lobby" && (
-            <p className="text-xs text-muted-foreground">
-              The host can refresh suggestions for everyone.
-            </p>
-          )}
-          <SuggestionCards suggestions={data.ranking.suggestions} />
-        </TabsContent>
-        <TabsContent value="history" className="space-y-5">
-          {data.history.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Previous sets will appear here when suggestions are refreshed or updated.
-            </p>
-          ) : (
-            data.history.map((set) => (
-              <section key={set.id} className="space-y-2">
-                <h3 className="text-sm font-bold">
-                  Suggested {new Date(set.generatedAt).toLocaleString()}
-                </h3>
-                <SuggestionCards suggestions={set.suggestions} historical />
-              </section>
-            ))
-          )}
-        </TabsContent>
-      </Tabs>
-      {status === "closed" && (
-        <VisitFeedback session={session} initial={data.feedback} refresh={refresh} />
-      )}
       {status === "lobby" && (
         <PreferenceForm
           key={JSON.stringify(data.preferences)}
@@ -201,9 +157,96 @@ export function DiningPanel({
           session={session}
           canRemember={!!user && linked}
           voiceAvailable={data.voiceAvailable}
+          rewardRestaurants={rewardRestaurants}
+          selectedPool={selectedPool}
+          onAddToPool={onAddToPool}
+          onViewRestaurant={onViewRestaurant}
           pool={pool}
           refresh={refresh}
         />
+      )}
+      <Tabs defaultValue="current">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <TabsList>
+            <TabsTrigger value="current">Current suggestions</TabsTrigger>
+            <TabsTrigger value="history">History (up to 3)</TabsTrigger>
+          </TabsList>
+          {isHost && status === "lobby" && (
+            <Button
+              variant="outline"
+              className="border-primary/40 bg-transparent text-primary shadow-none hover:border-primary hover:bg-primary/10 hover:text-primary"
+              disabled={
+                refreshing ||
+                generation.isFetching ||
+                data.pending ||
+                !data.generated ||
+                data.remaining === 0
+              }
+              onClick={() => void newSuggestions()}
+            >
+              {refreshing || data.pending ? "Refreshing..." : "Refresh suggestions"}
+            </Button>
+          )}
+        </div>
+        <TabsContent value="current" className="space-y-4">
+          {isHost && status === "lobby" && (
+            <p className="text-xs text-muted-foreground">
+              {data.generated && data.remaining === 0
+                ? "You've seen all matching options. Check History or adjust the group filters."
+                : `${data.remaining} more places to explore. No repeats.`}
+            </p>
+          )}
+          {!isHost && status === "lobby" && (
+            <p className="text-xs text-muted-foreground">
+              The host can refresh suggestions for everyone.
+            </p>
+          )}
+          {data.ranking.suggestions.length > 0 ? (
+            <SuggestionCards
+              onViewRestaurant={onViewRestaurant}
+              selectedIds={new Set(selectedPool.map((restaurant) => restaurant.id))}
+              onAddToPool={status === "lobby" ? onAddToPool : undefined}
+              suggestions={data.ranking.suggestions}
+              rewardRestaurants={rewardRestaurants}
+            />
+          ) : (
+            <div className="space-y-3 rounded-xl border border-dashed p-5 text-center">
+              <p className="font-semibold">No suggestions are available yet.</p>
+              <p className="text-sm text-muted-foreground">
+                {data.ranking.message} You can also search for a restaurant below and add it to the
+                pool.
+              </p>
+              {isHost && status === "lobby" && !data.generated && !generation.isFetching && (
+                <Button variant="outline" onClick={() => void generation.refetch()}>
+                  Find suggestions
+                </Button>
+              )}
+            </div>
+          )}
+        </TabsContent>
+        <TabsContent value="history" className="space-y-5">
+          {recentHistory.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Previous sets will appear here when suggestions are refreshed or updated.
+            </p>
+          ) : (
+            recentHistory.map((set) => (
+              <section key={set.id} className="space-y-2">
+                <h3 className="text-sm font-bold">
+                  Suggested {new Date(set.generatedAt).toLocaleString()}
+                </h3>
+                <SuggestionCards
+                  suggestions={set.suggestions}
+                  historical
+                  rewardRestaurants={rewardRestaurants}
+                />
+              </section>
+            ))
+          )}
+        </TabsContent>
+      </Tabs>
+      {status === "closed" && (
+        <VisitFeedback session={session} initial={data.feedback} refresh={refresh} />
       )}
     </section>
   );
@@ -214,6 +257,10 @@ function PreferenceForm({
   session,
   canRemember,
   voiceAvailable,
+  rewardRestaurants,
+  selectedPool,
+  onAddToPool,
+  onViewRestaurant,
   pool,
   refresh,
 }: {
@@ -221,6 +268,10 @@ function PreferenceForm({
   session: Session;
   canRemember: boolean;
   voiceAvailable: boolean;
+  rewardRestaurants: RewardRestaurant[];
+  selectedPool: Restaurant[];
+  onAddToPool?: ((restaurant: Restaurant) => Promise<void>) | undefined;
+  onViewRestaurant?: ((id: string) => void) | undefined;
   pool: Restaurant[];
   refresh: () => Promise<unknown>;
 }) {
@@ -233,7 +284,7 @@ function PreferenceForm({
   const unit = useDistanceUnit();
   const change = (patch: Partial<DiningPreferences>) =>
     setPreferences((current) => ({ ...current, ...patch }));
-  const input = "mt-1 w-full rounded-lg border-2 bg-background px-3 py-2";
+  const input = "mt-1 w-full rounded-lg border bg-background px-3 py-2";
   async function persist(participating: boolean) {
     setBusy(true);
     try {
@@ -258,6 +309,10 @@ function PreferenceForm({
       <DiningConversation
         session={session}
         available={voiceAvailable}
+        rewardRestaurants={rewardRestaurants}
+        selectedPool={selectedPool}
+        onAddToPool={onAddToPool}
+        onViewRestaurant={onViewRestaurant}
         onReview={(result) => {
           setPreferences((current) => {
             const favorites = result.favoriteCuisines ?? current.favoriteCuisines;
@@ -278,12 +333,22 @@ function PreferenceForm({
           }
         }}
       />
-      <details ref={details}>
-        <summary className="cursor-pointer font-bold">
-          {initial.participating ? "Edit my dining preferences" : "Share my dining preferences"}
+      <details
+        ref={details}
+        data-tour="dining-preferences"
+        className="group relative isolate rounded-xl border bg-background"
+      >
+        <summary className="flex list-none cursor-pointer items-center justify-between gap-3 rounded-xl px-4 py-3 font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <span>
+            {initial.participating ? "Edit my dining preferences" : "Share my dining preferences"}
+          </span>
+          <ChevronDown
+            className="size-4 shrink-0 transition-transform group-open:rotate-180"
+            aria-hidden="true"
+          />
         </summary>
         <form
-          className="mt-4"
+          className="border-t px-4 pb-4 pt-4"
           onSubmit={(event) => {
             event.preventDefault();
             void persist(true);
@@ -511,8 +576,8 @@ function VisitFeedback({
     }
   }
   return (
-    <section className="mx-auto mt-8 max-w-2xl space-y-3 rounded-2xl bg-card p-5 chunky">
-      <h2 className="text-xl font-extrabold">Did you eat at the winning restaurant?</h2>
+    <section className="mx-auto mt-8 max-w-2xl space-y-3 rounded-2xl border-2 border-input bg-card p-5 text-card-foreground shadow-sm dark:border-neutral-500 dark:bg-neutral-800">
+      <h2 className="text-xl font-semibold">Did you eat at the winning restaurant?</h2>
       <p className="text-sm text-muted-foreground">
         A winning vote isn't a confirmed visit. Your private feedback can improve future suggestions
         when you choose to use history.

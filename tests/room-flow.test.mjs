@@ -86,6 +86,11 @@ const {
   analyzeRoomDiningConversation,
   getRoomDiningVoiceCooldown,
   suggestRoomDiningFromConversation,
+  finalizeRoomSetup,
+  addRestaurantToPool,
+  removeRestaurantFromPool,
+  startVoting,
+  castVote,
 } = await import(handlersUrl);
 const { hashToken, newCode } = await import(server);
 const { RoomCodeSchema, roomJoinUrl } = await import(access);
@@ -103,6 +108,12 @@ class Query {
   insert(value) {
     this.operation = "insert";
     this.value = value;
+    return this;
+  }
+  upsert(value, options) {
+    this.operation = "upsert";
+    this.value = value;
+    this.conflict = options.onConflict.split(",");
     return this;
   }
   update(value) {
@@ -140,6 +151,15 @@ class Query {
   }
   async run() {
     const rows = store.tables[this.table];
+    if (this.operation === "upsert") {
+      const values = Array.isArray(this.value) ? this.value : [this.value];
+      for (const value of values) {
+        const existing = rows.find((row) => this.conflict.every((key) => row[key] === value[key]));
+        if (existing) Object.assign(existing, structuredClone(value));
+        else rows.push(structuredClone({ id: randomUUID(), ...value }));
+      }
+      return { data: values, error: null };
+    }
     if (this.operation === "insert") {
       store.inserts[this.table] = (store.inserts[this.table] ?? 0) + 1;
       const error = store.errors[this.table]?.shift();
@@ -167,7 +187,7 @@ class Query {
       return { data: matched, error: null };
     }
     if (this.operation === "delete") store.tables[this.table] = rows.filter((row) => !matches(row));
-    return { data: rows.filter(matches), error: null };
+    return { data: rows.filter(matches), count: rows.filter(matches).length, error: null };
   }
 }
 beforeEach(() => {
@@ -180,6 +200,9 @@ beforeEach(() => {
       preset_filters: [],
       profiles: [],
       group_creation_usage: [],
+      room_pool_selections: [],
+      room_restaurants: [],
+      room_dining_preferences: [],
     },
     inserts: {},
     errors: {},
@@ -297,6 +320,31 @@ test("guest host creates a six-character room and friends join by code or link",
   assert.notEqual(friend.token, linkFriend.token);
   assert.equal(JSON.stringify(state).includes(host.token), false);
   assert.equal(JSON.stringify(state).includes("token_hash"), false);
+});
+
+test("setup, collaborative pool additions and voting retain the combined room flow", async () => {
+  const host = await createRoom({ data: { ...profile, setupPending: true } });
+  const joinData = { ...profile, nickname: "Friend", code: host.code };
+  await assert.rejects(joinRoom({ data: joinData }), /still setting up/);
+  await assert.rejects(finalizeRoomSetup({ data: host }), /at least two/);
+  const { buildPool } = await import(restaurants);
+  const candidates = buildPool(store.tables.rooms[0].settings, []);
+  assert.ok(candidates.length >= 3);
+  for (const restaurant of candidates.slice(0, 2))
+    await addRestaurantToPool({ data: { ...host, restaurant } });
+  await finalizeRoomSetup({ data: host });
+  const friend = await joinRoom({ data: joinData });
+  await addRestaurantToPool({ data: { ...friend, restaurant: candidates[2] } });
+  assert.equal((await getRoomState({ data: friend })).pool.length, 3);
+  await assert.rejects(startVoting({ data: friend }), /host/i);
+  await startVoting({ data: host });
+  assert.equal(store.tables.room_restaurants.length, 3);
+  await assert.rejects(addRestaurantToPool({ data: { ...friend, restaurant: candidates[0] } }), /locked/);
+  await assert.rejects(removeRestaurantFromPool({ data: { ...host, restaurantId: candidates[0].id } }), /locked/);
+  await castVote({ data: { ...friend, want: candidates[0].id, could: candidates[1].id } });
+  const state = await getRoomState({ data: friend });
+  assert.deepEqual(state.myVote, { want: candidates[0].id, could: candidates[1].id });
+  assert.equal(state.publicVotes, null);
 });
 test("code collisions retry without creating duplicate rooms", async () => {
   store.errors.rooms = [{ code: "23505" }];

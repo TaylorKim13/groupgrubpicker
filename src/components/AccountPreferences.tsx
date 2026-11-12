@@ -60,7 +60,7 @@ export function AccountPreferences({
         <label className="block font-bold">
           Distance units
           <select
-            className="ml-3 rounded-lg border-2 bg-card px-3 py-2"
+            className="ml-3 rounded-lg border bg-card px-3 py-2"
             disabled={busy}
             value={unit}
             onChange={(e) => setUnit(e.target.value as DistanceUnit)}

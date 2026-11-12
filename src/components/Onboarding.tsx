@@ -10,10 +10,12 @@ export function Onboarding({
   tour = "home",
   steps,
   onStep,
+  discreet = false,
 }: {
   tour?: string;
   steps: readonly TourStep[];
   onStep?: (step: TourStep) => void;
+  discreet?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
@@ -144,6 +146,7 @@ export function Onboarding({
     <>
       <Button
         variant="link"
+        className={discreet ? "h-auto p-0 text-sm font-medium" : undefined}
         onClick={() => {
           setStep(0);
           setOpen(true);
@@ -204,7 +207,7 @@ export function Onboarding({
             <div
               ref={card}
               style={position}
-              className="absolute max-h-[calc(100dvh-32px)] overflow-y-auto rounded-2xl border-2 bg-card p-6 text-card-foreground shadow-2xl"
+              className="absolute max-h-[calc(100dvh-32px)] overflow-y-auto rounded-2xl border bg-card p-6 text-card-foreground shadow-2xl"
             >
               <div className="mb-4 flex items-center justify-between">
                 <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primary">

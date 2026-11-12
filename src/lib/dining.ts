@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { DIETS, distanceKm, type Restaurant, type RoomSettings } from "./restaurants";
+import {
+  DIETS,
+  distanceKm,
+  selectedPriceLevels,
+  type Restaurant,
+  type RoomSettings,
+} from "./restaurants";
 
 export const CUISINES = [
   "American",
@@ -72,6 +78,10 @@ export function rankDiningSuggestions(
     ...new Set([...settings.diets, ...active.flatMap((m) => m.preferences.diets)]),
   ];
   const budget = Math.min(settings.priceMax, ...active.map((m) => m.preferences.maxPrice));
+  const selectedPrices = selectedPriceLevels(settings);
+  const allowedPrices = (selectedPrices.length ? selectedPrices : [1, 2, 3, 4]).filter(
+    (price) => price <= budget,
+  );
   const radius = Math.min(settings.radiusKm, ...active.map((m) => m.preferences.maxDistanceKm));
   const unique = [...new Map(pool.map((r) => [r.id, r])).values()];
   const eligible = unique.filter((r) => {
@@ -84,8 +94,8 @@ export function rankDiningSuggestions(
       return false;
     if (
       r.priceUnknown
-        ? budget < 4 || settings.priceMin > 1
-        : r.price > budget || r.price < settings.priceMin
+        ? budget < 4 || (selectedPrices.length > 0 && selectedPrices.length < 4)
+        : !allowedPrices.includes(r.price)
     )
       return false;
     // Google/custom entries do not provide verified dietary or allergy evidence.

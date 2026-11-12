@@ -233,6 +233,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          reward_restaurants: Json
           username: string | null
           distance_unit: "mi" | "km"
           avatar: string
@@ -242,6 +243,7 @@ export type Database = {
           id: string
         }
         Insert: {
+          reward_restaurants?: Json
           username?: string | null
           distance_unit?: "mi" | "km"
           avatar?: string
@@ -251,6 +253,7 @@ export type Database = {
           id: string
         }
         Update: {
+          reward_restaurants?: Json
           username?: string | null
           distance_unit?: "mi" | "km"
           avatar?: string
@@ -289,6 +292,48 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "room_restaurants_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      room_pool_selections: {
+        Row: {
+          added_by: string | null
+          created_at: string
+          id: string
+          restaurant: Json
+          restaurant_id: string
+          room_id: string
+        }
+        Insert: {
+          added_by?: string | null
+          created_at?: string
+          id?: string
+          restaurant: Json
+          restaurant_id: string
+          room_id: string
+        }
+        Update: {
+          added_by?: string | null
+          created_at?: string
+          id?: string
+          restaurant?: Json
+          restaurant_id?: string
+          room_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_pool_selections_added_by_fkey"
+            columns: ["added_by"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_pool_selections_room_id_fkey"
             columns: ["room_id"]
             isOneToOne: false
             referencedRelation: "rooms"

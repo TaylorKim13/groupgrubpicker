@@ -17,6 +17,8 @@ import {
   type ConversationPreferences,
 } from "@/lib/dining-conversation";
 import type { Session } from "@/lib/session";
+import type { Restaurant } from "@/lib/restaurants";
+import type { RewardRestaurant } from "@/lib/restaurant-rewards";
 
 type Capture = {
   stream: MediaStream;
@@ -44,10 +46,18 @@ export function DiningConversation({
   session,
   available,
   onReview,
+  rewardRestaurants,
+  selectedPool,
+  onAddToPool,
+  onViewRestaurant,
 }: {
   session: Session;
   available: boolean;
   onReview: (result: ConversationPreferences) => void;
+  rewardRestaurants: RewardRestaurant[];
+  selectedPool: Restaurant[];
+  onAddToPool?: ((restaurant: Restaurant) => Promise<void>) | undefined;
+  onViewRestaurant?: ((id: string) => void) | undefined;
 }) {
   const analyze = useServerFn(analyzeRoomDiningConversation);
   const suggest = useServerFn(suggestRoomDiningFromConversation);
@@ -309,7 +319,10 @@ export function DiningConversation({
   }
 
   return (
-    <div className="space-y-3 rounded-xl border-2 border-primary/30 bg-primary/5 p-4">
+    <div
+      data-tour="dining-conversation"
+      className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4"
+    >
       <h3 className="font-extrabold">Let Gemini help you decide</h3>
       <p className="text-sm text-muted-foreground">
         Record up to a minute of your table's food discussion, then review what Gemini heard. Get
@@ -501,7 +514,13 @@ export function DiningConversation({
               Demo restaurants — these are examples, not live local listings.
             </p>
           )}
-          <SuggestionCards suggestions={picks.suggestions} />
+          <SuggestionCards
+            suggestions={picks.suggestions}
+            rewardRestaurants={rewardRestaurants}
+            selectedIds={new Set(selectedPool.map((restaurant) => restaurant.id))}
+            onAddToPool={onAddToPool}
+            onViewRestaurant={onViewRestaurant}
+          />
         </section>
       )}
     </div>

@@ -1,5 +1,6 @@
-import { ArrowUpRight, ChevronRight, Clock3, Info, MapPin, Sparkles } from "lucide-react";
+import { ArrowUpRight, ChevronRight, Clock3, Gift, Info, MapPin, Sparkles } from "lucide-react";
 import type { DiningSuggestion } from "@/lib/dining";
+import { hasRewardMatch, type RewardRestaurant } from "@/lib/restaurant-rewards";
 import { priceLabel } from "@/lib/restaurants";
 import { Button } from "./ui/button";
 import {
@@ -36,12 +37,20 @@ const backdrops = ["bg-secondary/35", "bg-primary/10", "bg-success/15"];
 export function SuggestionCards({
   suggestions,
   historical = false,
+  rewardRestaurants,
+  onViewRestaurant,
+  selectedIds = new Set<string>(),
+  onAddToPool,
 }: {
+  onViewRestaurant?: ((id: string) => void) | undefined;
+  selectedIds?: Set<string>;
+  onAddToPool?: ((restaurant: DiningSuggestion["restaurant"]) => Promise<void>) | undefined;
   suggestions: DiningSuggestion[];
   historical?: boolean;
+  rewardRestaurants: RewardRestaurant[];
 }) {
   return (
-    <ol className="grid gap-4 sm:grid-cols-3">
+    <ol className="grid gap-4 sm:grid-cols-2">
       {suggestions.map((suggestion, index) => {
         const r = suggestion.restaurant;
         const emoji = foodEmoji(r.cuisine);
@@ -50,18 +59,21 @@ export function SuggestionCards({
         const backdrop = backdrops[index % backdrops.length];
         const mapsQuery = r.address ? `${r.name} ${r.address}` : `${r.lat},${r.lng}`;
         return (
-          <li key={r.id} className="min-w-0">
+          <li
+            key={r.id}
+            className="group flex min-w-0 flex-col overflow-hidden rounded-2xl border bg-background transition-shadow hover:shadow-[4px_4px_0_var(--color-border)]"
+          >
             <Dialog>
               <DialogTrigger asChild>
                 <button
                   type="button"
                   aria-label={`View details for ${r.name}`}
-                  className="group flex h-full w-full cursor-pointer flex-col overflow-hidden rounded-2xl border-2 bg-background text-left transition-shadow hover:shadow-[4px_4px_0_var(--color-border)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="flex h-full w-full cursor-pointer flex-col text-left focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring focus-visible:ring-inset"
                 >
                   <div
-                    className={`relative flex h-32 w-full items-center justify-center ${backdrop}`}
+                    className={`relative flex h-36 w-full items-center justify-center ${backdrop}`}
                   >
-                    <span className="absolute left-3 top-3 rounded-full border border-border/15 bg-background/90 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider">
+                    <span className="absolute left-3 top-3 rounded-full border border-border/15 bg-background/90 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider">
                       {historical ? `Past pick ${index + 1}` : `Pick ${index + 1}`}
                     </span>
                     <span
@@ -72,7 +84,19 @@ export function SuggestionCards({
                     </span>
                   </div>
                   <div className="flex w-full flex-1 flex-col p-4">
-                    <h3 className="text-lg font-extrabold leading-tight">{r.name}</h3>
+                    <h3 className="flex items-center gap-2 text-lg font-semibold leading-tight">
+                      {r.name}
+                      {hasRewardMatch(rewardRestaurants, r.name) && (
+                        <span
+                          className="shrink-0 text-primary"
+                          role="img"
+                          aria-label="Your rewards account matches this restaurant"
+                          title="Your rewards account matches this restaurant"
+                        >
+                          <Gift className="h-4 w-4" aria-hidden="true" />
+                        </span>
+                      )}
+                    </h3>
                     <p className="mt-1.5 text-sm text-muted-foreground">
                       {r.cuisine} · {price}
                     </p>
@@ -95,7 +119,7 @@ export function SuggestionCards({
                   </div>
                 </button>
               </DialogTrigger>
-              <DialogContent className="max-h-[90dvh] w-[calc(100%-2rem)] gap-0 overflow-y-auto rounded-2xl border-2 bg-card p-0 sm:rounded-2xl">
+              <DialogContent className="max-h-[90dvh] w-[calc(100%-2rem)] gap-0 overflow-y-auto rounded-2xl border bg-card p-0 sm:rounded-2xl">
                 <div className={`flex h-36 items-center justify-center ${backdrop}`}>
                   <span aria-hidden="true" className="text-7xl drop-shadow-sm">
                     {emoji}
@@ -103,7 +127,7 @@ export function SuggestionCards({
                 </div>
                 <div className="space-y-5 p-5 sm:p-6">
                   <DialogHeader className="text-left">
-                    <DialogTitle className="pr-4 text-2xl font-extrabold">{r.name}</DialogTitle>
+                    <DialogTitle className="pr-4 text-2xl font-semibold">{r.name}</DialogTitle>
                     <DialogDescription>
                       {r.cuisine} · {price}
                     </DialogDescription>
@@ -125,7 +149,7 @@ export function SuggestionCards({
                     </p>
                   </div>
                   <div>
-                    <h4 className="flex items-center gap-2 text-sm font-extrabold">
+                    <h4 className="flex items-center gap-2 text-sm font-semibold">
                       <Sparkles className="size-4 text-primary" aria-hidden="true" /> Why it made
                       the list
                     </h4>
@@ -135,7 +159,7 @@ export function SuggestionCards({
                   </div>
                   {r.diets.length > 0 && (
                     <div>
-                      <h4 className="text-sm font-extrabold">
+                      <h4 className="text-sm font-semibold">
                         Dietary options{demo ? " (sample)" : ""}
                       </h4>
                       <div className="mt-2 flex flex-wrap gap-1.5">
@@ -179,14 +203,34 @@ export function SuggestionCards({
                       </a>
                     </Button>
                   )}
-                  {!historical && (
+                  {onViewRestaurant && (
+                    <Button
+                      variant="outline"
+                      className="w-full rounded-xl"
+                      onClick={() => onViewRestaurant(r.id)}
+                    >
+                      Show on nearby map
+                    </Button>
+                  )}
+                  {!historical && !onAddToPool && (
                     <p className="text-center text-xs text-muted-foreground">
-                      Vote for this spot in the restaurant pool below.
+                      Vote for this spot in the Melting Pot below.
                     </p>
                   )}
                 </div>
               </DialogContent>
             </Dialog>
+            {!historical && onAddToPool && (
+              <div className="mt-auto px-4 pb-4">
+                <Button
+                  className="w-full rounded-xl"
+                  disabled={selectedIds.has(r.id)}
+                  onClick={() => void onAddToPool(r)}
+                >
+                  {selectedIds.has(r.id) ? "Added to voting pool" : "+ Add to voting pool"}
+                </Button>
+              </div>
+            )}
           </li>
         );
       })}

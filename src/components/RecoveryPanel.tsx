@@ -27,7 +27,7 @@ export function RecoveryPanel({
           : "Enter your username. We’ll send a reset link to the email saved on that account."}
       </p>
       {message ? (
-        <p role="status" className="rounded-lg border-2 bg-card p-4">
+        <p role="status" className="rounded-lg border bg-card p-4">
           {message}
         </p>
       ) : (
@@ -50,7 +50,7 @@ export function RecoveryPanel({
           <label className="block font-bold">
             {kind === "email" ? "Account email" : "Username"}
             <input
-              className="mt-2 w-full rounded-lg border-2 bg-card px-4 py-3"
+              className="mt-2 w-full rounded-lg border bg-card px-4 py-3"
               type={kind === "email" ? "email" : "text"}
               required
               disabled={busy}
