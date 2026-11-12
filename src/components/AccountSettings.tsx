@@ -293,7 +293,7 @@ export function AccountSettings({
         {selectedReward && (
           <div className="mt-4 rounded-xl border bg-secondary/40 p-4">
             <div className="flex items-start gap-3">
-              <div className="rounded-full bg-primary/15 p-2 text-primary">
+              <div className="rounded-full bg-primary/15 p-2 text-brand">
                 <Gift className="h-5 w-5" aria-hidden="true" />
               </div>
               <div className="min-w-0 flex-1">
@@ -379,7 +379,7 @@ export function AccountSettings({
               <li key={`${reward.placeId ?? "legacy"}:${reward.brandName}:${index}`}>
                 <span className="inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1.5 text-sm font-medium">
                   <Gift
-                    className={`h-4 w-4 ${reward.placeId ? "text-primary" : "text-muted-foreground"}`}
+                    className={`h-4 w-4 ${reward.placeId ? "text-brand" : "text-muted-foreground"}`}
                     aria-hidden="true"
                   />
                   <span>

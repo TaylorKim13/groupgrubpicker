@@ -1,276 +1,318 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, ArrowRight, Sparkles, X } from "lucide-react";
+import { ArrowRight, Check, CheckCheck, HelpCircle, MousePointer2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { tourStorageKey, type TourStep } from "@/lib/onboarding";
+import { VOTING_TOUR_KEY, votingStage, votingSteps } from "@/lib/onboarding";
 
-type Spotlight = { top: number; left: number; width: number; height: number };
+type Pick = { id: string; name: string } | null;
+type Hole = { x: number; y: number; width: number; height: number };
 
+/** A nonmodal coach: real restaurant controls remain clickable throughout. */
 export function Onboarding({
-  tour = "home",
-  steps,
-  onStep,
-  discreet = false,
+  want,
+  could,
+  submissionCount,
+  hasVoted,
+  isHost,
+  onStart,
 }: {
-  tour?: string;
-  steps: readonly TourStep[];
-  onStep?: (step: TourStep) => void;
-  discreet?: boolean;
+  want: Pick;
+  could: Pick;
+  submissionCount: number;
+  hasVoted: boolean;
+  isHost: boolean;
+  onStart: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [step, setStep] = useState(0);
-  const [spotlight, setSpotlight] = useState<Spotlight | null>(null);
-  const [position, setPosition] = useState({ left: 16, top: 16, width: 360 });
-  const dialog = useRef<HTMLDialogElement>(null);
+  const [phase, setPhase] = useState<"intro" | "picking" | "done">("intro");
+  const [holes, setHoles] = useState<Hole[]>([]);
   const card = useRef<HTMLDivElement>(null);
-  const nextButton = useRef<HTMLButtonElement>(null);
+  const launcher = useRef<HTMLButtonElement>(null);
+  const baseline = useRef(submissionCount);
   const maskId = useId();
   const titleId = useId();
-  const descriptionId = useId();
-  const item = steps[step];
-  const hasItem = !!item;
-  const onStepRef = useRef(onStep);
-  onStepRef.current = onStep;
+  const stage = votingStage(want?.id ?? null, could?.id ?? null);
+  const index = stage === "want" ? 0 : stage === "could" ? 1 : 2;
+  const startRef = useRef(onStart);
+  startRef.current = onStart;
 
   useEffect(() => {
-    setStep(0);
+    if (hasVoted) return;
     try {
-      setOpen(
-        !localStorage.getItem(tourStorageKey(tour)) &&
-          !localStorage.getItem(tourStorageKey("skipped")),
-      );
+      if (localStorage.getItem(VOTING_TOUR_KEY)) return;
     } catch {
-      setOpen(true);
+      /* Storage is optional. */
     }
-  }, [tour]);
+    setOpen(true);
+  }, [hasVoted]);
 
-  function finish(skipped = false) {
+  function dismiss() {
     try {
-      localStorage.setItem(tourStorageKey(tour), "done");
-      if (skipped) localStorage.setItem(tourStorageKey("skipped"), "done");
+      localStorage.setItem(VOTING_TOUR_KEY, "done");
     } catch {
-      /* Browser storage is optional. */
+      /* Storage is optional. */
     }
     setOpen(false);
+    launcher.current?.focus({ preventScroll: true });
   }
 
   useEffect(() => {
-    if (!open || !hasItem) return;
-    const element = dialog.current;
-    element?.showModal();
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      element?.close();
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [open, hasItem]);
+    if (open && submissionCount > baseline.current) {
+      setPhase("done");
+      try {
+        localStorage.setItem(VOTING_TOUR_KEY, "done");
+      } catch {
+        /* Storage is optional. */
+      }
+    }
+  }, [open, submissionCount]);
 
   useEffect(() => {
-    if (!open || !item) return;
-    onStepRef.current?.(item);
-    let target: Element | null = null;
-    let observer: ResizeObserver | undefined;
-    let mutations: MutationObserver | undefined;
+    if (!open) return;
+    document.body.classList.add("voting-guide-active");
+    card.current?.focus({ preventScroll: true });
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        try {
+          localStorage.setItem(VOTING_TOUR_KEY, "done");
+        } catch {
+          /* Storage is optional. */
+        }
+        setOpen(false);
+        launcher.current?.focus({ preventScroll: true });
+      }
+    };
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("keydown", escape);
+      document.body.classList.remove("voting-guide-active");
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const selector =
+      phase !== "picking"
+        ? null
+        : stage === "submit"
+          ? '[data-vote-guide="submit"]'
+          : `[data-vote-choice="${stage}"]`;
+    let firstMeasure = true;
     function measure() {
+      const targets = selector
+        ? [...document.querySelectorAll<HTMLElement>(selector)].filter(
+            (element) =>
+              element.getClientRects().length > 0 &&
+              (stage !== "could" || element.dataset["restaurantId"] !== want?.id),
+          )
+        : [];
+      if (firstMeasure && targets[0]) {
+        firstMeasure = false;
+        if (card.current?.contains(document.activeElement))
+          targets[0].focus({ preventScroll: true });
+        const rect = targets[0].getBoundingClientRect();
+        const dockTop = card.current?.getBoundingClientRect().top ?? window.innerHeight;
+        if (rect.top < 100 || rect.bottom > dockTop - 24)
+          window.scrollBy({
+            top: rect.top - Math.max(100, (dockTop - 100) / 2),
+            behavior: "instant",
+          });
+      }
       const width = document.documentElement.clientWidth;
       const height = window.innerHeight;
-      const bounds = target?.getBoundingClientRect();
-      const hole =
-        bounds && bounds.width > 0 && bounds.height > 0
-          ? {
-              top: Math.max(4, bounds.top - 6),
-              left: Math.max(4, bounds.left - 6),
-              width: Math.max(
-                0,
-                Math.min(width - 4, bounds.right + 6) - Math.max(4, bounds.left - 6),
-              ),
-              height: Math.max(
-                0,
-                Math.min(height - 4, bounds.bottom + 6) - Math.max(4, bounds.top - 6),
-              ),
-            }
-          : null;
-      setSpotlight(hole);
-      const cardWidth = Math.min(360, width - 32);
-      const cardHeight = card.current?.offsetHeight ?? 320;
-      let top = (height - cardHeight) / 2;
-      if (hole) {
-        if (hole.top + hole.height + cardHeight + 28 <= height) top = hole.top + hole.height + 16;
-        else if (hole.top >= cardHeight + 28) top = hole.top - cardHeight - 16;
-        else top = height - cardHeight - 16;
-      }
-      setPosition({
-        width: cardWidth,
-        left: Math.max(
-          16,
-          Math.min(hole ? hole.left : (width - cardWidth) / 2, width - cardWidth - 16),
-        ),
-        top: Math.max(16, top),
-      });
+      setHoles(
+        targets
+          .map((element) => {
+            const rect = element.getBoundingClientRect();
+            const x = Math.max(0, rect.left - 5),
+              y = Math.max(0, rect.top - 5);
+            return {
+              x,
+              y,
+              width: Math.max(0, Math.min(width, rect.right + 5) - x),
+              height: Math.max(0, Math.min(height, rect.bottom + 5) - y),
+            };
+          })
+          .filter((hole) => hole.width > 0 && hole.height > 0),
+      );
     }
-    // Wait for the page to reveal any controls associated with this step.
-    function resolveTarget() {
-      const candidate = item?.target
-        ? document.querySelector(`[data-tour="${item.target}"]`)
-        : null;
-      if (candidate === target) return;
-      if (target) observer?.unobserve(target);
-      target = candidate;
-      target?.scrollIntoView({ block: "center", behavior: "instant" });
-      if (target) observer?.observe(target);
-      measure();
-    }
-    const frame = requestAnimationFrame(() => {
-      observer = new ResizeObserver(measure);
-      if (card.current) observer.observe(card.current);
-      resolveTarget();
-      measure();
-      // Account panels and live restaurant listings can load after a step starts.
-      mutations = new MutationObserver(resolveTarget);
-      mutations.observe(document.body, { childList: true, subtree: true });
-      nextButton.current?.focus({ preventScroll: true });
+    const frame = requestAnimationFrame(measure);
+    const observer = new ResizeObserver(measure);
+    if (card.current) observer.observe(card.current);
+    // Keep the spotlight attached during polling, filtering, and responsive layout changes.
+    const mutations = new MutationObserver(() => {
+      if (selector) measure();
     });
-    window.addEventListener("resize", measure);
+    const pool = document.querySelector("[data-voting-pool]");
+    if (pool) mutations.observe(pool, { childList: true, subtree: true });
     window.addEventListener("scroll", measure, true);
+    window.addEventListener("resize", measure);
     return () => {
       cancelAnimationFrame(frame);
-      observer?.disconnect();
-      mutations?.disconnect();
-      window.removeEventListener("resize", measure);
+      observer.disconnect();
+      mutations.disconnect();
       window.removeEventListener("scroll", measure, true);
+      window.removeEventListener("resize", measure);
     };
-  }, [open, item]);
+  }, [open, phase, stage, want?.id]);
 
+  const begin = () => {
+    startRef.current();
+    setPhase("picking");
+  };
   return (
     <>
-      <Button
-        variant="link"
-        className={discreet ? "h-auto p-0 text-sm font-medium" : undefined}
-        onClick={() => {
-          setStep(0);
-          setOpen(true);
-        }}
-      >
-        <Sparkles className="size-4" /> Quick walkthrough
-      </Button>
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        <Button
+          ref={launcher}
+          variant="outline"
+          size="sm"
+          className="rounded-lg gap-2"
+          onClick={() => {
+            baseline.current = submissionCount;
+            setPhase("intro");
+            setOpen(true);
+          }}
+        >
+          <HelpCircle className="size-4" /> How voting works
+        </Button>
+      </div>
       {open &&
-        item &&
         typeof document !== "undefined" &&
         createPortal(
-          <dialog
-            ref={dialog}
-            className="onboarding-dialog"
-            aria-labelledby={titleId}
-            aria-describedby={descriptionId}
-            onCancel={(event) => {
-              event.preventDefault();
-              finish(true);
-            }}
-          >
-            <svg className="absolute inset-0 h-full w-full" aria-hidden="true">
+          <>
+            <svg className="voting-guide-shade" aria-hidden="true">
               <defs>
                 <mask id={maskId}>
                   <rect width="100%" height="100%" fill="white" />
-                  {spotlight && (
-                    <rect
-                      x={spotlight.left}
-                      y={spotlight.top}
-                      width={spotlight.width}
-                      height={spotlight.height}
-                      rx="14"
-                      fill="black"
-                    />
-                  )}
+                  {holes.map((hole, i) => (
+                    <rect key={i} {...hole} rx="12" fill="black" />
+                  ))}
                 </mask>
               </defs>
               <rect
                 width="100%"
                 height="100%"
                 fill="black"
-                fillOpacity="0.48"
+                fillOpacity={phase === "picking" ? "0.32" : "0.18"}
                 mask={`url(#${maskId})`}
               />
-              {spotlight && (
+              {holes.map((hole, i) => (
                 <rect
-                  x={spotlight.left}
-                  y={spotlight.top}
-                  width={spotlight.width}
-                  height={spotlight.height}
-                  rx="14"
+                  key={i}
+                  {...hole}
+                  rx="12"
                   fill="none"
-                  stroke="var(--primary)"
-                  strokeWidth="3"
+                  stroke={stage === "could" ? "var(--olive)" : "var(--brand)"}
+                  strokeWidth="2"
                 />
-              )}
+              ))}
             </svg>
             <div
               ref={card}
-              style={position}
-              className="absolute max-h-[calc(100dvh-32px)] overflow-y-auto rounded-2xl border bg-card p-6 text-card-foreground shadow-2xl"
+              className="voting-guide"
+              role="region"
+              aria-labelledby={titleId}
+              tabIndex={-1}
             >
-              <div className="mb-4 flex items-center justify-between">
-                <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primary">
-                  <Sparkles className="size-4" /> Your seat at the table
+              <div className="flex items-center justify-between gap-3">
+                <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                  {phase === "done" && <CheckCheck className="size-4 text-success" />}
+                  {phase === "done"
+                    ? "You're all set"
+                    : hasVoted
+                      ? "Voting guide"
+                      : "Your first vote"}
                 </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Skip walkthrough"
-                  onClick={() => finish(true)}
+                <button
+                  type="button"
+                  className="voting-guide-close"
+                  aria-label="Close voting guide"
+                  onClick={dismiss}
                 >
-                  <X />
-                </Button>
+                  <X className="size-4" />
+                </button>
               </div>
-              <p className="text-xs font-bold text-muted-foreground">
-                Step {step + 1} of {steps.length}
-              </p>
-              <div aria-live="polite" aria-atomic="true">
-                <h2 id={titleId} className="mt-2 font-display text-2xl font-extrabold">
-                  {item.title}
+              {phase === "picking" && (
+                <div className="mt-3 flex gap-1.5" aria-label={`Step ${index + 1} of 3`}>
+                  {[0, 1, 2].map((item) => (
+                    <span
+                      key={item}
+                      className={`h-1 flex-1 rounded-full transition-colors ${item <= index ? "bg-primary" : "bg-muted"}`}
+                    />
+                  ))}
+                </div>
+              )}
+              <div className="mt-3" aria-live="polite" aria-atomic="true">
+                <h2 id={titleId} className="text-xl font-semibold leading-tight tracking-tight">
+                  {phase === "intro"
+                    ? "Two picks. One group decision."
+                    : phase === "done"
+                      ? "Your vote is at the table."
+                      : votingSteps[stage].title}
                 </h2>
-                <p
-                  id={descriptionId}
-                  className="mt-3 text-sm leading-relaxed text-muted-foreground"
-                >
-                  {item.text}
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  {phase === "intro"
+                    ? "Choose your favorite and a backup. Try it on the restaurant cards — this guide follows your picks."
+                    : phase === "done"
+                      ? isHost
+                        ? "Everyone's votes count toward the winner. When the group is ready, end voting to reveal the result."
+                        : "The host will reveal the winner. You can update your vote until voting closes."
+                      : votingSteps[stage].text}
                 </p>
               </div>
-              <div className="mt-5 flex gap-1.5" aria-hidden="true">
-                {steps.map((entry, index) => (
-                  <span
-                    key={entry.id}
-                    className={`h-1 flex-1 rounded-full ${index <= step ? "bg-primary" : "bg-muted"}`}
-                  />
+              <div className="voting-guide-ballot">
+                {[
+                  { pick: want, label: "Want", points: 2 },
+                  { pick: could, label: "Could", points: 1 },
+                ].map(({ pick, label, points }) => (
+                  <div key={label} className="flex min-w-0 items-center gap-3">
+                    <span
+                      className={`voting-guide-rank ${pick ? (points === 1 ? "voting-guide-rank-filled voting-guide-rank-backup" : "voting-guide-rank-filled") : ""}`}
+                    >
+                      {pick ? <Check className="size-3.5" /> : points}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold">
+                        {label}{" "}
+                        <span className="font-normal text-muted-foreground">
+                          · {points} {points === 1 ? "point" : "points"}
+                        </span>
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {pick?.name ?? (points === 2 ? "Your favorite" : "A different restaurant")}
+                      </p>
+                    </div>
+                  </div>
                 ))}
               </div>
-              <div className="mt-5 flex items-center justify-between gap-2">
-                <Button variant="ghost" size="sm" onClick={() => finish(true)}>
-                  Skip tour
-                </Button>
-                <div className="flex gap-2">
-                  {step > 0 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      aria-label="Previous step"
-                      onClick={() => setStep(step - 1)}
-                    >
-                      <ArrowLeft /> Back
-                    </Button>
-                  )}
-                  <Button
-                    ref={nextButton}
-                    size="sm"
-                    onClick={() => (step === steps.length - 1 ? finish() : setStep(step + 1))}
-                  >
-                    {step === steps.length - 1 ? "Got it" : "Next"}
-                    <ArrowRight />
+              <div className="mt-4 flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  className="text-xs font-medium text-muted-foreground underline-offset-4 hover:underline"
+                  onClick={dismiss}
+                >
+                  {phase === "done" ? "Close guide" : "Skip guide"}
+                </button>
+                {phase === "intro" ? (
+                  <Button size="sm" className="rounded-lg" onClick={begin}>
+                    Let's pick <ArrowRight className="size-4" />
                   </Button>
-                </div>
+                ) : phase === "done" ? (
+                  <Button size="sm" className="rounded-lg" onClick={dismiss}>
+                    Got it <Check className="size-4" />
+                  </Button>
+                ) : (
+                  <span className="flex items-center gap-1.5 text-xs font-medium text-brand">
+                    <MousePointer2 className="size-3.5" />{" "}
+                    {stage === "submit"
+                      ? "Submit when ready"
+                      : `Tap ${stage === "want" ? "Want" : "Could"} on a card`}
+                  </span>
+                )}
               </div>
             </div>
-          </dialog>,
+          </>,
           document.body,
         )}
     </>

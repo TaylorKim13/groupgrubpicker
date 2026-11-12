@@ -1,4 +1,4 @@
-import { ArrowUpRight, ChevronRight, Clock3, Gift, Info, MapPin, Sparkles } from "lucide-react";
+import { ArrowUpRight, ChevronRight, Clock3, Gift, Info, MapPin } from "lucide-react";
 import type { DiningSuggestion } from "@/lib/dining";
 import { hasRewardMatch, type RewardRestaurant } from "@/lib/restaurant-rewards";
 import { priceLabel } from "@/lib/restaurants";
@@ -32,8 +32,6 @@ function foodEmoji(cuisine: string) {
   return foods.find(([pattern]) => pattern.test(label))?.[1] ?? "🍽️";
 }
 
-const backdrops = ["bg-secondary/35", "bg-primary/10", "bg-success/15"];
-
 export function SuggestionCards({
   suggestions,
   historical = false,
@@ -56,7 +54,7 @@ export function SuggestionCards({
         const emoji = foodEmoji(r.cuisine);
         const price = r.priceUnknown ? "Price unknown" : priceLabel(r.price);
         const demo = !r.google && !r.custom;
-        const backdrop = backdrops[index % backdrops.length];
+        const backdrop = "bg-muted";
         const mapsQuery = r.address ? `${r.name} ${r.address}` : `${r.lat},${r.lng}`;
         return (
           <li
@@ -73,7 +71,7 @@ export function SuggestionCards({
                   <div
                     className={`relative flex h-36 w-full items-center justify-center ${backdrop}`}
                   >
-                    <span className="absolute left-3 top-3 rounded-full border border-border/15 bg-background/90 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider">
+                    <span className="absolute left-3 top-3 text-xs font-medium text-muted-foreground">
                       {historical ? `Past pick ${index + 1}` : `Pick ${index + 1}`}
                     </span>
                     <span
@@ -88,7 +86,7 @@ export function SuggestionCards({
                       {r.name}
                       {hasRewardMatch(rewardRestaurants, r.name) && (
                         <span
-                          className="shrink-0 text-primary"
+                          className="shrink-0 text-brand"
                           role="img"
                           aria-label="Your rewards account matches this restaurant"
                           title="Your rewards account matches this restaurant"
@@ -107,12 +105,10 @@ export function SuggestionCards({
                             <Info className="size-3.5" aria-hidden="true" /> Things to know
                           </>
                         ) : (
-                          <>
-                            <Sparkles className="size-3.5" aria-hidden="true" /> For your table
-                          </>
+                          <>For your table</>
                         )}
                       </span>
-                      <span className="inline-flex items-center gap-0.5 text-primary">
+                      <span className="inline-flex items-center gap-0.5 text-brand">
                         Details <ChevronRight className="size-4" aria-hidden="true" />
                       </span>
                     </div>
@@ -150,8 +146,7 @@ export function SuggestionCards({
                   </div>
                   <div>
                     <h4 className="flex items-center gap-2 text-sm font-semibold">
-                      <Sparkles className="size-4 text-primary" aria-hidden="true" /> Why it made
-                      the list
+                      Why it made the list
                     </h4>
                     <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                       {suggestion.aiExplanation ?? suggestion.reasons.join(" ")}
@@ -166,7 +161,7 @@ export function SuggestionCards({
                         {r.diets.map((diet) => (
                           <span
                             key={diet}
-                            className="rounded-full bg-accent px-2.5 py-1 text-xs font-semibold"
+                            className="rounded-md bg-muted px-2.5 py-1 text-xs font-medium"
                           >
                             {diet}
                           </span>

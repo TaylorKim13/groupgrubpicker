@@ -320,7 +320,6 @@ export function DiningConversation({
 
   return (
     <div
-      data-tour="dining-conversation"
       className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4"
     >
       <h3 className="font-extrabold">Let Gemini help you decide</h3>

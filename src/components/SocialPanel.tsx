@@ -285,7 +285,7 @@ export function SocialPanel({ userId }: { userId: string }) {
               </div>
               <ul className="mt-4 grid gap-2 border-t pt-4 sm:grid-cols-2" aria-label={`Members of ${c.name}`}>
                 {c.members.map((m) => (
-                  <li key={m.id} className="flex min-w-0 items-center gap-3 rounded-lg border border-transparent bg-muted/50 px-3 py-2.5 dark:border-neutral-500 dark:bg-neutral-700">
+                  <li key={m.id} className="flex min-w-0 items-center gap-3 rounded-lg border bg-muted/50 px-3 py-2.5">
                     <ProfileAvatar avatar={m.avatar} name={m.name} className="h-9 w-9 bg-background text-xl" />
                     <span className="min-w-0 flex-1 break-words text-sm font-medium">{m.name}{m.id === userId && m.name !== "You" && <span className="ml-1 font-normal text-muted-foreground">(you)</span>}</span>
                     {m.status === "invited" && <span className="shrink-0 rounded-full bg-secondary px-2 py-1 text-[10px] font-semibold text-secondary-foreground">Invited</span>}

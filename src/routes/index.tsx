@@ -15,8 +15,6 @@ import { ProfilePicker } from "@/components/ProfilePicker";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { ThemeControl } from "@/components/ThemeControl";
 import { Button } from "@/components/ui/button";
-import { Onboarding } from "@/components/Onboarding";
-import { homeTour, hostProfileTour, hostAreaTour, hostGroupTour, homeJoinTour } from "@/lib/onboarding";
 import { useAccount } from "@/components/AccountProvider";
 import { getAccount } from "@/lib/account.functions";
 import { Slider } from "@/components/ui/slider";
@@ -185,13 +183,13 @@ function Home() {
       <div className={mode ? "create-photo-area" : "contents"}>
       <header className="home-header">
         <Link to="/" className="brand-wordmark text-4xl" onClick={() => setMode(null)}>
-          GROUP<span className="text-primary"> GRUB</span>{" "}
+          GROUP<span className="text-brand"> GRUB</span>{" "}
           <span className="sr-only">Group dining, simplified</span>
         </Link>
         <div className="flex flex-wrap items-center gap-3">
           <ThemeControl />
           <Button variant="ghost" className={user ? "h-auto min-h-14 gap-3 px-3 py-2" : undefined} asChild>
-            <Link to="/account" data-tour="account">
+            <Link to="/account">
               {user && "Your Account"}
               {user ? (
                 <ProfileAvatar
@@ -209,18 +207,15 @@ function Home() {
         <section className="home-hero" aria-labelledby="home-title">
           <div className="home-hero-copy">
             <p className="home-eyebrow">Good food. Your people.</p>
-            <h1 id="home-title" data-tour="welcome" className="home-headline">Big appetites.<br />One decision.</h1>
+            <h1 id="home-title" className="home-headline">Big appetites.<br />One decision.</h1>
             <p className="home-hero-description">Find your next great meal. Together.</p>
             <div className="home-hero-actions">
-              <Button data-tour="host" className="home-start-button" onClick={() => { setHostStep("profile"); setMode("host"); }}>
+              <Button className="home-start-button" onClick={() => { setHostStep("profile"); setMode("host"); }}>
                 <Plus /> Start a table
               </Button>
-              <Button data-tour="join" className="home-join-button" variant="outline" onClick={() => setMode("join")}>
+              <Button className="home-join-button" variant="outline" onClick={() => setMode("join")}>
                 <Users /> Join friends
               </Button>
-            </div>
-            <div className="home-hero-walkthrough">
-              <Onboarding discreet steps={homeTour} />
             </div>
           </div>
         </section>
@@ -260,7 +255,7 @@ function Home() {
               }
             }}
           >
-            <fieldset data-tour={mode === "join" ? "join-details" : `host-${hostStep}`} disabled={busy}>
+            <fieldset disabled={busy}>
               {mode === "host" && hostStep === "area" ? (
                 <div className="space-y-6">
                   <div>
@@ -330,11 +325,6 @@ function Home() {
               </Button>
             </fieldset>
           </form>
-          <div className="mt-4 flex justify-center">
-            <Onboarding key={mode === "join" ? "home-join" : `host-${hostStep}`}
-              tour={mode === "join" ? "home-join" : `host-${hostStep}`}
-              steps={mode === "join" ? homeJoinTour : hostStep === "profile" ? hostProfileTour : hostStep === "area" ? hostAreaTour : hostGroupTour} discreet />
-          </div>
         </section>
       )}
       </div>
@@ -354,7 +344,7 @@ function Home() {
         </section>
       )}
       {!mode && (
-      <details data-tour="open-tables" className="mt-8 border-b pb-6">
+      <details className="mt-8 border-b pb-6">
         <summary className="cursor-pointer font-bold">
           Browse open tables {rooms.data?.length ? `(${rooms.data.length})` : ""}
         </summary>

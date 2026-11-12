@@ -14,9 +14,6 @@ import { getGroupHistory } from "@/lib/room.functions";
 import { getAdminAccess } from "@/lib/metrics.functions";
 import { MetricsDashboard } from "@/components/MetricsDashboard";
 import { ThemeControl } from "@/components/ThemeControl";
-import { useState } from "react";
-import { Onboarding } from "@/components/Onboarding";
-import { accountTour, signInTour } from "@/lib/onboarding";
 
 export const Route = createFileRoute("/account")({
   head: () => ({
@@ -31,7 +28,6 @@ export const Route = createFileRoute("/account")({
   component: AccountPage,
 });
 function AccountPage() {
-  const [tab, setTab] = useState("overview");
   const user = useAccount();
   const fetchAdminAccess = useServerFn(getAdminAccess);
   const adminAccess = useQuery({
@@ -69,7 +65,7 @@ function AccountPage() {
     <main className={user ? "account-shell" : "login-shell"}>
       <div className="flex items-center justify-between gap-3">
         <Link to="/" className="brand-wordmark text-4xl" aria-label="Group Grub home">
-          GROUP<span className="text-primary"> GRUB</span>
+          GROUP<span className="text-brand"> GRUB</span>
         </Link>
         <ThemeControl />
       </div>
@@ -80,7 +76,6 @@ function AccountPage() {
             Save your preferences, connect with friends, and revisit your picks.
           </p>
           <SignInPanel />
-          <div className="mt-4 flex justify-center"><Onboarding tour="sign-in" steps={signInTour} discreet /></div>
         </section>
       ) : (
         <section className="account-content-panel">
@@ -88,11 +83,11 @@ function AccountPage() {
           <h1 className="text-3xl font-semibold">Your Account</h1>
           <p className="mt-2 text-sm text-muted-foreground">Your people, preferences, and favorite places.</p>
         </div>
-        <Tabs value={tab} onValueChange={setTab}>
+        <Tabs defaultValue="overview">
           <TabsList className={`grid w-full ${isAdmin ? "grid-cols-4" : "grid-cols-3"}`}>
-            <TabsTrigger value="overview" data-tour="account-overview">Overview</TabsTrigger>
-            <TabsTrigger value="preferences" data-tour="preferences-tab">Preferences</TabsTrigger>
-            <TabsTrigger value="settings" data-tour="account-settings">Settings</TabsTrigger>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="preferences">Preferences</TabsTrigger>
+            <TabsTrigger value="settings">Settings</TabsTrigger>
             {isAdmin && <TabsTrigger value="metrics">Metrics</TabsTrigger>}
           </TabsList>
           {isAdmin && (
@@ -187,8 +182,6 @@ function AccountPage() {
             </TabsContent>
           ))}
         </Tabs>
-        <div className="mt-6 flex justify-center"><Onboarding tour="account" steps={accountTour} discreet
-          onStep={(step) => setTab(step.id === "preferences" || step.id === "save-preferences" ? "preferences" : step.id === "settings" ? "settings" : "overview")} /></div>
         </section>
       )}
     </main>

@@ -88,7 +88,7 @@ function SubmitDealPage() {
     <main className="deal-submit-page">
       <header className="deal-submit-header">
         <Link to="/" className="brand-wordmark text-4xl" aria-label="Group Grub home">
-          GROUP<span className="text-primary"> GRUB</span>
+          GROUP<span className="text-brand"> GRUB</span>
         </Link>
         <Button variant="ghost" asChild>
           <Link to="/">
@@ -99,7 +99,7 @@ function SubmitDealPage() {
       </header>
 
       <section className="deal-submit-panel">
-        <p className="text-sm font-bold uppercase text-primary">Good deals are better shared</p>
+        <p className="text-sm font-bold uppercase text-brand">Good deals are better shared</p>
         <h1 className="mt-2 text-3xl font-semibold">Share a restaurant deal</h1>
         <p className="mt-3 text-muted-foreground">
           Add a current offer for a restaurant. Community deals appear on matching restaurant cards

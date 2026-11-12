@@ -60,7 +60,7 @@ export function VotingWaitGame() {
 
   return (
     <section aria-labelledby="snack-match-title" className="rounded-2xl bg-card p-5 chunky">
-      <p className="text-sm font-bold text-primary">Vote submitted! Waiting for the table?</p>
+      <p className="text-sm font-bold text-brand">Vote submitted! Waiting for the table?</p>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
         <h2 id="snack-match-title" className="text-2xl font-semibold">
           Snack Match

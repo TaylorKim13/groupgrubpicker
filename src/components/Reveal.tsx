@@ -108,14 +108,14 @@ export function Reveal({ result, hasRewards = false }: { result: Result; hasRewa
       </div>
       <section id="winner-hero" className="winner-hero relative z-10 text-center" aria-labelledby="winner-title">
         <Link to="/" className="winner-home-link brand-wordmark text-4xl" aria-label="Group Grub home">
-          GROUP<span className="text-primary"> GRUB</span>
+          GROUP<span className="text-brand"> GRUB</span>
         </Link>
         <p className="font-bold uppercase tracking-widest">We're eating at</p>
         <h1 id="winner-title" className="mt-4 flex flex-wrap items-center justify-center gap-3 text-5xl font-semibold md:text-7xl">
           {w.name}
           {hasRewards && (
             <span
-              className="text-primary"
+              className="text-brand"
               role="img"
               title="Your rewards account matches this restaurant"
               aria-label="Your rewards account matches this restaurant"

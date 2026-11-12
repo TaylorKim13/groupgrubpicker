@@ -174,7 +174,7 @@ export function DiningPanel({
           {isHost && status === "lobby" && (
             <Button
               variant="outline"
-              className="border-primary/40 bg-transparent text-primary shadow-none hover:border-primary hover:bg-primary/10 hover:text-primary"
+              className="bg-transparent shadow-none"
               disabled={
                 refreshing ||
                 generation.isFetching ||
@@ -335,7 +335,6 @@ function PreferenceForm({
       />
       <details
         ref={details}
-        data-tour="dining-preferences"
         className="group relative isolate rounded-xl border bg-background"
       >
         <summary className="flex list-none cursor-pointer items-center justify-between gap-3 rounded-xl px-4 py-3 font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -576,7 +575,7 @@ function VisitFeedback({
     }
   }
   return (
-    <section className="mx-auto mt-8 max-w-2xl space-y-3 rounded-2xl border-2 border-input bg-card p-5 text-card-foreground shadow-sm dark:border-neutral-500 dark:bg-neutral-800">
+    <section className="mx-auto mt-8 max-w-2xl space-y-3 rounded-2xl border bg-card p-5 text-card-foreground shadow-sm">
       <h2 className="text-xl font-semibold">Did you eat at the winning restaurant?</h2>
       <p className="text-sm text-muted-foreground">
         A winning vote isn't a confirmed visit. Your private feedback can improve future suggestions

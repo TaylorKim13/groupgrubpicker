@@ -22,6 +22,9 @@
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
+  --color-brand: var(--brand);
+  --color-olive: var(--olive);
+  --color-olive-foreground: var(--olive-foreground);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
@@ -35,6 +38,7 @@
   --color-deal-label: var(--deal-label);
   --color-deal-label-foreground: var(--deal-label-foreground);
   --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
@@ -45,63 +49,71 @@
 /* Shared surfaces and restrained accents for every page and theme. */
 :root {
   --radius: 0.75rem;
-  --background: #ffffff;
-  --foreground: #202020;
+  --background: #f7f4ef;
+  --foreground: #292521;
   --card: #ffffff;
-  --card-foreground: #202020;
+  --card-foreground: #292521;
   --popover: #ffffff;
-  --popover-foreground: #202020;
+  --popover-foreground: #292521;
   --primary: #c51e32;
   --primary-foreground: #ffffff;
-  --secondary: #f2f2f2;
-  --secondary-foreground: #303030;
-  --muted: #f5f5f5;
-  --muted-foreground: #666666;
-  --accent: #f2f2f2;
-  --accent-foreground: #303030;
-  --success: #26734d;
+  --secondary: #eeeae3;
+  --secondary-foreground: #484137;
+  --muted: #f0ece6;
+  --muted-foreground: #686057;
+  --accent: #ebe5dd;
+  --accent-foreground: #484137;
+  --success: #356747;
   --destructive: #b53a3a;
   --destructive-foreground: #ffffff;
-  --border: #e0e0e0;
-  --input: #858585;
-  --field-background: #fafafa;
-  --field-placeholder: #686868;
-  --ring: #c51e32;
+  --border: #ddd5ca;
+  --input: #82786c;
+  --field-background: #fcfaf7;
+  --field-placeholder: #71675c;
+  --ring: #af2534;
   --deal-background: #f0f6ee;
   --deal-foreground: #34532e;
   --deal-border: #d2e2c9;
   --deal-label: #e0ecd9;
   --deal-label-foreground: #34532e;
+  --brand: #af2534;
+  --olive: #65734a;
+  --olive-foreground: #ffffff;
+  --success-foreground: #ffffff;
 }
 
 .dark {
-  --background: #000000;
-  --foreground: #f5f5f5;
-  --card: #202020;
-  --card-foreground: #f5f5f5;
-  --popover: #202020;
-  --popover-foreground: #f5f5f5;
+  --background: #171614;
+  --foreground: #f3eee6;
+  --card: #242220;
+  --card-foreground: #f3eee6;
+  --popover: #242220;
+  --popover-foreground: #f3eee6;
   --primary: #c51e32;
   --primary-foreground: #ffffff;
-  --secondary: #262626;
-  --secondary-foreground: #eeeeee;
-  --muted: #1c1c1c;
-  --muted-foreground: #aaaaaa;
-  --accent: #303030;
-  --accent-foreground: #f5f5f5;
-  --success: #ff7c89;
+  --secondary: #302d27;
+  --secondary-foreground: #e5dfd4;
+  --muted: #2b2823;
+  --muted-foreground: #beb5a8;
+  --accent: #37322b;
+  --accent-foreground: #f3eee6;
+  --success: #9bc5a0;
   --destructive: #f09595;
   --destructive-foreground: #331515;
-  --border: #383838;
-  --input: #999999;
-  --field-background: #303030;
-  --field-placeholder: #bdbdbd;
-  --ring: #c51e32;
+  --border: #494238;
+  --input: #948675;
+  --field-background: #2e2a24;
+  --field-placeholder: #bfb4a4;
+  --ring: #f29b91;
   --deal-background: #273b28;
   --deal-foreground: #d4e8c7;
   --deal-border: #46613d;
   --deal-label: #364e2e;
   --deal-label-foreground: #d4e8c7;
+  --brand: #f29b91;
+  --olive: #a4b482;
+  --olive-foreground: #202819;
+  --success-foreground: #182e21;
 }
 
 @layer base {
@@ -410,7 +422,7 @@
   background: linear-gradient(rgb(0 0 0 / .60), rgb(0 0 0 / .60)), url("/images/winner-dining.jpg") center / cover;
 }
 .winner-hero h1 { max-width: 1100px; font-family: var(--font-sans); text-transform: none; overflow-wrap: anywhere; }
-.winner-hero h1 .text-primary { color: #ffffff; }
+.winner-hero h1 .text-brand { color: #ffffff; }
 .winner-details { max-width: 1120px; margin: 0 auto; padding: 48px 24px 0; scroll-margin-top: 24px; }
 
 .winner-hero { position: relative; }
@@ -418,7 +430,7 @@
 
 /* Shared treatment includes native fields used outside the reusable Input component. */
 :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="file"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]):not([type="color"]), textarea, select) {
-  border: 2px solid var(--input);
+  border: 1px solid var(--input);
   background-color: var(--field-background);
   color: var(--foreground);
 }
@@ -520,8 +532,8 @@
 }
 
 :root:not(.dark) .metrics-dashboard article {
-  background-color: #f7f7f7;
-  border: 2px solid #a3a3a3;
+  background-color: #f3eee7;
+  border: 1px solid #aea291;
   box-shadow: 0 2px 6px rgb(0 0 0 / .06);
 }
 
@@ -565,18 +577,81 @@
   background: linear-gradient(rgb(0 0 0 / .65), rgb(0 0 0 / .65)), url("/images/account-pizza.jpg") center / cover;
 }
 
-/* Spotlight tours share main's surfaces, typography, and accent colors. */
-.onboarding-dialog {
+
+/* Voting coach stays nonmodal so people learn by using the real ballot. */
+.voting-guide-active [data-voting-pool] { padding-bottom: 380px; }
+.voting-guide-shade {
   position: fixed;
   inset: 0;
   width: 100%;
   height: 100dvh;
-  max-width: none;
-  max-height: none;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  overflow: hidden;
+  pointer-events: none;
+  z-index: 40;
 }
-.onboarding-dialog::backdrop { background: transparent; }
+.voting-guide {
+  position: fixed;
+  z-index: 45;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  right: 24px;
+  width: min(360px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--card-foreground);
+  background: var(--card);
+  box-shadow: 0 12px 38px rgb(26 20 10 / .18), 0 2px 8px rgb(0 0 0 / .06);
+  animation: voting-coach-in .22s ease-out;
+}
+.voting-guide h2 { font-family: var(--font-sans); text-transform: none; }
+.voting-guide-close {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  color: var(--muted-foreground);
+  background: var(--muted);
+  cursor: pointer;
+}
+.voting-guide-close:hover { color: var(--foreground); background: var(--accent); }
+.voting-guide-ballot {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px;
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+.voting-guide-rank {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: 1px dashed var(--input);
+  border-radius: 9px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 700;
+}
+.voting-guide-rank-filled { color: var(--primary-foreground); background: var(--primary); border: 1px solid var(--primary); }
+@keyframes voting-coach-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 640px) {
+  .voting-guide { right: 16px; bottom: max(12px, env(safe-area-inset-bottom)); width: calc(100vw - 32px); padding: 16px; }
+  .voting-guide-ballot { grid-template-columns: 1fr 1fr; gap: 8px; }
+}
+
+/* Brighter lettering on photo-backed navigation keeps the red identity readable. */
+.home-shell > .contents > .home-header,
+.create-photo-area > .home-header,
+.login-shell > div:first-child,
+.account-shell > div:first-child,
+.deal-submit-header {
+  --brand: #f29b91;
+  --ring: #f29b91;
+}
+.voting-guide-rank-backup { color: var(--olive-foreground); background: var(--olive); border-color: var(--olive); }

@@ -4,7 +4,6 @@ import { googlePriceLabel, directionsUrl } from "@/lib/restaurant-info";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { ThemeControl } from "@/components/ThemeControl";
 import { Onboarding } from "@/components/Onboarding";
-import { joinTour, roomTour } from "@/lib/onboarding";
 import { useSelectionTracking } from "@/components/useSelectionTracking";
 import { RoomInvite } from "@/components/RoomInvite";
 import { VotingWaitGame } from "@/components/VotingWaitGame";
@@ -22,7 +21,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowRight, ChevronDown, Gift, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ChevronDown, Gift, UserRound } from "lucide-react";
 import { ProfilePicker } from "@/components/ProfilePicker";
 import { RestaurantMap } from "@/components/RestaurantMap";
 import { GooglePopularTimes } from "@/components/GooglePopularTimes";
@@ -113,7 +112,7 @@ function JoinGate({ code, onJoined }: { code: string; onJoined: (s: Session) => 
       <div className="create-photo-area">
       <header className="home-header">
         <Link to="/" className="brand-wordmark text-4xl">
-          GROUP<span className="text-primary"> GRUB</span>
+          GROUP<span className="text-brand"> GRUB</span>
         </Link>
         <div className="flex flex-wrap items-center gap-3">
           <ThemeControl />
@@ -166,7 +165,7 @@ function JoinGate({ code, onJoined }: { code: string; onJoined: (s: Session) => 
             }
           }}
         >
-          <fieldset data-tour="invite-profile" disabled={busy || !validCode}>
+          <fieldset disabled={busy || !validCode}>
             <ProfilePicker autoFocus {...{ nickname, setNickname, avatar, setAvatar }} />
             <Button
               type="submit"
@@ -178,7 +177,6 @@ function JoinGate({ code, onJoined }: { code: string; onJoined: (s: Session) => 
             </Button>
           </fieldset>
         </form>
-        {validCode && <div className="mt-4 flex justify-center"><Onboarding tour="invite" steps={joinTour} discreet /></div>}
       </section>
       </div>
     </main>
@@ -238,11 +236,6 @@ function Room({
   });
   const rewardRestaurants: RewardRestaurant[] = rewardQuery.data?.restaurants ?? [];
   const refresh = () => qc.invalidateQueries({ queryKey: key });
-  const isSetup = requestedSetupFlow && q.data?.me.isHost === true && q.data?.status === "lobby";
-  const walkthrough = useMemo(
-    () => roomTour(q.data?.me.isHost ?? false, q.data?.status ?? "lobby", isSetup),
-    [q.data?.me.isHost, q.data?.status, isSetup],
-  );
   const addToPool = useServerFn(addRestaurantToPool);
   const addRestaurant = async (restaurant: Restaurant) => {
     try {
@@ -311,7 +304,7 @@ function Room({
         </div>
       )}
       {s.status === "closed" && s.result ? (
-        <div data-tour="winner" className="py-10">
+        <div className="py-10">
           <Reveal
             result={s.result}
             hasRewards={hasRewardMatch(rewardRestaurants, s.result.winner.name)}
@@ -367,9 +360,6 @@ function Room({
           )}
         </div>
       )}
-      <div className="mt-8 flex justify-center">
-        <Onboarding key={`${s.me.isHost}-${s.status}-${setupFlow}`} tour={`room-${s.me.isHost ? "host" : "guest"}-${setupFlow ? "setup" : s.status}`} steps={walkthrough} discreet />
-      </div>
     </main>
   );
 }
@@ -378,7 +368,7 @@ function PoolSetupHeader() {
   return (
     <header className="flex flex-wrap items-center justify-between gap-3 border-b-2 pb-5">
       <Link to="/" className="font-display text-2xl font-extrabold">
-        GROUP<span className="text-primary"> GRUB</span>
+        GROUP<span className="text-brand"> GRUB</span>
       </Link>
       <ThemeControl />
     </header>
@@ -388,14 +378,15 @@ function PoolSetupHeader() {
 function TopBar({ s }: { s: State }) {
   const phase = { lobby: "Build your pool", voting: "Voting open", closed: "Winner!" }[s.status];
   return (
-    <header data-tour="room-invite" className="border-b-2 pb-5">
-      <div className="flex items-center gap-4">
+    <header className="border-b-2 pb-5">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <Link to="/" className="font-display text-2xl font-extrabold leading-none">
-          GROUP<span className="text-primary"> GRUB</span>
+          GROUP<span className="text-brand"> GRUB</span>
         </Link>
-        <span className="rounded-full bg-secondary px-3 py-1 text-xs font-bold uppercase text-secondary-foreground">
+        <span className="text-xs font-medium text-muted-foreground">
           {phase}
         </span>
+        <ThemeControl />
       </div>
       <div className="mt-3 grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-start">
         <Button variant="outline" asChild>
@@ -418,7 +409,7 @@ function Members({ s, session, refresh }: { s: State; session: Session; refresh:
   const addFriend = useServerFn(addFriendFromRoom);
   const [asked, setAsked] = useState<Set<string>>(new Set());
   return (
-    <div data-tour="room-members" className="rounded-2xl bg-card p-5 chunky">
+    <div className="rounded-2xl bg-card p-5 chunky">
       <div className="flex items-baseline justify-between">
         <h2 className="text-xl font-extrabold">At the table ({s.members.length})</h2>
         {s.status === "voting" && (
@@ -974,6 +965,8 @@ function Pool({
   const close = useServerFn(closeVoting);
   const [want, setWant] = useState<string | null>(s.myVote?.want ?? null);
   const [could, setCould] = useState<string | null>(s.myVote?.could ?? null);
+  const [submissionCount, setSubmissionCount] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
   const [focus, setFocus] = useState<string | null>(null);
   const [restaurantSearch, setRestaurantSearch] = useState("");
   const [addSearch, setAddSearch] = useState("");
@@ -1046,7 +1039,7 @@ function Pool({
     <>
       {s.status === "lobby" && (
         <section className="rounded-2xl border-2 border-primary bg-card p-5 chunky">
-          <div data-tour="voting-pool" className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-2xl font-extrabold">Voting pool ({pool.length})</h2>
             {s.me.isHost && (
               <p className="text-sm font-semibold text-muted-foreground">
@@ -1097,7 +1090,7 @@ function Pool({
                 className="w-full rounded-xl py-3 font-bold chunky"
                 disabled={pool.length < 2}
                 onClick={onCreateRoom}
-                data-tour="pool-action"
+
               >
                 Create Room
               </Button>
@@ -1114,7 +1107,7 @@ function Pool({
                 className="w-full rounded-xl py-3 font-bold chunky"
                 disabled={pool.length < 2}
                 onClick={() => void runRoomAction(start)}
-                data-tour="pool-action"
+
               >
                 {pool.length < 2
                   ? `Choose at least 2 places (${pool.length} selected)`
@@ -1143,7 +1136,7 @@ function Pool({
             <p className="mt-1 text-sm text-muted-foreground">Search around the group’s location, or add one of the nearby places shown on the map.</p>
           </div>
           <form
-            data-tour="add-restaurant"
+
             className="flex flex-col gap-2 sm:flex-row"
             onSubmit={async (event) => {
               event.preventDefault();
@@ -1231,25 +1224,38 @@ function Pool({
       )}
 
       {voting && (
-        <div data-tour="submit-vote" className="sticky top-2 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-secondary p-4 text-secondary-foreground chunky">
+        <div className="flex justify-end">
+          <Onboarding want={pool.find((restaurant) => restaurant.id === want) ?? null}
+            could={pool.find((restaurant) => restaurant.id === could) ?? null}
+            submissionCount={submissionCount} hasVoted={!!s.myVote || submissionCount > 0}
+            isHost={s.me.isHost} onStart={() => setRestaurantSearch("")} />
+        </div>
+      )}
+      {voting && (
+        <div data-vote-guide="submit" className="sticky top-2 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-secondary p-4 text-secondary-foreground chunky">
           <div className="text-sm">
             <b>Want</b> (2 pts): {pool.find((r) => r.id === want)?.name ?? "—"} · <b>Could</b> (1
             pt): {pool.find((r) => r.id === could)?.name ?? "—"}
           </div>
           <button
-            disabled={!want || !could}
+            disabled={!want || !could || submitting}
             onClick={async () => {
+              if (submitting || !want || !could) return;
+              setSubmitting(true);
               try {
                 await vote({ data: { ...session, want: want!, could: could! } });
+                setSubmissionCount((count) => count + 1);
                 toast.success(s.myVote ? "Vote updated" : "Vote locked in");
                 refresh();
               } catch (e: any) {
                 toast.error(e.message);
+              } finally {
+                setSubmitting(false);
               }
             }}
             className="rounded-xl bg-primary px-5 py-2 font-bold text-primary-foreground chunky disabled:opacity-50"
           >
-            {s.myVote ? "Update vote" : "Submit vote"}
+            {submitting ? "Saving vote…" : s.myVote || submissionCount > 0 ? "Update vote" : "Submit vote"}
           </button>
         </div>
       )}
@@ -1261,7 +1267,7 @@ function Pool({
             className="rounded-xl px-5 py-3 font-bold chunky"
             disabled={votedCount === 0}
             onClick={() => void runRoomAction(close)}
-            data-tour="reveal-winner"
+
           >
             End voting & reveal the winner
           </Button>
@@ -1273,7 +1279,7 @@ function Pool({
         </div>
       )}
 
-      {voting && <div>
+      {voting && <div data-voting-pool>
         <h2 className="mb-3 text-2xl font-extrabold">
           The pool <span className="text-base font-normal text-muted-foreground">({filteredPool.length === pool.length ? `${pool.length}` : `${filteredPool.length} of ${pool.length}`} spots)</span>
         </h2>
@@ -1312,6 +1318,7 @@ function Pool({
               focused={focus === r.id}
               onFocus={() => setFocus(r.id)}
               voting={voting}
+              voteBusy={submitting}
               want={want === r.id}
               could={could === r.id}
               onPick={(slot) => pick(r.id, slot)}
@@ -1339,6 +1346,7 @@ function RestaurantCard({
   r,
   center,
   voting,
+  voteBusy,
   want,
   could,
   onPick,
@@ -1351,6 +1359,7 @@ function RestaurantCard({
   r: Restaurant;
   center: RoomSettings["center"];
   voting: boolean;
+  voteBusy: boolean;
   want: boolean;
   could: boolean;
   onPick: (s: "want" | "could") => void;
@@ -1366,7 +1375,7 @@ function RestaurantCard({
   const dealButton = deals.length > 0 && (
     <button
       type="button"
-      className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      className="inline-flex items-center gap-1 rounded-md border border-deal-border bg-deal-background px-2.5 py-1 text-xs font-semibold text-deal-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       title="Show this restaurant's deal"
       aria-expanded={showDeals}
       aria-controls={dealsPanelId}
@@ -1381,9 +1390,9 @@ function RestaurantCard({
   );
   return (
     <div
-      data-tour="restaurant-pool"
+
       onMouseEnter={onFocus}
-      className={`min-w-0 rounded-xl border-2 bg-card p-4 transition ${want ? "ring-4 ring-primary" : could ? "ring-4 ring-secondary" : ""} ${focused ? "chunky" : ""}`}
+      className={`min-w-0 rounded-xl border bg-card p-4 transition ${want ? "ring-2 ring-brand" : could ? "ring-2 ring-olive" : ""} ${focused ? "chunky" : ""}`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
@@ -1424,7 +1433,7 @@ function RestaurantCard({
           <div className="flex shrink-0 flex-col items-end gap-2">
             {dealButton}
             {r.custom && (
-              <span className="rounded bg-success px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary-foreground">
+              <span className="rounded bg-success px-1.5 py-0.5 text-[10px] font-bold uppercase text-success-foreground">
                 by {r.nominatedBy}
               </span>
             )}
@@ -1453,15 +1462,27 @@ function RestaurantCard({
         <div className="mt-3 grid grid-cols-2 gap-2">
           <button
             onClick={() => onPick("want")}
-            className={`rounded-lg border-2 py-1.5 text-sm font-bold ${want ? "bg-primary text-primary-foreground" : "bg-background"}`}
+            type="button"
+            data-vote-choice="want"
+            data-restaurant-id={r.id}
+            aria-label={`Want ${r.name} — 2 points`}
+            aria-pressed={want}
+            disabled={voteBusy}
+            className={`flex items-center justify-center gap-1.5 rounded-lg border py-2 text-sm font-semibold ${want ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-muted"}`}
           >
-            {want ? "★ Want" : "Want"}
+            {want && <Check className="size-4" aria-hidden="true" />} Want
           </button>
           <button
             onClick={() => onPick("could")}
-            className={`rounded-lg border-2 py-1.5 text-sm font-bold ${could ? "bg-secondary text-secondary-foreground" : "bg-background"}`}
+            type="button"
+            data-vote-choice="could"
+            data-restaurant-id={r.id}
+            aria-label={`Could ${r.name} — 1 point`}
+            aria-pressed={could}
+            disabled={voteBusy}
+            className={`flex items-center justify-center gap-1.5 rounded-lg border py-2 text-sm font-semibold ${could ? "border-olive bg-olive text-olive-foreground" : "bg-card hover:bg-muted"}`}
           >
-            {could ? "☆ Could" : "Could"}
+            {could && <Check className="size-4" aria-hidden="true" />} Could
           </button>
         </div>
       )}
