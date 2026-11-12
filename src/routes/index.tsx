@@ -10,7 +10,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { createRoom, geocodeSearchCenter, joinRoom, listPublicRooms } from "@/lib/room.functions";
 import { loadSession, saveSession } from "@/lib/session";
-import { AVATARS, DEFAULT_SETTINGS, DIETS, type Center, type Diet } from "@/lib/restaurants";
+import { AVATARS, DEFAULT_SETTINGS, DIETS, priceLabel, type Center, type Diet } from "@/lib/restaurants";
 import { ProfilePicker } from "@/components/ProfilePicker";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { ThemeControl } from "@/components/ThemeControl";
@@ -276,13 +276,13 @@ function Home() {
                 <div className="space-y-6">
                   <div>
                     <p className="font-bold">Price range</p>
-                    <div className="mt-2 grid grid-cols-4 gap-2">
+                    <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
                       {[1, 2, 3, 4].map((price) => {
                         const selected = priceLevels.includes(price);
-                        return <button key={price} type="button" aria-pressed={selected} onClick={() => setPriceLevels(selected ? priceLevels.filter((level) => level !== price) : [...priceLevels, price].sort((a, b) => a - b))} className={`rounded-lg border py-2 text-sm font-bold ${selected ? "bg-primary text-primary-foreground" : "bg-background"}`}>{"$".repeat(price)}</button>;
+                        return <button key={price} type="button" aria-pressed={selected} onClick={() => setPriceLevels(selected ? priceLevels.filter((level) => level !== price) : [...priceLevels, price].sort((a, b) => a - b))} className={`rounded-lg border py-2 text-sm font-bold ${selected ? "bg-primary text-primary-foreground" : "bg-background"}`}>{priceLabel(price)}</button>;
                       })}
                     </div>
-                    <p className="mt-1 text-xs text-muted-foreground">Leave all unselected for any price.</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Estimated USD per person, before tax and tip. Leave all unselected for any price.</p>
                   </div>
                   <div>
                     <p className="font-bold">Dietary restrictions</p>

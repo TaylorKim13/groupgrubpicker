@@ -58,7 +58,6 @@ import {
   DIETS,
   distanceKm,
   priceLabel,
-  priceRangeLabel,
   type Restaurant,
   type RoomSettings,
 } from "@/lib/restaurants";
@@ -620,7 +619,7 @@ function SettingsSummary({ settings: st }: { settings: RoomSettings }) {
       <p>📍 {st.center.label}</p>
       <p>📏 Within {formatDistance(st.radiusKm, unit)}</p>
       <p>
-        💸 {priceLabel(st.priceMin)}–{priceLabel(st.priceMax)}
+        💸 {priceLabel(st.priceMin)} / {priceLabel(st.priceMax)}
       </p>
       <p>⏱ Max wait {st.maxWait} min</p>
       {st.diets.length > 0 && <p>🥦 {st.diets.join(", ")}</p>}
@@ -697,7 +696,7 @@ function HostSettings({
           📍 {st.center.label.split(",")[0]} · {st.radiusKm} km
         </span>
         <span className="rounded-full border bg-background px-2.5 py-0.5">
-          {priceLabel(st.priceMin)}–{priceLabel(st.priceMax)} · ≤{st.maxWait} min
+          {priceLabel(st.priceMin)} / {priceLabel(st.priceMax)} · ≤{st.maxWait} min
         </span>
         {st.diets.length > 0 && (
           <span className="rounded-full border bg-background px-2.5 py-0.5">
@@ -815,7 +814,6 @@ function HostSettings({
                     }`}
                   >
                     <span className="block">{priceLabel(p)}</span>
-                    <span className="block text-xs font-normal">{priceRangeLabel(p)}</span>
                   </button>
                 );
               })}

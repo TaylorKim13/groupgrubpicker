@@ -296,7 +296,7 @@ export function buildPool(s: RoomSettings, nominations: Restaurant[]): Restauran
   return [...mockRestaurants(s.center), ...nominations].filter((r) => matchesFilters(r, s));
 }
 
-export const priceLabel = (p: number) => "$".repeat(Math.max(1, Math.min(4, p)));
+export const priceLabel = (p: number) => priceRangeLabel(p);
 
 export const selectedPriceLevels = (
   settings: Pick<RoomSettings, "priceMin" | "priceMax" | "priceLevels">,
@@ -311,7 +311,7 @@ export const priceLevelsLabel = (
   const levels = selectedPriceLevels(settings);
   if (levels.length === 0 || levels.length === 4) return "Any price";
   if (levels.every((price, index) => index === 0 || price === levels[index - 1]! + 1)) {
-    return `${priceLabel(levels[0]!)}–${priceLabel(levels[levels.length - 1]!)}`;
+    return levels.map(priceLabel).join(", ");
   }
   return levels.map(priceLabel).join(", ");
 };

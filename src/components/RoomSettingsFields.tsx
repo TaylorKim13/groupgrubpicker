@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { DIETS, priceLabel, priceRangeLabel, type Center, type RoomSettings } from "@/lib/restaurants";
+import { DIETS, priceLabel, type Center, type RoomSettings } from "@/lib/restaurants";
 import { fromKm, toKm, type DistanceUnit, type RoomPreferences } from "@/lib/settings";
 import { Button } from "./ui/button";
 
@@ -137,7 +137,7 @@ export function RoomSettingsFields({
             >
               {[1, 2, 3, 4].map((n) => (
                 <option key={n} value={n}>
-                  {priceLabel(n)} ({priceRangeLabel(n)})
+                  {priceLabel(n)}
                 </option>
               ))}
             </select>
