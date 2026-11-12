@@ -49,7 +49,7 @@ export function GooglePopularTimes({
           if (loadTimer) clearTimeout(loadTimer);
           renderTimer = setTimeout(() => {
             if (cancelled) return;
-            setState(popularTimes.rendered === false ? "unavailable" : "ready");
+            setState(popularTimes.rendered === true ? "ready" : "unavailable");
             details.scrollTop = details.scrollHeight;
             requestAnimationFrame(() => {
               if (!cancelled) details.scrollTop = details.scrollHeight;
@@ -79,16 +79,7 @@ export function GooglePopularTimes({
   }, [placeId]);
 
   return (
-    <div className="mt-2 w-full min-w-0">
-      {state === "loading" && <p className="text-xs text-muted-foreground">Loading Google Popular times...</p>}
-      {state === "unavailable" && (
-        <p className="text-xs text-muted-foreground">
-          {placeId
-            ? "Google Popular times are not available for this restaurant."
-            : "Google Popular times are not available for this listing."}
-        </p>
-      )}
-      {state === "error" && <p className="text-xs text-muted-foreground">Google Popular times could not load here.</p>}
+    <div className="mt-2 w-full min-w-0" hidden={state !== "ready"}>
       <div className="w-full min-w-0 overflow-hidden" ref={host} />
     </div>
   );
