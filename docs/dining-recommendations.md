@@ -36,6 +36,71 @@
 
 ## How it works
 
+### Microphone help
+
+In the lobby, **Help us decide** records up to 60 seconds of a group discussion.
+Everyone being recorded must agree before the microphone button is enabled.
+The browser requires microphone permission and HTTPS (or localhost). A visible
+listening indicator, **Stop and review**, and **Cancel** give the user control.
+The scrolling audio bars respond to actual microphone energy and settle when
+the microphone is quiet. A progress bar beside the seconds counter fills to
+60 seconds; both stop when recording ends.
+The microphone stops on cancellation, completion, navigation, or leaving the lobby.
+Cancel before submission discards the recording; dismissing an analysis cannot
+recall audio already sent to Google.
+
+The app captures mono audio locally and sends a bounded 16 kHz WAV only after
+recording stops. Gemini extracts a dining-only summary and validated preferences.
+Audio and transcripts are not stored in the app's database or browser storage.
+Google receives the audio under its Gemini API terms, including applicable
+free-tier data processing terms. The recording request contains no room members,
+votes, or personal histories. The summary is shown only in the recording browser
+and is sent back to Gemini if the user requests restaurant picks.
+
+**Use audio for suggestions** requests three restaurants directly from the
+reviewed discussion, without saving or changing any seat's shared preferences.
+This works for guests even when the host is away. The server expands the Places
+search with the audio's favorite cuisines, applies all shared group requirements
+plus the explicit audio constraints, and sends eligible candidates and the
+dining summary to Gemini. Gemini must choose three distinct existing IDs (or
+the number available if fewer than three qualify), with grounded explanations.
+Results appear below the recording review as a private preview, not a new set
+in the shared suggestion history. If Gemini is unavailable or returns invalid
+picks, clearly labeled preference-based picks appear instead. Fewer than three
+matches are explained, with no invented restaurants or relaxed requirements.
+
+**Review in preference form** fills the existing form for correction. Fields
+not discussed keep their current values. The user must click **Use for this
+outing** to share the reviewed choices as their seat's preferences. This does
+not create extra seats or attribute extracted choices to other group members.
+Dollar amounts without explicit restaurant price tiers remain in the summary
+for manual review. Restaurant suggestions still use the existing eligibility
+checks and Google Places pool; no restaurant facts come from the recording.
+
+The existing server-only `GEMINI_API_KEY` enables voice help. Optional
+`GEMINI_AUDIO_MODEL` overrides the audio model; otherwise it uses `GEMINI_MODEL`
+or `gemini-3.5-flash-lite`. Choose an audio-input model with structured JSON
+support. No new database migration or dependency is required. The server checks
+the hashed room pass and lobby status before processing and again before
+returning results. Requests are bounded to a minute of audio with a one-minute
+per-member cooldown per server process.
+The recording button stays disabled during this cooldown and shows a live
+seconds-remaining countdown. Availability is checked while the lobby is open
+and again before requesting microphone access, including after a page reload.
+This cooldown is not a shared quota
+across multiple server instances; use provider project quotas for a global cap.
+Missing configuration disables the microphone UI. Permission denial, unavailable
+audio capture, quota errors, and invalid model output leave manual input usable.
+
+Verify on HTTPS with a real microphone: allow/deny permission, record a brief
+cuisine discussion, stop, review/edit, and share. Confirm suggestions update
+through the existing host generation flow. Also cancel while recording, navigate
+away, and start voting during capture/analysis; the microphone should stop and
+locked preferences should not change. Run `node --test tests/dining-conversation.test.mjs`
+for audio encoding, input/output validation, failure handling, and cooldown checks.
+
+### Suggestions and preferences
+
 The room's **Suggestions for your table** section offers up to three picks from
 the eligible pool. Live discovery searches shared favorite cuisines in addition
 to nearby restaurants and uses Google's cuisine types when available. Members

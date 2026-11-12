@@ -14,6 +14,9 @@ import { getGroupHistory } from "@/lib/room.functions";
 import { getAdminAccess } from "@/lib/metrics.functions";
 import { MetricsDashboard } from "@/components/MetricsDashboard";
 import { ThemeControl } from "@/components/ThemeControl";
+import { useState } from "react";
+import { Onboarding } from "@/components/Onboarding";
+import { accountTour, signInTour } from "@/lib/onboarding";
 
 export const Route = createFileRoute("/account")({
   head: () => ({
@@ -28,6 +31,7 @@ export const Route = createFileRoute("/account")({
   component: AccountPage,
 });
 function AccountPage() {
+  const [tab, setTab] = useState("overview");
   const user = useAccount();
   const fetchAdminAccess = useServerFn(getAdminAccess);
   const adminAccess = useQuery({
@@ -80,11 +84,17 @@ function AccountPage() {
           <SignInPanel />
         </section>
       ) : (
-        <Tabs defaultValue="overview">
+        <Tabs value={tab} onValueChange={setTab}>
           <TabsList className={`grid w-full ${isAdmin ? "grid-cols-4" : "grid-cols-3"}`}>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="preferences">Preferences</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
+            <TabsTrigger value="overview" data-tour="account-overview">
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="preferences" data-tour="preferences-tab">
+              Preferences
+            </TabsTrigger>
+            <TabsTrigger value="settings" data-tour="account-settings">
+              Settings
+            </TabsTrigger>
             {isAdmin && <TabsTrigger value="metrics">Metrics</TabsTrigger>}
           </TabsList>
           {isAdmin && (
@@ -179,6 +189,23 @@ function AccountPage() {
           ))}
         </Tabs>
       )}
+      <footer className="mt-8 flex justify-center">
+        <Onboarding
+          key={user ? "account" : "sign-in"}
+          tour={user ? "account" : "sign-in"}
+          steps={user ? accountTour : signInTour}
+          onStep={(step) => {
+            if (user)
+              setTab(
+                step.id === "preferences" || step.id === "save-preferences"
+                  ? "preferences"
+                  : step.id === "settings"
+                    ? "settings"
+                    : "overview",
+              );
+          }}
+        />
+      </footer>
     </main>
   );
 }

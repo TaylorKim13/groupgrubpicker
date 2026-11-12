@@ -1,6 +1,8 @@
 import { googlePriceLabel, directionsUrl } from "@/lib/restaurant-info";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { ThemeControl } from "@/components/ThemeControl";
+import { Onboarding } from "@/components/Onboarding";
+import { joinTour, roomTour } from "@/lib/onboarding";
 import { useSelectionTracking } from "@/components/useSelectionTracking";
 import { RoomInvite } from "@/components/RoomInvite";
 import { RoomCodeSchema, normalizeRoomCode } from "@/lib/room-access";
@@ -50,11 +52,7 @@ import {
 import { clearSession, loadSession, saveSession, type Session } from "@/lib/session";
 import { useAccount } from "@/components/AccountProvider";
 import { useSocial } from "@/components/SocialPanel";
-import {
-  addFriendFromRoom,
-  inviteFriendsToTable,
-  linkSeatToAccount,
-} from "@/lib/social.functions";
+import { addFriendFromRoom, inviteFriendsToTable, linkSeatToAccount } from "@/lib/social.functions";
 
 export const Route = createFileRoute("/room/$code")({
   ssr: false,
@@ -134,7 +132,7 @@ function JoinGate({ code, onJoined }: { code: string; onJoined: (s: Session) => 
             }
           }}
         >
-          <fieldset disabled={busy || !validCode}>
+          <fieldset data-tour="invite-profile" disabled={busy || !validCode}>
             <ProfilePicker autoFocus {...{ nickname, setNickname, avatar, setAvatar }} />
             <button
               type="submit"
@@ -146,6 +144,11 @@ function JoinGate({ code, onJoined }: { code: string; onJoined: (s: Session) => 
           </fieldset>
         </form>
       </div>
+      {validCode && (
+        <footer className="mt-6 flex justify-center">
+          <Onboarding tour="invite" steps={joinTour} />
+        </footer>
+      )}
     </main>
   );
 }
@@ -182,6 +185,10 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
     retry: 1,
   });
   const refresh = () => qc.invalidateQueries({ queryKey: key });
+  const walkthrough = useMemo(
+    () => roomTour(q.data?.me.isHost ?? false, q.data?.status ?? "lobby"),
+    [q.data?.me.isHost, q.data?.status],
+  );
 
   if (q.error && (!q.data || q.error.message === "Not a member of this room"))
     return (
@@ -211,7 +218,7 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
     <main className="mx-auto max-w-6xl px-4 py-6">
       <TopBar s={s} onLeave={onLeave} />
       {s.status === "closed" && s.result ? (
-        <div className="py-10">
+        <div data-tour="winner" className="py-10">
           <Reveal result={s.result} />
           <DiningPanel
             session={session}
@@ -243,6 +250,13 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
           </section>
         </div>
       )}
+      <footer className="mt-8 flex justify-center">
+        <Onboarding
+          key={`${s.me.isHost}-${s.status}`}
+          tour={`room-${s.me.isHost ? "host" : "guest"}-${s.status}`}
+          steps={walkthrough}
+        />
+      </footer>
     </main>
   );
 }
@@ -250,7 +264,10 @@ function Room({ session, onLeave }: { session: Session; onLeave: () => void }) {
 function TopBar({ s, onLeave }: { s: State; onLeave: () => void }) {
   const phase = { lobby: "Lobby", voting: "Voting open", closed: "Winner!" }[s.status];
   return (
-    <header className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-card p-4 chunky">
+    <header
+      data-tour="room-invite"
+      className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-card p-4 chunky"
+    >
       <div className="flex items-center gap-4">
         <Link to="/" className="font-display text-2xl font-extrabold leading-none">
           GROUP<span className="text-primary"> GRUB</span>
@@ -301,7 +318,7 @@ function Members({ s, session, refresh }: { s: State; session: Session; refresh:
     }
   };
   return (
-    <div className="rounded-2xl bg-card p-5 chunky">
+    <div data-tour="room-members" className="rounded-2xl bg-card p-5 chunky">
       <div className="flex items-baseline justify-between">
         <h2 className="text-xl font-extrabold">At the table ({s.members.length})</h2>
         {s.status === "voting" && (
@@ -565,7 +582,7 @@ function HostSettings({
   }, [st, dirty, save, session, refresh]);
 
   return (
-    <div className="space-y-5 rounded-2xl bg-card p-5 chunky">
+    <div data-tour="host-settings" className="space-y-5 rounded-2xl bg-card p-5 chunky">
       <h2 className="text-xl font-extrabold">Host controls</h2>
       <div className="flex flex-wrap gap-1.5 text-xs font-bold">
         <span className="rounded-full border-2 bg-background px-2.5 py-0.5">
@@ -844,8 +861,9 @@ function Pool({ s, session, refresh }: { s: State; session: Session; refresh: ()
     const query = restaurantSearch.trim().toLocaleLowerCase();
     if (!query) return pool;
     return pool.filter((restaurant) =>
-      [restaurant.name, restaurant.cuisine, restaurant.address ?? ""]
-        .some((value) => value.toLocaleLowerCase().includes(query)),
+      [restaurant.name, restaurant.cuisine, restaurant.address ?? ""].some((value) =>
+        value.toLocaleLowerCase().includes(query),
+      ),
     );
   }, [pool, restaurantSearch]);
 
@@ -884,7 +902,10 @@ function Pool({ s, session, refresh }: { s: State; session: Session; refresh: ()
       {s.status !== "closed" && <Nominate s={s} session={session} refresh={refresh} />}
 
       {voting && (
-        <div className="sticky top-2 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-secondary p-4 chunky">
+        <div
+          data-tour="submit-vote"
+          className="sticky top-2 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-secondary p-4 chunky"
+        >
           <div className="text-sm">
             <b>Want</b> (2 pts): {pool.find((r) => r.id === want)?.name ?? "—"} · <b>Could</b> (1
             pt): {pool.find((r) => r.id === could)?.name ?? "—"}
@@ -908,8 +929,18 @@ function Pool({ s, session, refresh }: { s: State; session: Session; refresh: ()
       )}
 
       <div>
-        <h2 className="mb-3 text-2xl font-extrabold">
-          The pool <span className="text-base font-normal text-muted-foreground">({filteredPool.length === pool.length ? `${pool.length}` : `${filteredPool.length} of ${pool.length}`} spots)</span>
+        <h2
+          data-tour={pool.length === 0 ? "restaurant-pool" : undefined}
+          className="mb-3 text-2xl font-extrabold"
+        >
+          The pool{" "}
+          <span className="text-base font-normal text-muted-foreground">
+            (
+            {filteredPool.length === pool.length
+              ? `${pool.length}`
+              : `${filteredPool.length} of ${pool.length}`}{" "}
+            spots)
+          </span>
         </h2>
         {pool.length > 0 && (
           <label className="mb-3 block">
@@ -924,7 +955,10 @@ function Pool({ s, session, refresh }: { s: State; session: Session; refresh: ()
             />
           </label>
         )}
-        <p className="mb-3 text-sm text-muted-foreground">Live restaurant listings from Google. Prices and popular-times data vary by restaurant; verify dietary needs directly with each restaurant.</p>
+        <p className="mb-3 text-sm text-muted-foreground">
+          Live restaurant listings from Google. Prices and popular-times data vary by restaurant;
+          verify dietary needs directly with each restaurant.
+        </p>
         {pool.length === 0 && (
           <p className="rounded-xl border-2 border-dashed p-6 text-center text-muted-foreground">
             Nothing matches these filters. Widen the radius or price range — or nominate a spot.
@@ -980,6 +1014,7 @@ function RestaurantCard({
   const unit = useDistanceUnit();
   return (
     <div
+      data-tour="restaurant-pool"
       onMouseEnter={onFocus}
       className={`min-w-0 rounded-xl border-2 bg-card p-4 transition ${want ? "ring-4 ring-primary" : could ? "ring-4 ring-secondary" : ""} ${focused ? "chunky" : ""}`}
     >
@@ -991,11 +1026,34 @@ function RestaurantCard({
             {formatDistance(distanceKm(center, r), unit)} ·{" "}
             {r.waitUnknown || r.google ? "Wait unknown" : `~${r.wait} min`}
           </p>
-          {googlePriceLabel(r) && <p className="mt-1 text-sm font-bold">{googlePriceLabel(r)} <span className="font-normal text-muted-foreground">Google price range</span></p>}
-          <p className="mt-1 text-xs text-muted-foreground">Distance shown is straight-line from the group search center.</p>
-          <a href={directionsUrl(r)} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs font-semibold underline">Get directions</a>
+          {googlePriceLabel(r) && (
+            <p className="mt-1 text-sm font-bold">
+              {googlePriceLabel(r)}{" "}
+              <span className="font-normal text-muted-foreground">Google price range</span>
+            </p>
+          )}
+          <p className="mt-1 text-xs text-muted-foreground">
+            Distance shown is straight-line from the group search center.
+          </p>
+          <a
+            href={directionsUrl(r)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-1 inline-block text-xs font-semibold underline"
+          >
+            Get directions
+          </a>
           {r.address && <p className="mt-1 text-xs text-muted-foreground">{r.address}</p>}
-          {r.websiteUri && <a href={r.websiteUri} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs font-semibold underline">Restaurant website</a>}
+          {r.websiteUri && (
+            <a
+              href={r.websiteUri}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 inline-block text-xs font-semibold underline"
+            >
+              Restaurant website
+            </a>
+          )}
           {r.google && r.id.startsWith("g_") && <GooglePopularTimes placeId={r.id.slice(2)} />}
         </div>
         {r.custom && (
@@ -1062,7 +1120,7 @@ function Nominate({ s, session, refresh }: { s: State; session: Session; refresh
   };
 
   return (
-    <div className="rounded-2xl bg-card p-5 chunky">
+    <div data-tour="wildcard" className="rounded-2xl bg-card p-5 chunky">
       <h2 className="text-xl font-extrabold">Your wildcard pick</h2>
       {s.myNomination ? (
         <div className="mt-2 flex items-center justify-between gap-3">
@@ -1119,7 +1177,16 @@ function Nominate({ s, session, refresh }: { s: State; session: Session; refresh
                   <div className="min-w-0">
                     <p className="truncate font-bold">{r.name}</p>
                     <p className="truncate text-xs text-muted-foreground">{r.address}</p>
-                    {r.websiteUri && <a href={r.websiteUri} target="_blank" rel="noreferrer" className="text-xs font-semibold underline">Website</a>}
+                    {r.websiteUri && (
+                      <a
+                        href={r.websiteUri}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs font-semibold underline"
+                      >
+                        Website
+                      </a>
+                    )}
                   </div>
                   <button
                     onClick={() => submit(r)}

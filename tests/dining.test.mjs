@@ -364,6 +364,66 @@ test("Gemini output order determines the picks and duplicate IDs are rejected", 
 });
 
 let tables, reads, writes, claims;
+test("audio restaurant selection sends the discussion as data and requires three valid picks", async () => {
+  const candidates = rankDiningSuggestions(
+    [place("a"), place("b"), place("c"), place("d")],
+    settings,
+    [],
+    now,
+    [],
+    10,
+  ).suggestions;
+  const conversation = { summary: "We would like tacos nearby.", targetCount: 3 };
+  const config = { key: "private", model: "test" };
+  const response = (ids) => async (_, options) => {
+    const body = JSON.parse(options.body);
+    const payload = JSON.parse(body.contents[0].parts[0].text);
+    assert.equal(payload.conversationSummary, conversation.summary);
+    assert.match(body.systemInstruction.parts[0].text, /Choose exactly 3/);
+    return {
+      ok: true,
+      json: async () => ({
+        candidates: [
+          {
+            finishReason: "STOP",
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify({
+                    explanations: ids.map((id) => ({ id, reasonIndexes: [0] })),
+                  }),
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    };
+  };
+  const result = await selectDiningSuggestions(
+    candidates,
+    config,
+    response(["d", "b", "c"]),
+    [],
+    conversation,
+  );
+  assert.equal(result.method, "gemini");
+  assert.deepEqual(
+    result.suggestions.map((s) => s.restaurant.id),
+    ["d", "b", "c"],
+  );
+  for (const ids of [["a"], ["a", "a", "b"], ["a", "b", "invented"]]) {
+    const fallback = await selectDiningSuggestions(
+      candidates,
+      config,
+      response(ids),
+      [],
+      conversation,
+    );
+    assert.equal(fallback.method, "rules");
+    assert.equal(fallback.suggestions.length, 3);
+  }
+});
 class Query {
   constructor(table) {
     this.table = table;
@@ -437,7 +497,10 @@ const server = await import(
     "./room.server": database,
     "./dining": dining,
     "./dining-ai.server": moduleUrl(
-      "export const selectDiningSuggestions = async suggestions => ({ suggestions: suggestions.slice(0, 3), method: 'rules' });",
+      `export const selectDiningSuggestions = async (suggestions, config, request, cuisines, conversation) => {
+        globalThis.__diningServerTest.lastSelection = { suggestions, cuisines, conversation };
+        return { suggestions: suggestions.slice(0, 3), method: 'rules' };
+      };`,
     ),
   })
 );
@@ -496,6 +559,103 @@ function reset() {
 }
 const room = { id: "room", status: "lobby", settings };
 const seat = { id: "seat", user_id: "user" };
+
+test("audio previews rank actual candidates, preserve shared constraints, and never save preferences", async () => {
+  reset();
+  tables.room_dining_preferences.push({
+    member_id: "seat",
+    room_id: "room",
+    preferences: member({ maxPrice: 2, maxDistanceKm: 3 }).preferences,
+  });
+  const conversation = {
+    summary: "Tacos nearby",
+    favoriteCuisines: ["Mexican"],
+    dislikedCuisines: null,
+    maxPrice: 4,
+    maxDistanceKm: 10,
+    diets: null,
+    novelty: null,
+  };
+  const pool = [
+    place("a"),
+    place("b"),
+    place("c"),
+    place("d"),
+    place("expensive", { price: 4 }),
+    place("far", { lat: 0.08 }),
+  ];
+  const result = await server.suggestDiningFromConversation(
+    room,
+    { id: "audio-seat", user_id: null },
+    null,
+    pool,
+    conversation,
+  );
+  assert.equal(result.suggestions.length, 3);
+  assert.ok(!result.suggestions.some((s) => ["expensive", "far"].includes(s.restaurant.id)));
+  assert.deepEqual(globalThis.__diningServerTest.lastSelection.conversation, {
+    summary: "Tacos nearby",
+    targetCount: 3,
+  });
+  assert.equal(writes.length, 0);
+  assert.equal(claims, 0);
+  await assert.rejects(
+    server.suggestDiningFromConversation(
+      room,
+      { id: "audio-seat", user_id: null },
+      null,
+      pool,
+      conversation,
+    ),
+    /wait a minute/,
+  );
+});
+
+test("audio previews explain fewer matches and cannot relax dietary requirements", async () => {
+  reset();
+  const conversation = {
+    summary: "Vegan food",
+    favoriteCuisines: null,
+    dislikedCuisines: null,
+    maxPrice: null,
+    maxDistanceKm: null,
+    diets: ["vegan"],
+    novelty: null,
+  };
+  const result = await server.suggestDiningFromConversation(
+    room,
+    { id: "diet-seat", user_id: null },
+    null,
+    [
+      place("known", { diets: ["vegan"] }),
+      place("unknown", { google: true, dietInfoUnknown: true }),
+    ],
+    conversation,
+  );
+  assert.equal(result.suggestions.length, 1);
+  assert.equal(result.suggestions[0].restaurant.id, "known");
+  assert.match(result.message, /Only 1 restaurant meets/);
+  const none = await server.suggestDiningFromConversation(
+    room,
+    { id: "no-diet-seat", user_id: null },
+    null,
+    [place("unknown", { google: true, dietInfoUnknown: true })],
+    conversation,
+  );
+  assert.equal(none.suggestions.length, 0);
+  assert.match(none.message, /dietary information/);
+  await assert.rejects(
+    server.suggestDiningFromConversation(
+      { ...room, status: "voting" },
+      seat,
+      null,
+      [],
+      conversation,
+    ),
+    /before voting/,
+  );
+  assert.equal(writes.length, 0);
+});
 
 test("room passes cannot expose saved account defaults, remember preferences, or opt into another user's history", async () => {
   reset();

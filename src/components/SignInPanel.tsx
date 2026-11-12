@@ -107,6 +107,7 @@ export function SignInPanel() {
   return (
     <div className="mt-6 space-y-3">
       <Button
+        data-tour="google-signin"
         type="button"
         variant="outline"
         className="w-full"
@@ -189,6 +190,7 @@ export function SignInPanel() {
         </Button>
       )}
       <button
+        data-tour="email-signup"
         type="button"
         disabled={busy}
         className="text-sm font-bold underline"

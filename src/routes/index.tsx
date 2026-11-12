@@ -16,6 +16,7 @@ import { ProfilePicker } from "@/components/ProfilePicker";
 import { ThemeControl } from "@/components/ThemeControl";
 import { Button } from "@/components/ui/button";
 import { Onboarding } from "@/components/Onboarding";
+import { homeTour } from "@/lib/onboarding";
 import { useAccount } from "@/components/AccountProvider";
 import { getAccount } from "@/lib/account.functions";
 import { ArrowLeft, ArrowRight, Plus, Users, UserRound } from "lucide-react";
@@ -76,12 +77,21 @@ function Home() {
   function getHostLocation(): Promise<{ lat: number; lng: number }> {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
-        reject(new Error("This browser can’t share its location. Enable location access to create a room."));
+        reject(
+          new Error(
+            "This browser can’t share its location. Enable location access to create a room.",
+          ),
+        );
         return;
       }
       navigator.geolocation.getCurrentPosition(
         ({ coords }) => resolve({ lat: coords.latitude, lng: coords.longitude }),
-        () => reject(new Error("Location access is needed to create a room. Allow it in your browser and try again.")),
+        () =>
+          reject(
+            new Error(
+              "Location access is needed to create a room. Allow it in your browser and try again.",
+            ),
+          ),
         { enableHighAccuracy: false, maximumAge: 300000, timeout: 12000 },
       );
     });
@@ -100,11 +110,11 @@ function Home() {
     setBusy(true);
     try {
       const s =
-  kind === "host"
-    ? await create({ data: { nickname, avatar, center: await getHostLocation() } })
-    : await join({
-        data: { nickname, avatar, code: normalizeRoomCode(joinCode ?? code) },
-      });
+        kind === "host"
+          ? await create({ data: { nickname, avatar, center: await getHostLocation() } })
+          : await join({
+              data: { nickname, avatar, code: normalizeRoomCode(joinCode ?? code) },
+            });
       saveSession(s);
       if (kind === "host") completeCreationClickTracking(s);
       else resetCreationClickTracking();
@@ -127,14 +137,14 @@ function Home() {
         <div className="flex flex-wrap items-center gap-3">
           <ThemeControl />
           <Button variant="ghost" asChild>
-            <Link to="/account">
+            <Link to="/account" data-tour="account">
               <UserRound />
               {user ? "Your table" : "Sign in"}
             </Link>
           </Button>
         </div>
       </header>
-      <div className="pt-12 pb-8">
+      <div data-tour="welcome" className="pt-12 pb-8">
         <p className="text-sm font-bold uppercase text-primary">Good food. Group decision.</p>
         <h1 className="mt-3 text-4xl font-extrabold leading-tight">
           {mode ? "Who’s coming to the table?" : "Where are we eating?"}
@@ -143,6 +153,7 @@ function Home() {
       {!mode ? (
         <section className="space-y-4">
           <Button
+            data-tour="host"
             className="h-auto w-full justify-between whitespace-normal rounded-lg px-6 py-6 text-left text-xl font-bold chunky"
             onClick={() => setMode("host")}
           >
@@ -153,6 +164,7 @@ function Home() {
             <ArrowRight />
           </Button>
           <Button
+            data-tour="join"
             variant="secondary"
             className="h-auto w-full justify-between whitespace-normal rounded-lg px-6 py-6 text-left text-xl font-bold chunky"
             onClick={() => setMode("join")}
@@ -187,7 +199,7 @@ function Home() {
                 {...{ nickname, setNickname, avatar, setAvatar }}
               />
               {mode === "join" && (
-                <div className="mt-6">
+                <div data-tour="join-details" className="mt-6">
                   <label htmlFor="room-code" className="text-sm font-bold">
                     Room code
                   </label>
@@ -212,7 +224,7 @@ function Home() {
           </form>
         </section>
       )}
-      <details className="mt-10 border-t-2 pt-5">
+      <details data-tour="open-tables" className="mt-10 border-t-2 pt-5">
         <summary className="cursor-pointer font-bold">
           Browse open tables {rooms.data?.length ? `(${rooms.data.length})` : ""}
         </summary>
@@ -256,7 +268,10 @@ function Home() {
         </ul>
       </details>
       <footer className="mt-8 flex justify-center">
-        <Onboarding />
+        <Onboarding
+          steps={homeTour}
+          onStep={(step) => setMode(step.id === "join-details" ? "join" : null)}
+        />
       </footer>
     </main>
   );

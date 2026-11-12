@@ -12,6 +12,7 @@ import {
 } from "./dining";
 import type { Restaurant, RoomSettings } from "./restaurants";
 import { selectDiningSuggestions } from "./dining-ai.server";
+import type { ConversationPreferences } from "./dining-conversation";
 
 type DiningRoom = {
   id: string;
@@ -250,6 +251,7 @@ export async function loadDiningContext(
     suggestionHistory,
     ranking,
     candidates: candidates.suggestions,
+    inputs,
     cuisinePreferences,
     cached,
     mine,
@@ -283,6 +285,76 @@ export async function getDiningState(
       ? ({ ...context.ranking, suggestions: context.cached.suggestions } as DiningRanking)
       : context.ranking,
     method: current ? (context.cached.method as "rules" | "gemini") : ("rules" as const),
+    demo: !process.env["GOOGLE_MAPS_API_KEY"] && !process.env["MAPS_API"],
+  };
+}
+
+const conversationSuggestionCooldowns = new Map<string, number>();
+
+/** Private preview: keep the group's requirements and add the reviewed audio constraints. */
+export async function suggestDiningFromConversation(
+  room: DiningRoom,
+  member: Seat,
+  accountUserId: string | null,
+  pool: Restaurant[],
+  conversation: ConversationPreferences,
+) {
+  if (room.status !== "lobby")
+    throw new Error("Audio suggestions are available before voting starts.");
+  const now = Date.now();
+  for (const [id, until] of conversationSuggestionCooldowns) {
+    if (until <= now) conversationSuggestionCooldowns.delete(id);
+  }
+  if ((conversationSuggestionCooldowns.get(member.id) ?? 0) > now)
+    throw new Error("Please wait a minute before requesting more audio suggestions.");
+  conversationSuggestionCooldowns.set(member.id, now + 60_000);
+  const context = await loadDiningContext(room, member, accountUserId, pool);
+  const preferences = DiningPreferencesSchema.parse({
+    participating: true,
+    favoriteCuisines: conversation.favoriteCuisines ?? [],
+    dislikedCuisines: conversation.dislikedCuisines ?? [],
+    maxPrice: conversation.maxPrice ?? 4,
+    maxDistanceKm: conversation.maxDistanceKm ?? 161,
+    diets: conversation.diets ?? [],
+    novelty: conversation.novelty ?? "balanced",
+  });
+  const ranked = rankDiningSuggestions(
+    pool,
+    room.settings,
+    [...context.inputs, { preferences, history: [] }],
+    now,
+    [],
+    pool.length,
+  );
+  const cuisinePreferences = [
+    ...new Set([
+      ...context.cuisinePreferences.map((p) => p.cuisine),
+      ...preferences.favoriteCuisines,
+      ...preferences.dislikedCuisines,
+    ]),
+  ].map((cuisine) => {
+    const shared = context.cuisinePreferences.find((p) => p.cuisine === cuisine);
+    return {
+      cuisine,
+      favorites: (shared?.favorites ?? 0) + Number(preferences.favoriteCuisines.includes(cuisine)),
+      avoids: (shared?.avoids ?? 0) + Number(preferences.dislikedCuisines.includes(cuisine)),
+    };
+  });
+  const selected = await selectDiningSuggestions(
+    ranked.suggestions,
+    undefined,
+    undefined,
+    cuisinePreferences,
+    { summary: conversation.summary, targetCount: Math.min(3, ranked.eligibleCount) },
+  );
+  return {
+    ...selected,
+    message:
+      ranked.eligibleCount < 3
+        ? ranked.eligibleCount === 0
+          ? ranked.message
+          : `Only ${ranked.eligibleCount} restaurant${ranked.eligibleCount === 1 ? " meets" : "s meet"} the audio preferences and the group's requirements.`
+        : "Three restaurants chosen for your conversation and the group's requirements.",
     demo: !process.env["GOOGLE_MAPS_API_KEY"] && !process.env["MAPS_API"],
   };
 }

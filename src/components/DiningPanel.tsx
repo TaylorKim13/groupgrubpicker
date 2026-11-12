@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -6,6 +6,7 @@ import { Button } from "./ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { useAccount } from "./AccountProvider";
 import { SuggestionCards } from "./SuggestionCards";
+import { DiningConversation } from "./DiningConversation";
 import { CUISINES, DiningPreferencesSchema, type DiningPreferences } from "@/lib/dining";
 import { DIETS, priceLabel, type Restaurant } from "@/lib/restaurants";
 import { useDistanceUnit } from "@/lib/distance-context";
@@ -199,6 +200,7 @@ export function DiningPanel({
           initial={data.preferences}
           session={session}
           canRemember={!!user && linked}
+          voiceAvailable={data.voiceAvailable}
           pool={pool}
           refresh={refresh}
         />
@@ -211,18 +213,21 @@ function PreferenceForm({
   initial,
   session,
   canRemember,
+  voiceAvailable,
   pool,
   refresh,
 }: {
   initial: DiningPreferences;
   session: Session;
   canRemember: boolean;
+  voiceAvailable: boolean;
   pool: Restaurant[];
   refresh: () => Promise<unknown>;
 }) {
   const [preferences, setPreferences] = useState(initial);
   const [remember, setRemember] = useState(false);
   const [busy, setBusy] = useState(false);
+  const details = useRef<HTMLDetailsElement>(null);
   const hasUnsavedChanges = JSON.stringify(preferences) !== JSON.stringify(initial);
   const save = useServerFn(saveRoomDiningPreferences);
   const unit = useDistanceUnit();
@@ -249,211 +254,236 @@ function PreferenceForm({
     }
   }
   return (
-    <details>
-      <summary className="cursor-pointer font-bold">
-        {initial.participating ? "Edit my dining preferences" : "Share my dining preferences"}
-      </summary>
-      <form
-        className="mt-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void persist(true);
+    <>
+      <DiningConversation
+        session={session}
+        available={voiceAvailable}
+        onReview={(result) => {
+          setPreferences((current) => {
+            const favorites = result.favoriteCuisines ?? current.favoriteCuisines;
+            const dislikes = result.dislikedCuisines ?? current.dislikedCuisines;
+            return {
+              ...current,
+              favoriteCuisines: favorites.filter((c) => !result.dislikedCuisines?.includes(c)),
+              dislikedCuisines: dislikes.filter((c) => !result.favoriteCuisines?.includes(c)),
+              maxPrice: result.maxPrice ?? current.maxPrice,
+              maxDistanceKm: result.maxDistanceKm ?? current.maxDistanceKm,
+              diets: result.diets ?? current.diets,
+              novelty: result.novelty ?? current.novelty,
+            };
+          });
+          if (details.current) {
+            details.current.open = true;
+            details.current.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
         }}
-      >
-        <fieldset disabled={busy} className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Only your current outing choices are included. Other members won't see your individual
-            preferences or past outings.
-          </p>
-          {(["favoriteCuisines", "dislikedCuisines"] as const).map((field) => (
-            <fieldset key={field}>
-              <legend className="text-sm font-bold">
-                {field === "favoriteCuisines" ? "Favorite cuisines" : "Cuisines I'd rather avoid"}
-              </legend>
+      />
+      <details ref={details}>
+        <summary className="cursor-pointer font-bold">
+          {initial.participating ? "Edit my dining preferences" : "Share my dining preferences"}
+        </summary>
+        <form
+          className="mt-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void persist(true);
+          }}
+        >
+          <fieldset disabled={busy} className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Only your current outing choices are included. Other members won't see your individual
+              preferences or past outings.
+            </p>
+            {(["favoriteCuisines", "dislikedCuisines"] as const).map((field) => (
+              <fieldset key={field}>
+                <legend className="text-sm font-bold">
+                  {field === "favoriteCuisines" ? "Favorite cuisines" : "Cuisines I'd rather avoid"}
+                </legend>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {CUISINES.map((cuisine) => (
+                    <label key={cuisine} className="flex items-center gap-1 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={preferences[field].includes(cuisine)}
+                        onChange={(event) =>
+                          change({
+                            [field]: event.target.checked
+                              ? [...preferences[field], cuisine]
+                              : preferences[field].filter((c) => c !== cuisine),
+                          })
+                        }
+                      />
+                      {cuisine}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            ))}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="text-sm font-bold">
+                Maximum price
+                <select
+                  className={input}
+                  value={preferences.maxPrice}
+                  onChange={(event) => change({ maxPrice: Number(event.target.value) })}
+                >
+                  {[1, 2, 3, 4].map((p) => (
+                    <option key={p} value={p}>
+                      {priceLabel(p)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm font-bold">
+                Maximum distance ({unit})
+                <input
+                  type="number"
+                  required
+                  min={unit === "mi" ? 0.4 : 0.5}
+                  max={unit === "mi" ? 100 : 161}
+                  step="any"
+                  className={input}
+                  value={Number(fromKm(preferences.maxDistanceKm, unit).toFixed(2))}
+                  onChange={(event) =>
+                    change({ maxDistanceKm: toKm(Number(event.target.value), unit) })
+                  }
+                />
+              </label>
+            </div>
+            <fieldset>
+              <legend className="text-sm font-bold">Required dietary options</legend>
               <div className="mt-2 flex flex-wrap gap-2">
-                {CUISINES.map((cuisine) => (
-                  <label key={cuisine} className="flex items-center gap-1 text-sm">
+                {DIETS.map((diet) => (
+                  <label key={diet} className="flex items-center gap-1 text-sm">
                     <input
                       type="checkbox"
-                      checked={preferences[field].includes(cuisine)}
+                      checked={preferences.diets.includes(diet)}
                       onChange={(event) =>
                         change({
-                          [field]: event.target.checked
-                            ? [...preferences[field], cuisine]
-                            : preferences[field].filter((c) => c !== cuisine),
+                          diets: event.target.checked
+                            ? [...preferences.diets, diet]
+                            : preferences.diets.filter((d) => d !== diet),
                         })
                       }
                     />
-                    {cuisine}
+                    {diet}
                   </label>
                 ))}
               </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Unknown dietary suitability cannot satisfy a requirement. Always confirm allergies
+                directly with the restaurant.
+              </p>
             </fieldset>
-          ))}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="text-sm font-bold">
-              Maximum price
+            <label className="block text-sm font-bold">
+              Something familiar or new?
               <select
                 className={input}
-                value={preferences.maxPrice}
-                onChange={(event) => change({ maxPrice: Number(event.target.value) })}
+                value={preferences.novelty}
+                onChange={(event) =>
+                  change({ novelty: event.target.value as DiningPreferences["novelty"] })
+                }
               >
-                {[1, 2, 3, 4].map((p) => (
-                  <option key={p} value={p}>
-                    {priceLabel(p)}
+                <option value="balanced">A balance</option>
+                <option value="familiar">Prefer familiar places</option>
+                <option value="new">Prefer somewhere new</option>
+              </select>
+            </label>
+            <label className="block text-sm font-bold">
+              Favorite from this restaurant list
+              <select
+                className={input}
+                value=""
+                onChange={(event) => {
+                  if (
+                    event.target.value &&
+                    !preferences.favoriteRestaurantIds.includes(event.target.value)
+                  )
+                    change({
+                      favoriteRestaurantIds: [
+                        ...preferences.favoriteRestaurantIds,
+                        event.target.value,
+                      ].slice(0, 20),
+                    });
+                }}
+              >
+                <option value="">Choose a favorite (optional)</option>
+                {pool.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
                   </option>
                 ))}
               </select>
             </label>
-            <label className="text-sm font-bold">
-              Maximum distance ({unit})
-              <input
-                type="number"
-                required
-                min={unit === "mi" ? 0.4 : 0.5}
-                max={unit === "mi" ? 100 : 161}
-                step="any"
-                className={input}
-                value={Number(fromKm(preferences.maxDistanceKm, unit).toFixed(2))}
-                onChange={(event) =>
-                  change({ maxDistanceKm: toKm(Number(event.target.value), unit) })
-                }
-              />
-            </label>
-          </div>
-          <fieldset>
-            <legend className="text-sm font-bold">Required dietary options</legend>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {DIETS.map((diet) => (
-                <label key={diet} className="flex items-center gap-1 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={preferences.diets.includes(diet)}
-                    onChange={(event) =>
+            {preferences.favoriteRestaurantIds.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {preferences.favoriteRestaurantIds.map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className="rounded-full border-2 px-3 py-1 text-xs"
+                    onClick={() =>
                       change({
-                        diets: event.target.checked
-                          ? [...preferences.diets, diet]
-                          : preferences.diets.filter((d) => d !== diet),
+                        favoriteRestaurantIds: preferences.favoriteRestaurantIds.filter(
+                          (f) => f !== id,
+                        ),
                       })
                     }
-                  />
-                  {diet}
-                </label>
-              ))}
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Unknown dietary suitability cannot satisfy a requirement. Always confirm allergies
-              directly with the restaurant.
-            </p>
-          </fieldset>
-          <label className="block text-sm font-bold">
-            Something familiar or new?
-            <select
-              className={input}
-              value={preferences.novelty}
-              onChange={(event) =>
-                change({ novelty: event.target.value as DiningPreferences["novelty"] })
-              }
-            >
-              <option value="balanced">A balance</option>
-              <option value="familiar">Prefer familiar places</option>
-              <option value="new">Prefer somewhere new</option>
-            </select>
-          </label>
-          <label className="block text-sm font-bold">
-            Favorite from this restaurant list
-            <select
-              className={input}
-              value=""
-              onChange={(event) => {
-                if (
-                  event.target.value &&
-                  !preferences.favoriteRestaurantIds.includes(event.target.value)
-                )
-                  change({
-                    favoriteRestaurantIds: [
-                      ...preferences.favoriteRestaurantIds,
-                      event.target.value,
-                    ].slice(0, 20),
-                  });
-              }}
-            >
-              <option value="">Choose a favorite (optional)</option>
-              {pool.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          {preferences.favoriteRestaurantIds.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {preferences.favoriteRestaurantIds.map((id) => (
-                <button
-                  key={id}
-                  type="button"
-                  className="rounded-full border-2 px-3 py-1 text-xs"
-                  onClick={() =>
-                    change({
-                      favoriteRestaurantIds: preferences.favoriteRestaurantIds.filter(
-                        (f) => f !== id,
-                      ),
-                    })
-                  }
-                >
-                  Remove {pool.find((r) => r.id === id)?.name ?? "saved favorite"}
-                </button>
-              ))}
-            </div>
-          )}
-          {canRemember ? (
-            <>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={preferences.useHistory}
-                  onChange={(event) => change({ useHistory: event.target.checked })}
-                />
-                Use my past group selections and visit feedback for this outing
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={remember}
-                  onChange={(event) => setRemember(event.target.checked)}
-                />
-                Remember these preferences for future outings
-              </label>
-            </>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Sign in and link your seat to remember preferences or use history. Guests can share
-              preferences for this outing.
-            </p>
-          )}
-          <div className="flex flex-wrap gap-2">
-            <Button type="submit" disabled={busy}>
-              {busy ? "Saving..." : "Use for this outing"}
-            </Button>
-            {initial.participating && (
-              <Button
-                type="button"
-                variant="outline"
-                disabled={busy}
-                onClick={() => void persist(false)}
-              >
-                Stop sharing for this outing
-              </Button>
+                  >
+                    Remove {pool.find((r) => r.id === id)?.name ?? "saved favorite"}
+                  </button>
+                ))}
+              </div>
             )}
-          </div>
-          {hasUnsavedChanges && (
-            <p role="status" className="rounded-lg bg-secondary/25 px-3 py-2 text-sm font-bold">
-              These changes aren’t used in suggestions until you click “Use for this outing.”
-            </p>
-          )}
-        </fieldset>
-      </form>
-    </details>
+            {canRemember ? (
+              <>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={preferences.useHistory}
+                    onChange={(event) => change({ useHistory: event.target.checked })}
+                  />
+                  Use my past group selections and visit feedback for this outing
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={remember}
+                    onChange={(event) => setRemember(event.target.checked)}
+                  />
+                  Remember these preferences for future outings
+                </label>
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Sign in and link your seat to remember preferences or use history. Guests can share
+                preferences for this outing.
+              </p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" disabled={busy}>
+                {busy ? "Saving..." : "Use for this outing"}
+              </Button>
+              {initial.participating && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => void persist(false)}
+                >
+                  Stop sharing for this outing
+                </Button>
+              )}
+            </div>
+            {hasUnsavedChanges && (
+              <p role="status" className="rounded-lg bg-secondary/25 px-3 py-2 text-sm font-bold">
+                These changes aren’t used in suggestions until you click “Use for this outing.”
+              </p>
+            )}
+          </fieldset>
+        </form>
+      </details>
+    </>
   );
 }
 

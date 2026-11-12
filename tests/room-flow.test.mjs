@@ -18,6 +18,12 @@ async function sourceModule(path, imports = {}) {
 }
 const zod = import.meta.resolve("zod");
 const restaurants = await sourceModule("lib/restaurants.ts");
+const dining = await sourceModule("lib/dining.ts", { zod, "./restaurants": restaurants });
+const conversation = await sourceModule("lib/dining-conversation.ts", {
+  zod,
+  "./dining": dining,
+  "./restaurants": restaurants,
+});
 const settings = await sourceModule("lib/settings.ts", { zod, "./restaurants": restaurants });
 const avatars = await sourceModule("lib/profile-avatar.ts", { zod });
 const access = await sourceModule("lib/room-access.ts", { zod, "./profile-avatar": avatars });
@@ -38,8 +44,21 @@ const server = await sourceModule("lib/room.server.ts", {
   "./room-access": access,
 });
 const handlersUrl = await sourceModule("lib/room.functions.ts", {
+  "./dining-conversation": conversation,
+  "./dining-conversation.server": url(`export async function analyzeDiningConversation() {
+    globalThis.__grubRoomFlowTest.analysisCalls = (globalThis.__grubRoomFlowTest.analysisCalls ?? 0) + 1;
+    if (globalThis.__grubRoomFlowTest.voteDuringAnalysis) globalThis.__grubRoomFlowTest.tables.rooms[0].status = "voting";
+    return { summary: "Italian food", favoriteCuisines: ["Italian"] };
+  }
+  export const getConversationCooldown = () => 12000;`),
   "./dining.server": url(
-    "const reached = async () => { throw new Error('dining-handler-reached'); }; export const getDiningState = reached, saveDiningPreferences = reached, generateDiningSuggestions = reached, saveDiningFeedback = reached, refreshDiningSuggestions = reached;",
+    `const reached = async () => { throw new Error('dining-handler-reached'); };
+    export const getDiningState = reached, saveDiningPreferences = reached, generateDiningSuggestions = reached, saveDiningFeedback = reached, refreshDiningSuggestions = reached;
+    export async function suggestDiningFromConversation() {
+      globalThis.__grubRoomFlowTest.suggestionCalls = (globalThis.__grubRoomFlowTest.suggestionCalls ?? 0) + 1;
+      if (globalThis.__grubRoomFlowTest.voteDuringSuggestions) globalThis.__grubRoomFlowTest.tables.rooms[0].status = "voting";
+      return { suggestions: [], method: "gemini", message: "Three picks", demo: true };
+    }`,
   ),
   "./settings": settings,
   "./creation-clicks": await sourceModule("lib/creation-clicks.ts", { zod }),
@@ -64,6 +83,9 @@ const {
   prepareRoomDiningSuggestions,
   saveRoomDiningFeedback,
   refreshRoomDiningSuggestions,
+  analyzeRoomDiningConversation,
+  getRoomDiningVoiceCooldown,
+  suggestRoomDiningFromConversation,
 } = await import(handlersUrl);
 const { hashToken, newCode } = await import(server);
 const { RoomCodeSchema, roomJoinUrl } = await import(access);
@@ -170,12 +192,24 @@ after(() => {
   delete globalThis.__grubRoomFlowTest;
 });
 const profile = { nickname: "  Aaron  ", avatar: "🍕", center: { lat: 40.2338, lng: -111.6585 } };
+const audioPreferences = {
+  summary: "Italian food",
+  favoriteCuisines: ["Italian"],
+  dislikedCuisines: null,
+  maxPrice: null,
+  maxDistanceKm: null,
+  diets: null,
+  novelty: null,
+};
 
 test("every dining endpoint checks the hashed room pass and only the host can generate suggestions", async () => {
   const host = await createRoom({ data: profile });
   const friend = await joinRoom({ data: { ...profile, code: host.code } });
   for (const [handler, extra] of [
     [getRoomDiningState, {}],
+    [getRoomDiningVoiceCooldown, {}],
+    [analyzeRoomDiningConversation, { audio: "A".repeat(64) }],
+    [suggestRoomDiningFromConversation, { conversation: audioPreferences }],
     [saveRoomDiningPreferences, { preferences: {}, remember: false }],
     [prepareRoomDiningSuggestions, {}],
     [refreshRoomDiningSuggestions, {}],
@@ -192,6 +226,46 @@ test("every dining endpoint checks the hashed room pass and only the host can ge
     saveRoomDiningPreferences({ data: { ...host, preferences: {}, remember: false } }),
     /dining-handler-reached/,
   );
+});
+
+test("voice analysis accepts authenticated guests only in the lobby and rechecks status after processing", async () => {
+  const host = await createRoom({ data: profile });
+  const guest = await joinRoom({ data: { ...profile, code: host.code } });
+  const data = { ...guest, audio: "A".repeat(64) };
+  assert.deepEqual(await getRoomDiningVoiceCooldown({ data: guest }), { retryAfterMs: 12000 });
+  const result = await analyzeRoomDiningConversation({ data });
+  assert.equal(result.summary, "Italian food");
+  assert.equal(store.analysisCalls, 1);
+  store.tables.rooms[0].status = "voting";
+  await assert.rejects(analyzeRoomDiningConversation({ data }), /before voting/);
+  assert.equal(store.analysisCalls, 1);
+  store.tables.rooms[0].status = "lobby";
+  store.voteDuringAnalysis = true;
+  await assert.rejects(analyzeRoomDiningConversation({ data }), /preferences are locked/);
+  assert.equal(store.analysisCalls, 2);
+});
+
+test("audio restaurant previews support guests, validate input, and lock if voting starts", async () => {
+  const host = await createRoom({ data: profile });
+  const guest = await joinRoom({ data: { ...profile, code: host.code } });
+  const data = { ...guest, conversation: audioPreferences };
+  assert.equal((await suggestRoomDiningFromConversation({ data })).method, "gemini");
+  assert.equal(store.suggestionCalls, 1);
+  await assert.rejects(
+    suggestRoomDiningFromConversation({
+      data: {
+        ...data,
+        conversation: { ...audioPreferences, maxPrice: 99 },
+      },
+    }),
+  );
+  assert.equal(store.suggestionCalls, 1);
+  store.tables.rooms[0].status = "voting";
+  await assert.rejects(suggestRoomDiningFromConversation({ data }), /before voting/);
+  assert.equal(store.suggestionCalls, 1);
+  store.tables.rooms[0].status = "lobby";
+  store.voteDuringSuggestions = true;
+  await assert.rejects(suggestRoomDiningFromConversation({ data }), /audio suggestions are locked/);
 });
 
 test("guest host creates a six-character room and friends join by code or link", async () => {

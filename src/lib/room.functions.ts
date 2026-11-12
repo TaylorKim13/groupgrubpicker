@@ -2,6 +2,7 @@ import { SettingsSchema, getHostingPreferences, applyHostingPreferences } from "
 import { optionalAccountAuth } from "./account-auth";
 import { RoomCodeSchema, RoomProfileSchema } from "./room-access";
 import { CreationClickSchema } from "./creation-clicks";
+import { ConversationAudioSchema, ConversationPreferencesSchema } from "./dining-conversation";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { authMember, db, getRoomByCode, hashToken, newCode, newToken } from "./room.server";
@@ -406,6 +407,7 @@ function placeCuisine(place: { types?: string[]; primaryTypeDisplayName?: { text
 async function loadRestaurantPool(
   room: { id: string; status: string; settings: RoomSettings },
   nominations: Restaurant[],
+  conversationCuisines: readonly string[] = [],
 ): Promise<Restaurant[]> {
   if (!process.env["GOOGLE_MAPS_API_KEY"] && !process.env["MAPS_API"]) {
     return buildPool(room.settings, nominations);
@@ -433,8 +435,9 @@ async function loadRestaurantPool(
     .eq("room_id", room.id);
   if (preferenceError) throw new Error("Could not load dining preferences for restaurant search");
   const cuisines = [
-    ...new Set<string>(
-      (preferences ?? []).flatMap((row: { preferences: unknown }) => {
+    ...new Set<string>([
+      ...conversationCuisines,
+      ...(preferences ?? []).flatMap((row: { preferences: unknown }) => {
         const p = row.preferences as { participating?: boolean; favoriteCuisines?: unknown } | null;
         return p?.participating === true && Array.isArray(p.favoriteCuisines)
           ? p.favoriteCuisines.filter(
@@ -442,7 +445,7 @@ async function loadRestaurantPool(
             )
           : [];
       }),
-    ),
+    ]),
   ].sort();
   const cacheKey = JSON.stringify([
     settings.center.lat,
@@ -948,6 +951,57 @@ export const getGroupHistory = createServerFn({ method: "GET" })
   });
 
 // Dining data stays behind the same hashed room-pass checks as votes and members.
+export const getRoomDiningVoiceCooldown = createServerFn({ method: "POST" })
+  .inputValidator((input) => Auth.parse(input))
+  .handler(async ({ data }) => {
+    const { member } = await authMember(data.code, data.memberId, data.token);
+    const { getConversationCooldown } = await import("./dining-conversation.server");
+    return { retryAfterMs: getConversationCooldown(member.id) };
+  });
+
+export const analyzeRoomDiningConversation = createServerFn({ method: "POST" })
+  .inputValidator((input) => Auth.merge(ConversationAudioSchema).parse(input))
+  .handler(async ({ data }) => {
+    const { room, member } = await authMember(data.code, data.memberId, data.token);
+    if (room.status !== "lobby") throw new Error("Voice help is available before voting starts.");
+    const { analyzeDiningConversation } = await import("./dining-conversation.server");
+    const result = await analyzeDiningConversation(data.audio, member.id);
+    // Voting may have started while Gemini was processing the recording.
+    const current = await authMember(data.code, data.memberId, data.token);
+    if (current.room.status !== "lobby")
+      throw new Error("Voting has started; preferences are locked.");
+    return result;
+  });
+
+export const suggestRoomDiningFromConversation = createServerFn({ method: "POST" })
+  .middleware([optionalAccountAuth])
+  .inputValidator((input) =>
+    Auth.extend({ conversation: ConversationPreferencesSchema }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { room, member } = await authMember(data.code, data.memberId, data.token);
+    if (room.status !== "lobby")
+      throw new Error("Audio suggestions are available before voting starts.");
+    const { suggestDiningFromConversation } = await import("./dining.server");
+    const nominations = await loadNominations(room.id);
+    const pool = await loadRestaurantPool(
+      room,
+      nominations.map((n) => n.restaurant),
+      data.conversation.favoriteCuisines ?? [],
+    );
+    const result = await suggestDiningFromConversation(
+      room,
+      member,
+      context.accountUserId,
+      pool,
+      data.conversation,
+    );
+    const current = await authMember(data.code, data.memberId, data.token);
+    if (current.room.status !== "lobby")
+      throw new Error("Voting has started; audio suggestions are locked.");
+    return result;
+  });
+
 export const getRoomDiningState = createServerFn({ method: "POST" })
   .middleware([optionalAccountAuth])
   .inputValidator((input) => Auth.parse(input))
@@ -959,7 +1013,10 @@ export const getRoomDiningState = createServerFn({ method: "POST" })
       room,
       nominations.map((n) => n.restaurant),
     );
-    return getDiningState(room, member, context.accountUserId, pool);
+    return {
+      ...(await getDiningState(room, member, context.accountUserId, pool)),
+      voiceAvailable: !!process.env["GEMINI_API_KEY"],
+    };
   });
 
 export const saveRoomDiningPreferences = createServerFn({ method: "POST" })

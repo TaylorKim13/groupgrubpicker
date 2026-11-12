@@ -76,7 +76,7 @@ export function AccountPreferences({
           disabled={busy}
         />
         <div className="flex flex-wrap gap-3">
-          <Button disabled={busy} type="submit">
+          <Button data-tour="save-preferences" disabled={busy} type="submit">
             {busy ? "Saving…" : "Save preferences"}
           </Button>
           <Button
