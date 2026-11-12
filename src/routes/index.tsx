@@ -72,7 +72,7 @@ function Home() {
   const geocode = useServerFn(geocodeSearchCenter);
   const [areaBusy, setAreaBusy] = useState(false);
   const [address, setAddress] = useState("");
-  const [center, setCenter] = useState<Center>(DEFAULT_SETTINGS.center);
+  const [center, setCenter] = useState<Center | null>(null);
   const [radiusKm, setRadiusKm] = useState(DEFAULT_SETTINGS.radiusKm);
   const [priceLevels, setPriceLevels] = useState<number[]>([]);
   const [diets, setDiets] = useState<Diet[]>([]);
@@ -106,11 +106,15 @@ function Home() {
       toast.error("Enter a 6-character room code");
       return;
     }
+    if (kind === "host" && (!center || areaBusy)) {
+      toast.error("Choose a search location first");
+      return;
+    }
     setBusy(true);
     try {
       const s =
   kind === "host"
-    ? await create({ data: { nickname, avatar, center, radiusKm, priceMin, priceMax, priceLevels, diets, maxWait, setupPending: true } })
+    ? await create({ data: { nickname, avatar, center: center!, radiusKm, priceMin, priceMax, priceLevels, diets, maxWait, setupPending: true } })
     : await join({
         data: { nickname, avatar, code: normalizeRoomCode(joinCode ?? code) },
       });
@@ -143,6 +147,11 @@ function Home() {
   }
 
   async function continueFromArea() {
+    if (areaBusy) return;
+    if (!center && address.trim().length < 2) {
+      toast.error("Allow location access or enter an address to continue");
+      return;
+    }
     if (address.trim().length >= 2) {
       if (areaBusy) return;
       setAreaBusy(true);
@@ -168,13 +177,14 @@ function Home() {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setCenter({ lat: position.coords.latitude, lng: position.coords.longitude, label: "My location" });
+        setAddress("");
         setAreaBusy(false);
       },
       () => {
-        toast.error("Couldn't get your location");
+        toast.error("Couldn't get your location. Enter an address or try again.");
         setAreaBusy(false);
       },
-      { timeout: 15000 },
+      { timeout: 15000, maximumAge: 60000, enableHighAccuracy: true },
     );
   }
 
@@ -210,7 +220,7 @@ function Home() {
             <h1 id="home-title" className="home-headline">Big appetites.<br />One decision.</h1>
             <p className="home-hero-description">Find your next great meal. Together.</p>
             <div className="home-hero-actions">
-              <Button className="home-start-button" onClick={() => { setHostStep("profile"); setMode("host"); }}>
+              <Button className="home-start-button" onClick={() => { setHostStep("profile"); setMode("host"); if (!center && !areaBusy) useMyLocation(); }}>
                 <Plus /> Start a table
               </Button>
               <Button className="home-join-button" variant="outline" onClick={() => setMode("join")}>
@@ -260,9 +270,9 @@ function Home() {
                 <div className="space-y-6">
                   <div>
                     <label htmlFor="search-center" className="font-bold">Search center</label>
-                    <p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground"><MapPin className="h-4 w-4" />{center.label}</p>
+                    <p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground"><MapPin className="h-4 w-4" />{areaBusy ? "Finding your location…" : center?.label ?? "Allow location access or enter an address"}</p>
                     <div className="mt-2 flex gap-2">
-                      <input id="search-center" value={address} maxLength={200} onChange={(event) => setAddress(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void setSearchAddress(); } }} placeholder="Address or neighborhood" className="min-w-0 flex-1 rounded-lg border bg-background px-3 py-2" />
+                      <input id="search-center" disabled={areaBusy} value={address} maxLength={200} onChange={(event) => setAddress(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void setSearchAddress(); } }} placeholder="Address or neighborhood" className="min-w-0 flex-1 rounded-lg border bg-background px-3 py-2" />
                       <Button type="button" variant="secondary" disabled={areaBusy || address.trim().length < 2} onClick={() => void setSearchAddress()}>{areaBusy ? "Finding…" : "Set"}</Button>
                     </div>
                     <Button type="button" variant="link" disabled={areaBusy} className="mt-1 px-0" onClick={useMyLocation}>Use my location</Button>
