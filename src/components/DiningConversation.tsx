@@ -333,19 +333,21 @@ export function DiningConversation({
           checked={consent}
           disabled={!available || phase !== "idle"}
           onChange={(e) => setConsent(e.target.checked)}
-          className="mt-1"
+          className="mt-1 shrink-0"
         />
-        Everyone being recorded agrees to send this audio to Google Gemini for analysis. The app
-        doesn't save audio or a transcript.{" "}
-        <a
-          className="underline"
-          href="https://ai.google.dev/gemini-api/terms"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Google's processing terms
-        </a>{" "}
-        apply.
+        <span className="min-w-0 flex-1">
+          Everyone being recorded agrees to send this audio to Google Gemini for analysis. The app
+          doesn't save audio or a transcript.{" "}
+          <a
+            className="underline"
+            href="https://ai.google.dev/gemini-api/terms"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Google's processing terms
+          </a>{" "}
+          apply.
+        </span>
       </label>
       <div className="flex flex-wrap gap-2">
         {phase === "idle" && (

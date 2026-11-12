@@ -445,13 +445,13 @@ function Members({ s, session, refresh }: { s: State; session: Session; refresh:
       )}
       <ul className="mt-3 space-y-2">
         {s.members.map((m) => (
-          <li key={m.id} className="flex items-center gap-3">
+          <li key={m.id} className="flex flex-wrap items-center gap-3 sm:flex-nowrap">
             <ProfileAvatar
               avatar={m.avatar}
               name={m.nickname}
               className="h-9 w-9 border-2 bg-background text-lg"
             />
-            <span className="flex-1 font-medium">
+            <span className="min-w-0 basis-[calc(100%-3rem)] break-words font-medium sm:flex-1 sm:basis-auto">
               {m.nickname}
               {m.id === s.me.id && <span className="text-muted-foreground"> (you)</span>}
               {m.isHost && (
@@ -1056,8 +1056,104 @@ function Pool({
 
   return (
     <>
+      {s.status === "lobby" && suggestionsPanel}
+
       {s.status === "lobby" && (
-        <section className="rounded-2xl border-2 border-primary bg-card p-5 chunky">
+        <section className="min-w-0 space-y-4 rounded-2xl bg-card p-5 chunky">
+          <div>
+            <h2 className="text-xl font-extrabold">Add a restaurant</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Search around the group’s location, or add one of the nearby places shown on the map.</p>
+          </div>
+          <form
+
+            className="flex flex-col gap-2 sm:flex-row"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              setSearching(true);
+              try {
+                setSearchResults(await searchPlacesFn({ data: { ...session, query: addSearch } }));
+              } catch (error) {
+                toast.error(error instanceof Error ? error.message : "Restaurant search failed");
+              } finally {
+                setSearching(false);
+              }
+            }}
+          >
+            <input
+              type="search"
+              minLength={2}
+              value={addSearch}
+              onChange={(event) => setAddSearch(event.target.value)}
+              placeholder="Restaurant name, cuisine, or neighborhood"
+              aria-label="Search for a restaurant to add"
+              className="min-w-0 flex-1 rounded-xl border-2 bg-background px-4 py-3"
+            />
+            <Button type="submit" disabled={searching || addSearch.trim().length < 2}>
+              {searching ? "Searching…" : "Search restaurants"}
+            </Button>
+          </form>
+          {searchResults && (
+            <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
+              {searchResults.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No matches found. Try another search.</p>
+              ) : searchResults.map((restaurant) => {
+                const added = pool.some((item) => item.id === restaurant.id);
+                return (
+                  <div key={restaurant.id} className="flex min-w-0 flex-col items-stretch justify-between gap-3 rounded-xl border-2 bg-background p-3 sm:flex-row sm:items-center">
+                    <div className="min-w-0 sm:flex-1">
+                      <p className="break-words font-bold sm:truncate">{restaurant.name}</p>
+                      <p className="break-words text-xs text-muted-foreground sm:truncate">{restaurant.cuisine} · {restaurant.address ?? "Address unavailable"} · {restaurant.priceUnknown ? "Price unknown" : priceLabel(restaurant.price)}</p>
+                    </div>
+                    <Button type="button" size="sm" disabled={added} onClick={() => void addRestaurant(restaurant)}>
+                      {added ? "Added" : "+ Add to pool"}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div className="h-72 overflow-hidden rounded-xl border-2 md:h-96">
+            <RestaurantMap
+              center={s.settings.center}
+              radiusKm={s.settings.radiusKm}
+              pool={candidates}
+              highlight={focus}
+              onSelect={(restaurant) => setFocus(restaurant.id)}
+              onAdd={addRestaurant}
+            />
+          </div>
+          <div>
+            <h3 className="mb-2 font-bold">Nearby restaurants</h3>
+            {candidates.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No nearby listings are available right now. Search for a restaurant by name.</p>
+            ) : (
+              <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
+                {candidates.map((restaurant) => {
+                  const added = pool.some((item) => item.id === restaurant.id);
+                  return (
+                    <div
+                      id={`restaurant-candidate-${restaurant.id}`}
+                      key={restaurant.id}
+                      className={`flex min-w-0 flex-col items-stretch justify-between gap-3 rounded-xl border-2 bg-background p-3 sm:flex-row sm:items-center ${focus === restaurant.id ? "border-primary ring-2 ring-primary/30" : ""}`}
+                    >
+                      <div className="min-w-0 sm:flex-1">
+                        <p className="break-words font-bold sm:truncate">{restaurant.name}</p>
+                        <p className="break-words text-xs text-muted-foreground sm:truncate">{restaurant.cuisine} · {restaurant.priceUnknown ? "Price unknown" : priceLabel(restaurant.price)}</p>
+                      </div>
+                      <Button type="button" size="sm" disabled={added} onClick={() => void addRestaurant(restaurant)}>
+                        {added ? "Added" : "+ Add to pool"}
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {s.status === "lobby" && (
+        <section className="min-w-0 rounded-2xl border-2 border-primary bg-card p-5 chunky">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-2xl font-extrabold">Voting pool ({pool.length})</h2>
             {s.me.isHost && (
@@ -1071,12 +1167,12 @@ function Pool({
               No restaurants selected yet. Add places from search or AI suggestions below.
             </p>
           ) : (
-            <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+            <ul className="mt-3 grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
               {pool.map((restaurant) => (
-                <li key={restaurant.id} className="flex items-center justify-between gap-3 rounded-xl border-2 bg-background p-3">
-                  <div className="min-w-0">
-                    <p className="truncate font-bold">{restaurant.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">
+                <li key={restaurant.id} className="flex min-w-0 flex-col items-stretch justify-between gap-3 rounded-xl border-2 bg-background p-3 sm:flex-row sm:items-center">
+                  <div className="min-w-0 sm:flex-1">
+                    <p className="break-words font-bold sm:truncate">{restaurant.name}</p>
+                    <p className="break-words text-xs text-muted-foreground sm:truncate">
                       {restaurant.cuisine} · {restaurant.address ?? "Address unavailable"}
                     </p>
                   </div>
@@ -1146,102 +1242,6 @@ function Pool({
         </section>
       )}
 
-      {s.status === "lobby" && suggestionsPanel}
-
-      {s.status === "lobby" && (
-        <section className="space-y-4 rounded-2xl bg-card p-5 chunky">
-          <div>
-            <h2 className="text-xl font-extrabold">Add a restaurant</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Search around the group’s location, or add one of the nearby places shown on the map.</p>
-          </div>
-          <form
-
-            className="flex flex-col gap-2 sm:flex-row"
-            onSubmit={async (event) => {
-              event.preventDefault();
-              setSearching(true);
-              try {
-                setSearchResults(await searchPlacesFn({ data: { ...session, query: addSearch } }));
-              } catch (error) {
-                toast.error(error instanceof Error ? error.message : "Restaurant search failed");
-              } finally {
-                setSearching(false);
-              }
-            }}
-          >
-            <input
-              type="search"
-              minLength={2}
-              value={addSearch}
-              onChange={(event) => setAddSearch(event.target.value)}
-              placeholder="Restaurant name, cuisine, or neighborhood"
-              aria-label="Search for a restaurant to add"
-              className="min-w-0 flex-1 rounded-xl border-2 bg-background px-4 py-3"
-            />
-            <Button type="submit" disabled={searching || addSearch.trim().length < 2}>
-              {searching ? "Searching…" : "Search restaurants"}
-            </Button>
-          </form>
-          {searchResults && (
-            <div className="grid gap-2 sm:grid-cols-2">
-              {searchResults.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No matches found. Try another search.</p>
-              ) : searchResults.map((restaurant) => {
-                const added = pool.some((item) => item.id === restaurant.id);
-                return (
-                  <div key={restaurant.id} className="flex items-center justify-between gap-3 rounded-xl border-2 bg-background p-3">
-                    <div className="min-w-0">
-                      <p className="truncate font-bold">{restaurant.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">{restaurant.cuisine} · {restaurant.address ?? "Address unavailable"} · {restaurant.priceUnknown ? "Price unknown" : priceLabel(restaurant.price)}</p>
-                    </div>
-                    <Button type="button" size="sm" disabled={added} onClick={() => void addRestaurant(restaurant)}>
-                      {added ? "Added" : "+ Add to pool"}
-                    </Button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          <div className="h-72 overflow-hidden rounded-xl border-2 md:h-96">
-            <RestaurantMap
-              center={s.settings.center}
-              radiusKm={s.settings.radiusKm}
-              pool={candidates}
-              highlight={focus}
-              onSelect={(restaurant) => setFocus(restaurant.id)}
-              onAdd={addRestaurant}
-            />
-          </div>
-          <div>
-            <h3 className="mb-2 font-bold">Nearby restaurants</h3>
-            {candidates.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No nearby listings are available right now. Search for a restaurant by name.</p>
-            ) : (
-              <div className="grid gap-2 sm:grid-cols-2">
-                {candidates.map((restaurant) => {
-                  const added = pool.some((item) => item.id === restaurant.id);
-                  return (
-                    <div
-                      id={`restaurant-candidate-${restaurant.id}`}
-                      key={restaurant.id}
-                      className={`flex items-center justify-between gap-3 rounded-xl border-2 bg-background p-3 ${focus === restaurant.id ? "border-primary ring-2 ring-primary/30" : ""}`}
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate font-bold">{restaurant.name}</p>
-                        <p className="truncate text-xs text-muted-foreground">{restaurant.cuisine} · {restaurant.priceUnknown ? "Price unknown" : priceLabel(restaurant.price)}</p>
-                      </div>
-                      <Button type="button" size="sm" disabled={added} onClick={() => void addRestaurant(restaurant)}>
-                        {added ? "Added" : "+ Add to pool"}
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </section>
-      )}
-
       {voting && (
         <div className="flex justify-end">
           <Onboarding want={pool.find((restaurant) => restaurant.id === want) ?? null}
@@ -1250,54 +1250,6 @@ function Pool({
             isHost={s.me.isHost} onStart={() => setRestaurantSearch("")} />
         </div>
       )}
-      {voting && (
-        <div data-vote-guide="submit" className="sticky top-2 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-secondary p-4 text-secondary-foreground chunky">
-          <div className="text-sm">
-            <b>Want</b> (2 pts): {pool.find((r) => r.id === want)?.name ?? "—"} · <b>Could</b> (1
-            pt): {pool.find((r) => r.id === could)?.name ?? "—"}
-          </div>
-          <button
-            disabled={!want || !could || submitting}
-            onClick={async () => {
-              if (submitting || !want || !could) return;
-              setSubmitting(true);
-              try {
-                await vote({ data: { ...session, want: want!, could: could! } });
-                setSubmissionCount((count) => count + 1);
-                toast.success(s.myVote ? "Vote updated" : "Vote locked in");
-                refresh();
-              } catch (e: any) {
-                toast.error(e.message);
-              } finally {
-                setSubmitting(false);
-              }
-            }}
-            className="rounded-xl bg-primary px-5 py-2 font-bold text-primary-foreground chunky disabled:opacity-50"
-          >
-            {submitting ? "Saving vote…" : s.myVote || submissionCount > 0 ? "Update vote" : "Submit vote"}
-          </button>
-        </div>
-      )}
-
-      {s.me.isHost && voting && (
-        <div className="flex flex-col items-end gap-2">
-          <Button
-            type="button"
-            className="rounded-xl px-5 py-3 font-bold chunky"
-            disabled={votedCount === 0}
-            onClick={() => void runRoomAction(close)}
-
-          >
-            End voting & reveal the winner
-          </Button>
-          {votedCount === 0 && (
-            <p className="text-right text-xs text-muted-foreground">
-              At least one vote is needed before revealing the winner.
-            </p>
-          )}
-        </div>
-      )}
-
       {voting && <div data-voting-pool>
         <h2 className="mb-3 text-2xl font-extrabold">
           The pool <span className="text-base font-normal text-muted-foreground">({filteredPool.length === pool.length ? `${pool.length}` : `${filteredPool.length} of ${pool.length}`} spots)</span>
@@ -1357,6 +1309,54 @@ function Pool({
           suitability are not verified, so confirm directly with the restaurant.
         </p>
       </div>}
+
+      {voting && (
+        <div data-vote-guide="submit" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-secondary p-4 text-secondary-foreground chunky">
+          <div className="text-sm">
+            <b>Want</b> (2 pts): {pool.find((r) => r.id === want)?.name ?? "—"} · <b>Could</b> (1
+            pt): {pool.find((r) => r.id === could)?.name ?? "—"}
+          </div>
+          <button
+            disabled={!want || !could || submitting}
+            onClick={async () => {
+              if (submitting || !want || !could) return;
+              setSubmitting(true);
+              try {
+                await vote({ data: { ...session, want: want!, could: could! } });
+                setSubmissionCount((count) => count + 1);
+                toast.success(s.myVote ? "Vote updated" : "Vote locked in");
+                refresh();
+              } catch (e: any) {
+                toast.error(e.message);
+              } finally {
+                setSubmitting(false);
+              }
+            }}
+            className="rounded-xl bg-primary px-5 py-2 font-bold text-primary-foreground chunky disabled:opacity-50"
+          >
+            {submitting ? "Saving vote…" : s.myVote || submissionCount > 0 ? "Update vote" : "Submit vote"}
+          </button>
+        </div>
+      )}
+
+      {s.me.isHost && voting && (
+        <div className="flex flex-col items-end gap-2">
+          <Button
+            type="button"
+            className="rounded-xl px-5 py-3 font-bold chunky"
+            disabled={votedCount === 0}
+            onClick={() => void runRoomAction(close)}
+
+          >
+            End voting & reveal the winner
+          </Button>
+          {votedCount === 0 && (
+            <p className="text-right text-xs text-muted-foreground">
+              At least one vote is needed before revealing the winner.
+            </p>
+          )}
+        </div>
+      )}
     </>
   );
 }
@@ -1413,9 +1413,9 @@ function RestaurantCard({
       onMouseEnter={onFocus}
       className={`min-w-0 rounded-xl border bg-card p-4 transition ${want ? "ring-2 ring-brand" : could ? "ring-2 ring-olive" : ""} ${focused ? "chunky" : ""}`}
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex flex-col items-start justify-between gap-2 sm:flex-row">
         <div className="min-w-0 flex-1">
-          <h3 className="flex items-center gap-2 text-lg font-extrabold leading-tight">
+          <h3 className="flex flex-wrap items-center gap-2 text-lg font-extrabold leading-tight sm:flex-nowrap">
             {r.name}
             {hasRewards && (
               <span
@@ -1449,7 +1449,7 @@ function RestaurantCard({
 )}
         </div>
         {(r.custom || dealButton) && (
-          <div className="flex shrink-0 flex-col items-end gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:flex-col sm:items-end">
             {dealButton}
             {r.custom && (
               <span className="rounded bg-success px-1.5 py-0.5 text-[10px] font-bold uppercase text-success-foreground">

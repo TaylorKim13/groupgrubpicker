@@ -58,7 +58,7 @@ function Wheel({ result, onDone }: { result: Result; onDone: () => void }) {
   return (
     <div className="text-center">
       <p className="mb-6 font-bold uppercase tracking-wide">{c.length}-way tie! Spinning the wheel…</p>
-      <div className="relative mx-auto h-72 w-72">
+      <div className="relative mx-auto aspect-square w-72 max-w-full">
         <div className="absolute left-1/2 top-[-14px] z-10 h-0 w-0 -translate-x-1/2 border-x-[12px] border-t-[22px] border-x-transparent border-t-foreground" />
         <div
           className="h-full w-full rounded-full border-4"

@@ -1,0 +1,20 @@
+import { readFileSync, writeFileSync } from 'node:fs';
+const path='src/routes/room.$code.tsx';
+let source=readFileSync(path,'utf8');
+const newline=source.includes('\r\n')?'\r\n':'\n';
+source=source.replaceAll('\r\n','\n');
+function index(marker){const result=source.indexOf(marker);if(result<0)throw Error('Missing marker: '+marker);return result;}
+const poolStart=index('      {s.status === "lobby" && (\n        <section className="min-w-0 rounded-2xl border-2 border-primary');
+const poolEnd=index('\n\n      {s.status === "lobby" && suggestionsPanel}');
+const pool=source.slice(poolStart,poolEnd);
+source=source.slice(0,poolStart)+source.slice(poolEnd+2);
+const onboardingStart=index('      {voting && (\n        <div className="flex justify-end">');
+source=source.slice(0,onboardingStart)+pool+'\n\n'+source.slice(onboardingStart);
+const actionsStart=index('      {voting && (\n        <div data-vote-guide="submit"');
+const actionsEnd=index('      {voting && <div data-voting-pool>');
+const actions=source.slice(actionsStart,actionsEnd).replace('className="sticky top-2 z-20 flex flex-wrap','className="flex flex-wrap');
+source=source.slice(0,actionsStart)+source.slice(actionsEnd);
+const end=index('      </div>}\n    </>\n  );\n}\n\nfunction RestaurantCard');
+const insertion=end+'      </div>}\n'.length;
+source=source.slice(0,insertion)+'\n'+actions.trimEnd()+'\n'+source.slice(insertion);
+writeFileSync(path,source.replaceAll('\n',newline));

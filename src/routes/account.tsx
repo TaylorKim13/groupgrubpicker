@@ -84,7 +84,7 @@ function AccountPage() {
           <p className="mt-2 text-sm text-muted-foreground">Your people, preferences, and favorite places.</p>
         </div>
         <Tabs defaultValue="overview">
-          <TabsList className={`grid w-full ${isAdmin ? "grid-cols-4" : "grid-cols-3"}`}>
+          <TabsList className={`grid h-auto w-full grid-cols-2 sm:h-9 ${isAdmin ? "sm:grid-cols-4" : "min-[480px]:grid-cols-3"}`}>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="preferences">Preferences</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>

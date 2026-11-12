@@ -19,7 +19,7 @@ export function RoomSettingsFields({
 }) {
   const [address, setAddress] = useState("");
   const [locating, setLocating] = useState(false);
-  const input = "mt-2 w-full rounded-lg border bg-background px-3 py-2";
+  const input = "mt-2 min-w-0 w-full rounded-lg border bg-background px-3 py-2";
   return (
     <fieldset disabled={disabled} className="space-y-5 disabled:opacity-60">
       {geocode && value.center && (
@@ -111,7 +111,7 @@ export function RoomSettingsFields({
           }}
         />
       </label>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
         {(["priceMin", "priceMax"] as const).map((key) => (
           <label key={key} className="font-bold">
             {key === "priceMin" ? "Minimum price" : "Maximum price"}

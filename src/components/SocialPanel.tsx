@@ -115,7 +115,7 @@ export function SocialPanel({ userId }: { userId: string }) {
           </Button>
         </p>
         <form
-          className="mt-3 flex gap-2"
+          className="mt-3 flex flex-col gap-2 sm:flex-row"
           onSubmit={(e) => {
             e.preventDefault();
             act(
@@ -137,7 +137,7 @@ export function SocialPanel({ userId }: { userId: string }) {
             onChange={(e) => setCode(e.target.value.toUpperCase().slice(0, 12))}
             placeholder="Friend's code"
             aria-label="Friend code"
-            className="flex-1 rounded-lg border bg-card px-3 py-2 font-display uppercase"
+            className="min-w-0 flex-1 rounded-lg border bg-card px-3 py-2 font-display uppercase"
           />
           <Button type="submit" disabled={code.length < 4}>
             Add friend
@@ -148,7 +148,7 @@ export function SocialPanel({ userId }: { userId: string }) {
             {s.incoming.map((f) => (
               <li
                 key={f.friendshipId}
-                className="flex items-center justify-between rounded-lg border bg-card p-3"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-3 sm:flex-nowrap sm:gap-0"
               >
                 <span>
                   <ProfileAvatar avatar={f.avatar} name={f.name} /> <b>{f.name}</b> wants to be

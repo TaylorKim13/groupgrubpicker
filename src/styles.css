@@ -655,3 +655,82 @@
   --ring: #f29b91;
 }
 .voting-guide-rank-backup { color: var(--olive-foreground); background: var(--olive); border-color: var(--olive); }
+
+/* Phone layouts retain the existing design and leave desktop styling intact. */
+@media (max-width: 639px) {
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  main, .app-dialog { overflow-wrap: anywhere; }
+  main :where(form, fieldset) { min-inline-size: 0; }
+
+  /* A 16px field font prevents automatic zoom when focusing inputs on iOS. */
+  :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="file"]), textarea, select) {
+    min-width: 0;
+    max-width: 100%;
+    min-height: 44px;
+    font-size: max(1rem, 16px);
+  }
+  :where(button:not([role="switch"]):not([role="checkbox"]):not([role="radio"]), a.inline-flex, summary) {
+    min-height: 44px;
+  }
+  :where(button:not([role="switch"]):not([role="checkbox"]):not([role="radio"]), a.inline-flex) {
+    min-width: 44px;
+    max-width: 100%;
+    flex-shrink: 0;
+    white-space: normal;
+  }
+  button:has(> .sr-only):has(> svg), button[aria-label="Copy room code"], .voting-guide-close { min-width: 44px; }
+  [role="slider"] { width: 24px; height: 24px; }
+  [data-orientation="horizontal"].touch-none { min-height: 44px; }
+
+  /* Keep all navigation controls visible, with a separate row for the wordmark. */
+  .home-shell > .contents > .home-header,
+  .create-photo-area > .home-header,
+  .login-shell > div:first-child,
+  .account-shell > div:first-child,
+  .deal-submit-page > .deal-submit-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 16px;
+  }
+  .home-header > .brand-wordmark,
+  .login-shell > div:first-child > .brand-wordmark,
+  .account-shell > div:first-child > .brand-wordmark,
+  .deal-submit-header > .brand-wordmark { align-self: flex-start; }
+  .home-header > div { justify-content: space-between; gap: 8px; }
+  .home-header > div > div { gap: 8px; }
+  .home-header label { gap: 6px; }
+  .home-header select { padding-inline: 8px; }
+  .home-shell .home-hero-copy {
+    min-height: 100svh;
+    padding: 210px 16px 160px;
+  }
+  .home-hero-actions { width: 100%; max-width: 360px; gap: 12px; }
+  .home-hero-actions > * { flex: 1 1 140px; }
+  .home-shell > :not(.home-hero):not(.home-community):not(.create-table-footer):not(.create-photo-area):not(.contents) {
+    width: calc(100% - 32px);
+  }
+  .home-form, .deal-submit-panel, .account-content-panel { padding: 20px 16px; }
+  .home-shell.home-shell-create > .create-photo-area { padding-bottom: 24px; }
+  .login-shell > section.login-form-panel { padding: 20px 16px; }
+
+  [role="tablist"] { height: auto; max-width: 100%; flex-wrap: wrap; }
+  [role="tab"] { min-width: 0; white-space: normal; }
+  .account-content-panel [role="tabpanel"] { min-width: 0; }
+  .account-content-panel li > .flex { flex-wrap: wrap; }
+
+  .winner-hero { padding: 48px 16px; }
+  .winner-details { padding: 32px 0 0; }
+}
+
+/* Include phones held sideways, where viewport width exceeds the phone breakpoint. */
+@media (max-width: 639px), (max-height: 500px) and (max-width: 1023px) {
+  .app-dialog {
+    max-width: min(32rem, calc(100vw - 32px));
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-radius: 12px;
+  }
+  .app-dialog > button:last-child { display: grid; place-items: center; top: 8px; right: 8px; }
+}
