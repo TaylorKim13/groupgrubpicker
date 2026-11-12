@@ -83,15 +83,21 @@ export function DiningPanel({
   if (q.isPending)
     return (
       <p className="p-4" role="status">
-        Finding suggestions for your table...
+        {status === "closed"
+          ? "Loading visit feedback..."
+          : "Finding suggestions for your table..."}
       </p>
     );
   if (q.error || !q.data)
     return (
       <section className="rounded-2xl bg-card p-5 chunky">
-        <h2 className="text-xl font-semibold">Suggestions for your table</h2>
+        <h2 className="text-xl font-semibold">
+          {status === "closed" ? "Visit feedback" : "Suggestions for your table"}
+        </h2>
         <p className="my-3 text-sm" role="alert">
-          {q.error?.message ?? "Could not load suggestions."}
+          {status === "closed"
+            ? "Could not load visit feedback."
+            : (q.error?.message ?? "Could not load suggestions.")}
         </p>
         <Button variant="outline" onClick={() => void q.refetch()}>
           Try again
@@ -99,6 +105,8 @@ export function DiningPanel({
       </section>
     );
   const data = q.data;
+  if (status === "closed")
+    return <VisitFeedback session={session} initial={data.feedback} refresh={refresh} />;
   const recentHistory = data.history.slice(0, 3);
   return (
     <section className="space-y-5 rounded-2xl bg-card p-5 chunky">
@@ -245,9 +253,6 @@ export function DiningPanel({
           )}
         </TabsContent>
       </Tabs>
-      {status === "closed" && (
-        <VisitFeedback session={session} initial={data.feedback} refresh={refresh} />
-      )}
     </section>
   );
 }
@@ -333,10 +338,7 @@ function PreferenceForm({
           }
         }}
       />
-      <details
-        ref={details}
-        className="group relative isolate rounded-xl border bg-background"
-      >
+      <details ref={details} className="group relative isolate rounded-xl border bg-background">
         <summary className="flex list-none cursor-pointer items-center justify-between gap-3 rounded-xl px-4 py-3 font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <span>
             {initial.participating ? "Edit my dining preferences" : "Share my dining preferences"}

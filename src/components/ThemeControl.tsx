@@ -57,7 +57,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function ThemeControl() {
+export function ThemeControl({ showHelp = true }: { showHelp?: boolean } = {}) {
   const theme = useContext(ThemeContext);
   const [reminderOpen, setReminderOpen] = useState(false);
   return (
@@ -82,15 +82,17 @@ export function ThemeControl() {
           <option value="dark">Dark</option>
         </select>
       </label>
-      <button
-        type="button"
-        className="rounded text-xs font-medium opacity-70 underline-offset-4 transition-opacity hover:underline hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        title="Walk through voting again"
-        onClick={() => setReminderOpen(true)}
-      >
-        Help
-      </button>
-      <VotingReminder open={reminderOpen} onOpenChange={setReminderOpen} />
+      {showHelp && (
+        <button
+          type="button"
+          className="rounded text-xs font-medium opacity-70 underline-offset-4 transition-opacity hover:underline hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          title="Walk through voting again"
+          onClick={() => setReminderOpen(true)}
+        >
+          Help
+        </button>
+      )}
+      {showHelp && <VotingReminder open={reminderOpen} onOpenChange={setReminderOpen} />}
     </div>
   );
 }

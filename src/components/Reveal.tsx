@@ -1,4 +1,3 @@
-import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import type { Result } from "@/lib/room.functions";
 import { priceLabel } from "@/lib/restaurants";
@@ -84,7 +83,7 @@ export function Reveal({ result, hasRewards = false }: { result: Result; hasRewa
   const [stage, setStage] = useState<"tie" | "win">(result.tie ? "tie" : "win");
   const dealsByRestaurant = useRestaurantDeals([result.winner.id], [result.winner.name]);
   useEffect(() => {
-    if (stage === "win") document.getElementById("winner-hero")?.scrollIntoView({ block: "start", behavior: "instant" });
+    if (stage === "win") document.getElementById("room-header")?.scrollIntoView({ block: "start", behavior: "instant" });
   }, [stage]);
   if (stage === "tie") {
     const done = () => setStage("win");
@@ -107,9 +106,6 @@ export function Reveal({ result, hasRewards = false }: { result: Result; hasRewa
         ))}
       </div>
       <section id="winner-hero" className="winner-hero relative z-10 text-center" aria-labelledby="winner-title">
-        <Link to="/" className="winner-home-link brand-wordmark text-4xl" aria-label="Group Grub home">
-          GROUP<span className="text-brand"> GRUB</span>
-        </Link>
         <p className="font-bold uppercase tracking-widest">We're eating at</p>
         <h1 id="winner-title" className="mt-4 flex flex-wrap items-center justify-center gap-3 text-5xl font-semibold md:text-7xl">
           {w.name}

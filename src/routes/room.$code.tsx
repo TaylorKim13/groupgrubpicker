@@ -298,7 +298,7 @@ function Room({
             {s.status === "lobby" && setupFlow
               ? "Add restaurant suggestions, search nearby, and choose the places your group can vote on."
               : s.status === "lobby"
-                ? "Share the room code, invite everyone to add restaurants, then open voting when your table is ready."
+                ? "Share the room code or invite link, then open voting when everyone has joined."
               : "Choose the restaurants you most want the group to try."}
           </p>
         </div>
@@ -318,6 +318,8 @@ function Room({
             rewardRestaurants={rewardRestaurants}
           />
         </div>
+      ) : s.status === "lobby" && !setupFlow ? (
+        <InvitationLobby s={s} session={session} refresh={refresh} />
       ) : (
         <div className="mt-6 space-y-6">
           {!setupFlow && (s.status === "lobby" || s.status === "voting") && (
@@ -352,12 +354,6 @@ function Room({
               />
             }
           />
-          {!setupFlow && s.status === "lobby" && (
-            <section className="space-y-6">
-              <RoomFriends s={s} session={session} refresh={refresh} />
-              {!s.me.isHost && <SettingsSummary settings={s.settings} />}
-            </section>
-          )}
         </div>
       )}
     </main>
@@ -376,29 +372,54 @@ function PoolSetupHeader() {
 }
 
 function TopBar({ s }: { s: State }) {
-  const phase = { lobby: "Build your pool", voting: "Voting open", closed: "Winner!" }[s.status];
   return (
-    <header className="border-b-2 pb-5">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <header id="room-header" className="border-b-2 pb-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center justify-between gap-4 sm:justify-start">
         <Link to="/" className="font-display text-2xl font-extrabold leading-none">
           GROUP<span className="text-brand"> GRUB</span>
         </Link>
-        <span className="text-xs font-medium text-muted-foreground">
-          {phase}
-        </span>
-        <ThemeControl />
-      </div>
-      <div className="mt-3 grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-start">
-        <Button variant="outline" asChild>
+        <Button variant="ghost" size="sm" className="shrink-0 text-muted-foreground" asChild>
           <Link to="/"><ArrowLeft /> Back</Link>
         </Button>
-        <RoomInvite code={s.code} />
-        <div className="sm:justify-self-end">
-          <ShareInviteButton code={s.code} />
         </div>
+        <ThemeControl showHelp={s.status !== "closed"} />
       </div>
+      {s.status !== "closed" && <div className="mt-5">
+        <RoomInvite code={s.code}>
+          <ShareInviteButton code={s.code} />
+        </RoomInvite>
+      </div>}
     </header>
   );
+}
+
+function InvitationLobby({ s, session, refresh }: { s: State; session: Session; refresh: () => void }) {
+  const start = useServerFn(startVoting);
+  const [opening, setOpening] = useState(false);
+  async function openVoting() {
+    if (opening) return;
+    setOpening(true);
+    try {
+      await start({ data: session });
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not open voting");
+    } finally {
+      setOpening(false);
+    }
+  }
+  return <section className="mt-6 space-y-6" aria-label="Invite friends to your table">
+    <RoomFriends s={s} session={session} refresh={refresh} />
+    <Members s={s} session={session} refresh={refresh} />
+    {s.me.isHost ? <div className="border-t pt-5">
+      <p className="mb-3 text-sm text-muted-foreground">Everyone here? Open voting so your group can choose where to eat.</p>
+      <Button className="w-full" disabled={opening || s.pool.length < 2} onClick={() => void openVoting()}>
+        {opening ? "Opening voting…" : "Open voting"}<ArrowRight />
+      </Button>
+      {s.pool.length < 2 && <p className="mt-2 text-sm text-muted-foreground">At least two restaurants are needed before voting can open.</p>}
+    </div> : <p className="text-center text-sm text-muted-foreground">You're at the table. The host will open voting when everyone is ready.</p>}
+  </section>;
 }
 
 function Members({ s, session, refresh }: { s: State; session: Session; refresh: () => void }) {
@@ -420,7 +441,7 @@ function Members({ s, session, refresh }: { s: State; session: Session; refresh:
       </div>
       {s.status === "lobby" && (
         <p className="mt-1 text-sm text-muted-foreground">
-          Everyone here can add restaurant options to the pool below before voting opens.
+          Share the room code or invite link with anyone who is still joining.
         </p>
       )}
       <ul className="mt-3 space-y-2">
