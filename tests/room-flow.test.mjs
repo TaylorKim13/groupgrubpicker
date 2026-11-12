@@ -18,6 +18,12 @@ async function sourceModule(path, imports = {}) {
 }
 const zod = import.meta.resolve("zod");
 const restaurants = await sourceModule("lib/restaurants.ts");
+const dining = await sourceModule("lib/dining.ts", { zod, "./restaurants": restaurants });
+const conversation = await sourceModule("lib/dining-conversation.ts", {
+  zod,
+  "./dining": dining,
+  "./restaurants": restaurants,
+});
 const settings = await sourceModule("lib/settings.ts", { zod, "./restaurants": restaurants });
 const avatars = await sourceModule("lib/profile-avatar.ts", { zod });
 const access = await sourceModule("lib/room-access.ts", { zod, "./profile-avatar": avatars });
@@ -38,8 +44,21 @@ const server = await sourceModule("lib/room.server.ts", {
   "./room-access": access,
 });
 const handlersUrl = await sourceModule("lib/room.functions.ts", {
+  "./dining-conversation": conversation,
+  "./dining-conversation.server": url(`export async function analyzeDiningConversation() {
+    globalThis.__grubRoomFlowTest.analysisCalls = (globalThis.__grubRoomFlowTest.analysisCalls ?? 0) + 1;
+    if (globalThis.__grubRoomFlowTest.voteDuringAnalysis) globalThis.__grubRoomFlowTest.tables.rooms[0].status = "voting";
+    return { summary: "Italian food", favoriteCuisines: ["Italian"] };
+  }
+  export const getConversationCooldown = () => 12000;`),
   "./dining.server": url(
-    "const reached = async () => { throw new Error('dining-handler-reached'); }; export const getDiningState = reached, saveDiningPreferences = reached, generateDiningSuggestions = reached, saveDiningFeedback = reached, refreshDiningSuggestions = reached;",
+    `const reached = async () => { throw new Error('dining-handler-reached'); };
+    export const getDiningState = reached, saveDiningPreferences = reached, generateDiningSuggestions = reached, saveDiningFeedback = reached, refreshDiningSuggestions = reached;
+    export async function suggestDiningFromConversation() {
+      globalThis.__grubRoomFlowTest.suggestionCalls = (globalThis.__grubRoomFlowTest.suggestionCalls ?? 0) + 1;
+      if (globalThis.__grubRoomFlowTest.voteDuringSuggestions) globalThis.__grubRoomFlowTest.tables.rooms[0].status = "voting";
+      return { suggestions: [], method: "gemini", message: "Three picks", demo: true };
+    }`,
   ),
   "./settings": settings,
   "./creation-clicks": await sourceModule("lib/creation-clicks.ts", { zod }),
@@ -64,6 +83,14 @@ const {
   prepareRoomDiningSuggestions,
   saveRoomDiningFeedback,
   refreshRoomDiningSuggestions,
+  analyzeRoomDiningConversation,
+  getRoomDiningVoiceCooldown,
+  suggestRoomDiningFromConversation,
+  finalizeRoomSetup,
+  addRestaurantToPool,
+  removeRestaurantFromPool,
+  startVoting,
+  castVote,
 } = await import(handlersUrl);
 const { hashToken, newCode } = await import(server);
 const { RoomCodeSchema, roomJoinUrl } = await import(access);
@@ -81,6 +108,12 @@ class Query {
   insert(value) {
     this.operation = "insert";
     this.value = value;
+    return this;
+  }
+  upsert(value, options) {
+    this.operation = "upsert";
+    this.value = value;
+    this.conflict = options.onConflict.split(",");
     return this;
   }
   update(value) {
@@ -118,6 +151,15 @@ class Query {
   }
   async run() {
     const rows = store.tables[this.table];
+    if (this.operation === "upsert") {
+      const values = Array.isArray(this.value) ? this.value : [this.value];
+      for (const value of values) {
+        const existing = rows.find((row) => this.conflict.every((key) => row[key] === value[key]));
+        if (existing) Object.assign(existing, structuredClone(value));
+        else rows.push(structuredClone({ id: randomUUID(), ...value }));
+      }
+      return { data: values, error: null };
+    }
     if (this.operation === "insert") {
       store.inserts[this.table] = (store.inserts[this.table] ?? 0) + 1;
       const error = store.errors[this.table]?.shift();
@@ -145,7 +187,7 @@ class Query {
       return { data: matched, error: null };
     }
     if (this.operation === "delete") store.tables[this.table] = rows.filter((row) => !matches(row));
-    return { data: rows.filter(matches), error: null };
+    return { data: rows.filter(matches), count: rows.filter(matches).length, error: null };
   }
 }
 beforeEach(() => {
@@ -158,6 +200,9 @@ beforeEach(() => {
       preset_filters: [],
       profiles: [],
       group_creation_usage: [],
+      room_pool_selections: [],
+      room_restaurants: [],
+      room_dining_preferences: [],
     },
     inserts: {},
     errors: {},
@@ -169,13 +214,25 @@ beforeEach(() => {
 after(() => {
   delete globalThis.__grubRoomFlowTest;
 });
-const profile = { nickname: "  Aaron  ", avatar: "🍕", center: { lat: 37.7749, lng: -122.4194 } };
+const profile = { nickname: "  Aaron  ", avatar: "🍕", center: { lat: 40.2338, lng: -111.6585 } };
+const audioPreferences = {
+  summary: "Italian food",
+  favoriteCuisines: ["Italian"],
+  dislikedCuisines: null,
+  maxPrice: null,
+  maxDistanceKm: null,
+  diets: null,
+  novelty: null,
+};
 
 test("every dining endpoint checks the hashed room pass and only the host can generate suggestions", async () => {
   const host = await createRoom({ data: profile });
   const friend = await joinRoom({ data: { ...profile, code: host.code } });
   for (const [handler, extra] of [
     [getRoomDiningState, {}],
+    [getRoomDiningVoiceCooldown, {}],
+    [analyzeRoomDiningConversation, { audio: "A".repeat(64) }],
+    [suggestRoomDiningFromConversation, { conversation: audioPreferences }],
     [saveRoomDiningPreferences, { preferences: {}, remember: false }],
     [prepareRoomDiningSuggestions, {}],
     [refreshRoomDiningSuggestions, {}],
@@ -192,6 +249,46 @@ test("every dining endpoint checks the hashed room pass and only the host can ge
     saveRoomDiningPreferences({ data: { ...host, preferences: {}, remember: false } }),
     /dining-handler-reached/,
   );
+});
+
+test("voice analysis accepts authenticated guests only in the lobby and rechecks status after processing", async () => {
+  const host = await createRoom({ data: profile });
+  const guest = await joinRoom({ data: { ...profile, code: host.code } });
+  const data = { ...guest, audio: "A".repeat(64) };
+  assert.deepEqual(await getRoomDiningVoiceCooldown({ data: guest }), { retryAfterMs: 12000 });
+  const result = await analyzeRoomDiningConversation({ data });
+  assert.equal(result.summary, "Italian food");
+  assert.equal(store.analysisCalls, 1);
+  store.tables.rooms[0].status = "voting";
+  await assert.rejects(analyzeRoomDiningConversation({ data }), /before voting/);
+  assert.equal(store.analysisCalls, 1);
+  store.tables.rooms[0].status = "lobby";
+  store.voteDuringAnalysis = true;
+  await assert.rejects(analyzeRoomDiningConversation({ data }), /preferences are locked/);
+  assert.equal(store.analysisCalls, 2);
+});
+
+test("audio restaurant previews support guests, validate input, and lock if voting starts", async () => {
+  const host = await createRoom({ data: profile });
+  const guest = await joinRoom({ data: { ...profile, code: host.code } });
+  const data = { ...guest, conversation: audioPreferences };
+  assert.equal((await suggestRoomDiningFromConversation({ data })).method, "gemini");
+  assert.equal(store.suggestionCalls, 1);
+  await assert.rejects(
+    suggestRoomDiningFromConversation({
+      data: {
+        ...data,
+        conversation: { ...audioPreferences, maxPrice: 99 },
+      },
+    }),
+  );
+  assert.equal(store.suggestionCalls, 1);
+  store.tables.rooms[0].status = "voting";
+  await assert.rejects(suggestRoomDiningFromConversation({ data }), /before voting/);
+  assert.equal(store.suggestionCalls, 1);
+  store.tables.rooms[0].status = "lobby";
+  store.voteDuringSuggestions = true;
+  await assert.rejects(suggestRoomDiningFromConversation({ data }), /audio suggestions are locked/);
 });
 
 test("guest host creates a six-character room and friends join by code or link", async () => {
@@ -223,6 +320,31 @@ test("guest host creates a six-character room and friends join by code or link",
   assert.notEqual(friend.token, linkFriend.token);
   assert.equal(JSON.stringify(state).includes(host.token), false);
   assert.equal(JSON.stringify(state).includes("token_hash"), false);
+});
+
+test("setup, collaborative pool additions and voting retain the combined room flow", async () => {
+  const host = await createRoom({ data: { ...profile, setupPending: true } });
+  const joinData = { ...profile, nickname: "Friend", code: host.code };
+  await assert.rejects(joinRoom({ data: joinData }), /still setting up/);
+  await assert.rejects(finalizeRoomSetup({ data: host }), /at least two/);
+  const { buildPool } = await import(restaurants);
+  const candidates = buildPool(store.tables.rooms[0].settings, []);
+  assert.ok(candidates.length >= 3);
+  for (const restaurant of candidates.slice(0, 2))
+    await addRestaurantToPool({ data: { ...host, restaurant } });
+  await finalizeRoomSetup({ data: host });
+  const friend = await joinRoom({ data: joinData });
+  await addRestaurantToPool({ data: { ...friend, restaurant: candidates[2] } });
+  assert.equal((await getRoomState({ data: friend })).pool.length, 3);
+  await assert.rejects(startVoting({ data: friend }), /host/i);
+  await startVoting({ data: host });
+  assert.equal(store.tables.room_restaurants.length, 3);
+  await assert.rejects(addRestaurantToPool({ data: { ...friend, restaurant: candidates[0] } }), /locked/);
+  await assert.rejects(removeRestaurantFromPool({ data: { ...host, restaurantId: candidates[0].id } }), /locked/);
+  await castVote({ data: { ...friend, want: candidates[0].id, could: candidates[1].id } });
+  const state = await getRoomState({ data: friend });
+  assert.deepEqual(state.myVote, { want: candidates[0].id, could: candidates[1].id });
+  assert.equal(state.publicVotes, null);
 });
 test("code collisions retry without creating duplicate rooms", async () => {
   store.errors.rooms = [{ code: "23505" }];

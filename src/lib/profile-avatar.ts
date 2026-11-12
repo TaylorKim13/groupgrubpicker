@@ -26,6 +26,18 @@ export function profilePhotoPath(value: string, userId?: string): string | null 
   }
 }
 export const isProfilePhoto = (value: string) => profilePhotoPath(value) !== null;
+
+const namedAvatars: Record<string, string> = {
+  pizza: "\u{1F355}", taco: "\u{1F32E}", sushi: "\u{1F363}",
+  burger: "\u{1F354}", dumpling: "\u{1F95F}", ramen: "\u{1F35C}",
+  salad: "\u{1F957}", donut: "\u{1F369}", pepper: "\u{1F336}\uFE0F",
+  avocado: "\u{1F951}", chicken: "\u{1F357}", boba: "\u{1F9CB}",
+};
+
+/** Older saved profiles can contain an avatar name instead of its emoji. */
+export function avatarEmoji(value: string): string {
+  return namedAvatars[value.trim().toLowerCase().replace(/^:|:$/g, "")] ?? value;
+}
 export const AvatarSchema = z.union([
   z.string().min(1).max(8),
   z.string().max(2048).refine(isProfilePhoto, "Choose an emoji or upload a profile photo"),

@@ -16,7 +16,7 @@ export function DashboardAdministrators({ userId }: { userId: string }) {
     refetchInterval: 30000,
   });
   return (
-    <section className="space-y-3 rounded-lg border-2 bg-card p-5">
+    <section className="space-y-3 rounded-lg border bg-card p-5">
       <h3 className="text-lg font-bold">Dashboard administrators</h3>
       <p className="text-sm text-muted-foreground">
         Administrators can view all metrics and grant administrator access to others. Use the email
@@ -62,7 +62,7 @@ export function DashboardAdministrators({ userId }: { userId: string }) {
           value={email}
           disabled={busy}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded-lg border-2 bg-background px-3 py-2"
+          className="w-full rounded-lg border bg-background px-3 py-2"
           placeholder="person@example.com"
         />
         <Button type="submit" disabled={busy || !email.trim() || !query.data}>

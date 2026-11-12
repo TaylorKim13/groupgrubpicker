@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { Toaster } from "sonner";
+import { VotingReminder } from "@/components/VotingReminder";
 
 type Theme = "system" | "light" | "dark";
 const ThemeContext = createContext<Theme>("system");
@@ -58,26 +59,38 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
 export function ThemeControl() {
   const theme = useContext(ThemeContext);
+  const [reminderOpen, setReminderOpen] = useState(false);
   return (
-    <label className="flex items-center gap-2 text-sm font-medium">
-      Appearance
-      <select
-        className="rounded-lg border-2 bg-card px-3 py-2 text-foreground"
-        value={theme}
-        onChange={(event) => {
-          const next = event.target.value as Theme;
-          try {
-            localStorage.setItem(storageKey, next);
-          } catch {
-            /* Keep the choice for this page session. */
-          }
-          window.dispatchEvent(new CustomEvent("groupgrub-theme-change", { detail: next }));
-        }}
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <label className="flex items-center gap-2 text-sm font-bold">
+        Appearance
+        <select
+          className="rounded-lg border bg-card px-3 py-2 text-foreground"
+          value={theme}
+          onChange={(event) => {
+            const next = event.target.value as Theme;
+            try {
+              localStorage.setItem(storageKey, next);
+            } catch {
+              /* Keep the choice for this page session. */
+            }
+            window.dispatchEvent(new CustomEvent("groupgrub-theme-change", { detail: next }));
+          }}
+        >
+          <option value="system">System</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </label>
+      <button
+        type="button"
+        className="rounded text-xs font-medium opacity-70 underline-offset-4 transition-opacity hover:underline hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        title="Walk through voting again"
+        onClick={() => setReminderOpen(true)}
       >
-        <option value="system">System</option>
-        <option value="light">Light</option>
-        <option value="dark">Dark</option>
-      </select>
-    </label>
+        Help
+      </button>
+      <VotingReminder open={reminderOpen} onOpenChange={setReminderOpen} />
+    </div>
   );
 }

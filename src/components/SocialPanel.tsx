@@ -64,13 +64,13 @@ export function SocialPanel({ userId }: { userId: string }) {
   return (
     <>
       {s.tableInvites.length > 0 && (
-        <section className="border-b-2 py-6">
+        <section className="border-b py-6">
           <h2 className="text-2xl font-bold">Table invites</h2>
           <ul className="mt-3 space-y-2">
             {s.tableInvites.map((i) => (
               <li
                 key={i.id}
-                className="flex items-center justify-between gap-3 rounded-lg border-2 bg-card p-3"
+                className="flex items-center justify-between gap-3 rounded-lg border bg-card p-3"
               >
                 <span>
                   <ProfileAvatar avatar={i.from.avatar} name={i.from.name} /> <b>{i.from.name}</b>{" "}
@@ -96,7 +96,7 @@ export function SocialPanel({ userId }: { userId: string }) {
         </section>
       )}
 
-      <section className="border-b-2 py-6">
+      <section className="border-b py-6">
         <h2 className="text-2xl font-bold">Friends</h2>
         <p className="mt-2 text-sm text-muted-foreground">
           Your friend code:{" "}
@@ -137,7 +137,7 @@ export function SocialPanel({ userId }: { userId: string }) {
             onChange={(e) => setCode(e.target.value.toUpperCase().slice(0, 12))}
             placeholder="Friend's code"
             aria-label="Friend code"
-            className="flex-1 rounded-lg border-2 bg-card px-3 py-2 font-display uppercase"
+            className="flex-1 rounded-lg border bg-card px-3 py-2 font-display uppercase"
           />
           <Button type="submit" disabled={code.length < 4}>
             Add friend
@@ -148,7 +148,7 @@ export function SocialPanel({ userId }: { userId: string }) {
             {s.incoming.map((f) => (
               <li
                 key={f.friendshipId}
-                className="flex items-center justify-between rounded-lg border-2 bg-card p-3"
+                className="flex items-center justify-between rounded-lg border bg-card p-3"
               >
                 <span>
                   <ProfileAvatar avatar={f.avatar} name={f.name} /> <b>{f.name}</b> wants to be
@@ -180,7 +180,7 @@ export function SocialPanel({ userId }: { userId: string }) {
             ))}
           </ul>
         )}
-        <ul className="mt-4 divide-y-2">
+        <ul className="mt-4 divide-y">
           {s.friends.map((f) => (
             <li key={f.friendshipId} className="flex items-center justify-between py-2">
               <span>
@@ -220,10 +220,10 @@ export function SocialPanel({ userId }: { userId: string }) {
         </ul>
       </section>
 
-      <section className="border-b-2 py-6">
+      <section className="border-b py-6">
         <h2 className="text-2xl font-bold">Your groups</h2>
         <form
-          className="mt-3 flex gap-2"
+          className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center"
           onSubmit={(e) => {
             e.preventDefault();
             act(
@@ -238,7 +238,7 @@ export function SocialPanel({ userId }: { userId: string }) {
             maxLength={40}
             placeholder="e.g. Work lunch crew"
             aria-label="Group name"
-            className="flex-1 rounded-lg border-2 bg-card px-3 py-2"
+            className="h-10 min-w-0 flex-1 rounded-lg border bg-card px-3 py-2 text-sm"
           />
           <Button type="submit" disabled={!crewName.trim()}>
             Create group
@@ -246,9 +246,15 @@ export function SocialPanel({ userId }: { userId: string }) {
         </form>
         <ul className="mt-4 space-y-3">
           {s.crews.map((c) => (
-            <li key={c.id} className="rounded-lg border-2 bg-card p-4">
+            <li key={c.id} className="overflow-hidden rounded-xl border bg-card p-5">
               <div className="flex items-center justify-between gap-2">
-                <p className="font-bold">{c.name}</p>
+                <div className="min-w-0">
+                  <h3 className="break-words text-lg font-semibold">{c.name}</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {c.members.filter((m) => m.status === "member").length} {c.members.filter((m) => m.status === "member").length === 1 ? "member" : "members"}
+                    {c.members.some((m) => m.status === "invited") && ` / ${c.members.filter((m) => m.status === "invited").length} pending`}
+                  </p>
+                </div>
                 {c.myStatus === "invited" ? (
                   <span className="flex gap-2">
                     <Button
@@ -277,15 +283,15 @@ export function SocialPanel({ userId }: { userId: string }) {
                   </Button>
                 )}
               </div>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <ul className="mt-4 grid gap-2 border-t pt-4 sm:grid-cols-2" aria-label={`Members of ${c.name}`}>
                 {c.members.map((m) => (
-                  <span key={m.id} className="mr-2 inline-flex items-center gap-1">
-                    <ProfileAvatar avatar={m.avatar} name={m.name} />
-                    {m.name}
-                    {m.status === "invited" ? " (invited)" : ""}
-                  </span>
+                  <li key={m.id} className="flex min-w-0 items-center gap-3 rounded-lg border bg-muted/50 px-3 py-2.5">
+                    <ProfileAvatar avatar={m.avatar} name={m.name} className="h-9 w-9 bg-background text-xl" />
+                    <span className="min-w-0 flex-1 break-words text-sm font-medium">{m.name}{m.id === userId && m.name !== "You" && <span className="ml-1 font-normal text-muted-foreground">(you)</span>}</span>
+                    {m.status === "invited" && <span className="shrink-0 rounded-full bg-secondary px-2 py-1 text-[10px] font-semibold text-secondary-foreground">Invited</span>}
+                  </li>
                 ))}
-              </p>
+              </ul>
               {c.myStatus === "member" &&
                 (() => {
                   const options = s.friends.filter((f) => !c.members.some((m) => m.id === f.id));

@@ -5,6 +5,13 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { UsernameSchema } from "./recovery";
 import { Buffer } from "node:buffer";
+import { googleMapsRequest } from "./google-maps.server";
+import {
+  parseRewardRestaurants,
+  RewardPlaceSearchResultSchema,
+  RewardRestaurantsSchema,
+  type RewardRestaurant,
+} from "./restaurant-rewards";
 import {
   AvatarSchema,
   PhotoUploadSchema,
@@ -12,6 +19,49 @@ import {
   PROFILE_PHOTO_BUCKET,
   MAX_STORED_PHOTO_BYTES,
 } from "./profile-avatar";
+
+const rewardPlaceNameCache = new Map<string, { name: string; expiresAt: number }>();
+const REWARD_PLACE_NAME_CACHE_MS = 6 * 60 * 60 * 1000;
+
+async function getRewardPlaceName(placeId: string): Promise<string | null> {
+  const cached = rewardPlaceNameCache.get(placeId);
+  if (cached && cached.expiresAt > Date.now()) return cached.name;
+
+  try {
+    const place = await googleMapsRequest(
+      `/v1/places/${encodeURIComponent(placeId)}?languageCode=en`,
+      {
+        method: "GET",
+        fieldMask: "id,displayName",
+      },
+    );
+    const name = typeof place.displayName?.text === "string" ? place.displayName.text.trim() : "";
+    if (!name) return null;
+    rewardPlaceNameCache.set(placeId, {
+      name,
+      expiresAt: Date.now() + REWARD_PLACE_NAME_CACHE_MS,
+    });
+    return name;
+  } catch {
+    return null;
+  }
+}
+
+async function refreshRewardPlaceNames(rewards: RewardRestaurant[]) {
+  const refreshed = [...rewards];
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(5, rewards.length) }, async () => {
+    while (nextIndex < rewards.length) {
+      const index = nextIndex++;
+      const reward = rewards[index];
+      if (!reward?.placeId) continue;
+      const name = await getRewardPlaceName(reward.placeId);
+      if (name && refreshed[index]) refreshed[index] = { ...refreshed[index]!, brandName: name };
+    }
+  });
+  await Promise.all(workers);
+  return refreshed;
+}
 
 export const getAccount = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -35,6 +85,30 @@ export const getAccount = createServerFn({ method: "GET" })
       usernameAvailable = false;
     }
     if (error || !profile) throw new Error("Could not load your profile");
+    const { data: rewardData, error: rewardError } = await context.supabase
+      .from("profiles")
+      .select("reward_restaurants")
+      .eq("id", context.userId)
+      .single();
+    // Older deployments may be running before this optional account setting migration.
+    let rewardRestaurants = [] as ReturnType<typeof parseRewardRestaurants>;
+    const rewardColumnUnavailable =
+      rewardError && ["42703", "PGRST204"].includes(rewardError.code ?? "");
+    if (!rewardColumnUnavailable) {
+      if (rewardError || !rewardData) throw new Error("Could not load your restaurant rewards");
+      rewardRestaurants = parseRewardRestaurants(rewardData.reward_restaurants);
+      const refreshedRewards = await refreshRewardPlaceNames(rewardRestaurants);
+      const namesChanged = refreshedRewards.some(
+        (reward, index) => reward.brandName !== rewardRestaurants[index]?.brandName,
+      );
+      if (namesChanged) {
+        rewardRestaurants = refreshedRewards;
+        await context.supabase
+          .from("profiles")
+          .update({ reward_restaurants: rewardRestaurants })
+          .eq("id", context.userId);
+      }
+    }
     const { data: preset, error: presetError } = await context.supabase
       .from("preset_filters")
       .select("settings")
@@ -46,7 +120,66 @@ export const getAccount = createServerFn({ method: "GET" })
       usernameAvailable,
       distanceUnit: profile.distance_unit,
       settings: preset ? getHostingPreferences(preset.settings) : null,
+      rewardRestaurants,
     };
+  });
+
+const RewardSearchInputSchema = z.object({ query: z.string().trim().min(2).max(100) });
+
+export const searchRewardPlaces = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => RewardSearchInputSchema.parse(input))
+  .handler(async ({ data }) => {
+    const response = await googleMapsRequest("/v1/places:searchText", {
+      method: "POST",
+      fieldMask: "places.id,places.displayName,places.formattedAddress,places.businessStatus",
+      body: JSON.stringify({
+        textQuery: data.query,
+        pageSize: 8,
+        languageCode: "en",
+      }),
+    });
+    return ((response.places ?? []) as any[])
+      .filter(
+        (place) =>
+          place.id &&
+          place.displayName?.text &&
+          place.businessStatus !== "CLOSED_PERMANENTLY" &&
+          place.businessStatus !== "CLOSED_TEMPORARILY",
+      )
+      .map((place) =>
+        RewardPlaceSearchResultSchema.parse({
+          placeId: place.id,
+          name: place.displayName.text,
+          address: place.formattedAddress ?? null,
+        }),
+      );
+  });
+
+export const saveRewardRestaurants = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ restaurants: RewardRestaurantsSchema }).parse(input))
+  .handler(async ({ data, context }) => {
+    const restaurants = parseRewardRestaurants(data.restaurants);
+    const { error } = await context.supabase
+      .from("profiles")
+      .update({ reward_restaurants: restaurants })
+      .eq("id", context.userId);
+    if (error) throw new Error("Could not save your restaurant rewards. Please try again.");
+    return { restaurants };
+  });
+
+export const getRewardRestaurants = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await context.supabase
+      .from("profiles")
+      .select("reward_restaurants")
+      .eq("id", context.userId)
+      .single();
+    if (error?.code === "42703" || error?.code === "PGRST204") return { restaurants: [] };
+    if (error || !data) throw new Error("Could not load your restaurant rewards");
+    return { restaurants: parseRewardRestaurants(data.reward_restaurants) };
   });
 
 export const saveAccount = createServerFn({ method: "POST" })

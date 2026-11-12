@@ -22,6 +22,7 @@ export type Restaurant = {
   custom?: boolean;
   google?: boolean;
   priceUnknown?: boolean;
+  priceRange?: { startPrice?: { currencyCode: string; units: string; nanos?: number }; endPrice?: { currencyCode: string; units: string; nanos?: number } };
   waitUnknown?: boolean;
   dietInfoUnknown?: boolean;
   websiteUri?: string;
@@ -40,6 +41,8 @@ export type RoomSettings = {
   visibility: "public" | "private";
   maxWait: number;
   anonymous: boolean;
+  priceLevels?: number[];
+  setupPending?: boolean;
 };
 
 export const DEFAULT_SETTINGS: RoomSettings = {
@@ -280,18 +283,39 @@ export function mockRestaurants(center: Center): Restaurant[] {
 }
 
 export function matchesFilters(r: Restaurant, s: RoomSettings) {
-  if (r.price < s.priceMin || r.price > s.priceMax) return false;
+  const levels = selectedPriceLevels(s);
+  if (!r.priceUnknown && levels.length > 0 && !levels.includes(r.price)) return false;
   if (r.wait > s.maxWait) return false;
   if (distanceKm(s.center, r) > s.radiusKm) return false;
   if (!s.diets.every((d) => r.diets.includes(d))) return false;
   return true;
 }
 
-/** Full pool: filtered mock list + all custom nominations (always included). */
+/** Apply room filters to both discovered restaurants and nominations. */
 export function buildPool(s: RoomSettings, nominations: Restaurant[]): Restaurant[] {
-  return [...mockRestaurants(s.center).filter((r) => matchesFilters(r, s)), ...nominations];
+  return [...mockRestaurants(s.center), ...nominations].filter((r) => matchesFilters(r, s));
 }
 
 export const priceLabel = (p: number) => "$".repeat(Math.max(1, Math.min(4, p)));
 
-export const AVATARS = ["🍕", "🌮", "🍣", "🍔", "🥟", "🍜", "🥗", "🍩", "🌶️", "🥑", "🍗", "🧋"];
+export const selectedPriceLevels = (
+  settings: Pick<RoomSettings, "priceMin" | "priceMax" | "priceLevels">,
+) => settings.priceLevels ?? Array.from(
+  { length: settings.priceMax - settings.priceMin + 1 },
+  (_, index) => settings.priceMin + index,
+);
+
+export const priceLevelsLabel = (
+  settings: Pick<RoomSettings, "priceMin" | "priceMax" | "priceLevels">,
+) => {
+  const levels = selectedPriceLevels(settings);
+  if (levels.length === 0 || levels.length === 4) return "Any price";
+  if (levels.every((price, index) => index === 0 || price === levels[index - 1]! + 1)) {
+    return `${priceLabel(levels[0]!)}–${priceLabel(levels[levels.length - 1]!)}`;
+  }
+  return levels.map(priceLabel).join(", ");
+};
+
+export const AVATARS = ["🍕", "🌮", "🍣", "🍔", "🥟", "🍜", "🥗", "🍩", "🥑", "🍗", "🧋"];
+
+export const priceRangeLabel = (p: number) => ["Under $15", "$15\u201330", "$30\u201360", "$60+"][p - 1] ?? "Unknown";

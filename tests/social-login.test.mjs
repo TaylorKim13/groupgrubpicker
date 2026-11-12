@@ -67,7 +67,8 @@ function render({
   const tree = context.exports.SignInPanel();
   function find(node, label) {
     if (!node || typeof node !== "object") return null;
-    if (node.type === "button" && node.props.children === label) return node;
+    const text = (entry) => Array.isArray(entry) ? entry.map(text).join("") : typeof entry === "string" ? entry : entry && typeof entry === "object" ? text(entry.props?.children) : "";
+    if (node.type === "button" && text(node.props.children).trim() === label) return node;
     const children = node.props?.children;
     for (const child of Array.isArray(children) ? children : [children]) {
       const found = find(child, label);

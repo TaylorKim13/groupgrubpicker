@@ -15,7 +15,7 @@
 2. Build/deploy the application. Existing Google Maps server credentials provide
    the live restaurant pool. Without Maps, suggestions are explicitly labeled
    demo restaurants.
-3. For AI-assisted explanations later, set these **server-only** variables in
+3. For Gemini to choose the restaurants, set these **server-only** variables in
    local `.env` and in Render's Environment settings, then restart/redeploy:
 
    ```dotenv
@@ -36,8 +36,75 @@
 
 ## How it works
 
-The room's **Suggestions for your table** section offers three candidates from
-the existing pool. Members can expand **Share my dining preferences** to choose
+### Microphone help
+
+In the lobby, **Help us decide** records up to 60 seconds of a group discussion.
+Everyone being recorded must agree before the microphone button is enabled.
+The browser requires microphone permission and HTTPS (or localhost). A visible
+listening indicator, **Stop and review**, and **Cancel** give the user control.
+The scrolling audio bars respond to actual microphone energy and settle when
+the microphone is quiet. A progress bar beside the seconds counter fills to
+60 seconds; both stop when recording ends.
+The microphone stops on cancellation, completion, navigation, or leaving the lobby.
+Cancel before submission discards the recording; dismissing an analysis cannot
+recall audio already sent to Google.
+
+The app captures mono audio locally and sends a bounded 16 kHz WAV only after
+recording stops. Gemini extracts a dining-only summary and validated preferences.
+Audio and transcripts are not stored in the app's database or browser storage.
+Google receives the audio under its Gemini API terms, including applicable
+free-tier data processing terms. The recording request contains no room members,
+votes, or personal histories. The summary is shown only in the recording browser
+and is sent back to Gemini if the user requests restaurant picks.
+
+**Use audio for suggestions** requests three restaurants directly from the
+reviewed discussion, without saving or changing any seat's shared preferences.
+This works for guests even when the host is away. The server expands the Places
+search with the audio's favorite cuisines, applies all shared group requirements
+plus the explicit audio constraints, and sends eligible candidates and the
+dining summary to Gemini. Gemini must choose three distinct existing IDs (or
+the number available if fewer than three qualify), with grounded explanations.
+Results appear below the recording review as a private preview, not a new set
+in the shared suggestion history. If Gemini is unavailable or returns invalid
+picks, clearly labeled preference-based picks appear instead. Fewer than three
+matches are explained, with no invented restaurants or relaxed requirements.
+
+**Review in preference form** fills the existing form for correction. Fields
+not discussed keep their current values. The user must click **Use for this
+outing** to share the reviewed choices as their seat's preferences. This does
+not create extra seats or attribute extracted choices to other group members.
+Dollar amounts without explicit restaurant price tiers remain in the summary
+for manual review. Restaurant suggestions still use the existing eligibility
+checks and Google Places pool; no restaurant facts come from the recording.
+
+The existing server-only `GEMINI_API_KEY` enables voice help. Optional
+`GEMINI_AUDIO_MODEL` overrides the audio model; otherwise it uses `GEMINI_MODEL`
+or `gemini-3.5-flash-lite`. Choose an audio-input model with structured JSON
+support. No new database migration or dependency is required. The server checks
+the hashed room pass and lobby status before processing and again before
+returning results. Requests are bounded to a minute of audio with a one-minute
+per-member cooldown per server process.
+The recording button stays disabled during this cooldown and shows a live
+seconds-remaining countdown. Availability is checked while the lobby is open
+and again before requesting microphone access, including after a page reload.
+This cooldown is not a shared quota
+across multiple server instances; use provider project quotas for a global cap.
+Missing configuration disables the microphone UI. Permission denial, unavailable
+audio capture, quota errors, and invalid model output leave manual input usable.
+
+Verify on HTTPS with a real microphone: allow/deny permission, record a brief
+cuisine discussion, stop, review/edit, and share. Confirm suggestions update
+through the existing host generation flow. Also cancel while recording, navigate
+away, and start voting during capture/analysis; the microphone should stop and
+locked preferences should not change. Run `node --test tests/dining-conversation.test.mjs`
+for audio encoding, input/output validation, failure handling, and cooldown checks.
+
+### Suggestions and preferences
+
+The room's **Suggestions for your table** section offers up to three picks from
+the eligible pool. Live discovery searches shared favorite cuisines in addition
+to nearby restaurants and uses Google's cuisine types when available. Members
+can expand **Share my dining preferences** to choose
 cuisines, dislikes, a maximum price/distance, required dietary options, familiar
 versus new places, and favorite restaurants. Clicking **Use for this outing**
 includes those preferences. **Stop sharing** excludes them again. Preferences
@@ -63,7 +130,7 @@ seat can remember their preferences and separately opt into history use. Saved
 defaults are presented privately on the next outing but still require sharing
 for that outing. Hosting defaults and personal dining preferences are separate.
 
-The host's open room automatically prepares explanations when the input
+The host's open room automatically prepares Gemini selections when the input
 fingerprint changes. Membership, preferences, restaurant candidates, settings,
 consented history/feedback, the date, and AI configuration affect that
 fingerprint. Room data continues polling every 2.5 seconds; generation claims
@@ -93,12 +160,17 @@ in a previous room provide a shared-group repetition signal. Duplicate seats
 for one account do not receive additional preference weight. Current votes
 are never recommendation inputs.
 
-Gemini uses generateContent with structured JSON output. It receives only
-candidate IDs, aggregate scores, and approved factual reason sentences. It
-selects reason indexes to assemble a short grounded explanation, preserving
-ranking and warnings. It cannot add restaurants, write unsupported claims, or
-expose personal histories. This first version uses AI to prioritize factual
-explanations; all eligibility and ranking run in application code.
+Gemini uses generateContent with structured JSON output. It receives all eligible,
+unseen candidates, with restaurant IDs/names, cuisine, known price, aggregate fit
+scores, factual reasons, warnings, and aggregate cuisine favorite/avoid counts.
+It chooses one to three restaurant IDs in its own preferred order and selects
+reason indexes for grounded explanations. It is instructed to prioritize favored
+cuisines and return fewer picks rather than pad a single favored cuisine with
+avoided cuisines. Avoidances remain preferences rather than hard exclusions.
+The server validates IDs, duplicates, and reason indexes, preserves restaurant
+facts and warnings, and falls back to the top three heuristic picks on failure.
+Eligibility stays in application code. No member identities, votes, or raw
+personal histories are sent. The UI identifies Gemini picks or fallback picks.
 
 After voting closes, **Did you eat at the winning restaurant?** records private
 visit and enjoyment feedback. Choosing **Didn't go** clears the enjoyment
@@ -129,7 +201,7 @@ After migration/deployment, create a room with two members, save conflicting
 cuisine preferences, confirm suggestions update, and try a guest and a linked
 account. Open voting and confirm preference changes are locked. Close voting,
 save feedback, and use history in a subsequent room. With a Gemini key, check
-that explanations prepare once per changed input and fallback rankings remain
+that selections prepare once per changed input and fallback rankings remain
 usable when the key or upstream service fails.
 
 References: [Gemini structured outputs](https://ai.google.dev/gemini-api/docs/structured-output),

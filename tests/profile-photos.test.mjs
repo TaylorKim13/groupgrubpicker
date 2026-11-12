@@ -28,6 +28,8 @@ const admin = moduleUrl(
 );
 const account = await load("account.functions.ts", {
   zod,
+  "./google-maps.server": moduleUrl('export const googleMapsRequest = async () => { throw new Error("Unexpected Maps request"); };'),
+  "./restaurant-rewards": await load("restaurant-rewards.ts", { zod }),
   "./recovery": await load("recovery.ts", { zod }),
   "./settings": settings,
   "./profile-avatar": avatarsUrl,
@@ -110,7 +112,9 @@ function accountContext(profileResults, presetError = null) {
               assert.equal(value, userId);
               selections.push({ table, columns, column });
               return {
-                single: async () => profileResults.shift(),
+                single: async () => columns === "reward_restaurants"
+                  ? { data: { reward_restaurants: [] }, error: null }
+                  : profileResults.shift(),
                 maybeSingle: async () => ({ data: null, error: presetError }),
               };
             },
@@ -141,7 +145,7 @@ test("migrated account retains its username without a fallback query", async () 
   const loaded = await getAccount({ context: fixture.context });
   assert.deepEqual(loaded.profile, profile);
   assert.equal(loaded.usernameAvailable, true);
-  assert.equal(fixture.selections.length, 2);
+  assert.equal(fixture.selections.length, 3);
 });
 
 test("account fallback does not mask permission failures, unrelated missing columns, or missing profiles", async () => {

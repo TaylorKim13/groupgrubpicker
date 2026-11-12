@@ -154,3 +154,37 @@ export const getVotingDurationMetrics = createServerFn({ method: "GET" })
         .parse(report.data),
     };
   });
+
+
+export const getMetricTrends = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { isAdministrator } = await import("./admin-access.server");
+    if (!(await isAdministrator(context.userId))) throw new Error("Administrator access required");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { buildMetricTrends } = await import("./metric-trends");
+    const client = supabaseAdmin as unknown as SupabaseClient;
+    const now = new Date();
+    const since = new Date(now.getTime() - 31 * 86400000).toISOString();
+    async function rows(table: string, columns: string, timestamp: string) {
+      const result: Record<string, unknown>[] = [];
+      for (let offset = 0; ; offset += 500) {
+        const { data, error } = await client.from(table).select(columns).gte(timestamp, since)
+          .order(timestamp).order("id").range(offset, offset + 499);
+        if (error) throw new Error("Could not load metric history. Please try refreshing.");
+        result.push(...(data ?? []) as unknown as Record<string, unknown>[]);
+        if (!data || data.length < 500) return result;
+      }
+    }
+    const [filters, selections, creations] = await Promise.all([
+      rows("room_filter_usage", "voting_started_at,location_filter_applied_at,price_filter_applied_at,restaurant_selected_at", "voting_started_at"),
+      rows("room_selection_usage", "entered_at,selected_at,last_seen_at", "entered_at"),
+      rows("group_creation_usage", "created_at,click_count", "created_at"),
+    ]);
+    const { z } = await import("zod");
+    const nullableDate = z.string().nullable();
+    return { days: buildMetricTrends(
+      z.array(z.object({ voting_started_at: nullableDate, location_filter_applied_at: nullableDate, price_filter_applied_at: nullableDate, restaurant_selected_at: nullableDate })).parse(filters),
+      z.array(z.object({ entered_at: z.string(), selected_at: nullableDate, last_seen_at: z.string() })).parse(selections),
+      z.array(z.object({ created_at: z.string(), click_count: z.number().nullable() })).parse(creations), now), updatedAt: now.toISOString() };
+  });

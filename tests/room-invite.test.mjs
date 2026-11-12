@@ -27,6 +27,7 @@ let source = transpile(
 );
 for (const [name, target] of Object.entries({
   react: hook,
+  "lucide-react": url('export const Copy = "copy-icon";'),
   sonner: toast,
   "@/lib/room-access": access,
   "./ui/button": url('export const Button = "button";'),
@@ -62,16 +63,13 @@ test("copy buttons use the public code/link and report clipboard errors truthful
   Object.defineProperty(globalThis, "navigator", { configurable: true, value: { clipboard } });
   try {
     const page = RoomInvite({ code: "ABC234" });
-    const link = find(page, (node) => node.type === "input");
-    assert.equal(link.props.value, "https://groupgrub.example/room/ABC234");
-    assert.equal(link.props.readOnly, true);
     const copyLink = find(
       page,
       (node) => node.type === "button" && node.props.children === "Copy invite link",
     );
     const copyCode = find(
       page,
-      (node) => node.type === "button" && node.props.children === "Copy code",
+      (node) => node.type === "button" && node.props["aria-label"] === "Copy room code",
     );
     copyLink.props.onClick();
     await new Promise((resolve) => setImmediate(resolve));
