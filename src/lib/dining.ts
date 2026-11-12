@@ -98,10 +98,11 @@ export function rankDiningSuggestions(
         : !allowedPrices.includes(r.price)
     )
       return false;
-    // Google/custom entries do not provide verified dietary or allergy evidence.
+    // Google Places search matches may be suggested for dietary searches, but are
+    // unverified. Custom nominations still need explicit dietary data to qualify.
     if (
       requiredDiets.length &&
-      (r.google || r.custom || !requiredDiets.every((d) => r.diets.includes(d)))
+      (r.custom || (!r.google && !requiredDiets.every((d) => r.diets.includes(d))))
     )
       return false;
     if (!r.google && !r.custom && r.wait > settings.maxWait) return false;

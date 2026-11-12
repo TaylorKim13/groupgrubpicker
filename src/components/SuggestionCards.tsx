@@ -184,7 +184,9 @@ export function SuggestionCards({
                       ))}
                       {(r.google || r.custom) && (
                         <p>
-                          Confirm wait times and dietary or allergy suitability with the restaurant.
+                          This dietary suggestion is based on Google listing information, not a
+                          verified menu. Confirm the options directly with the restaurant,
+                          including cross-contact safety for celiac disease or allergies.
                         </p>
                       )}
                       {historical && (
