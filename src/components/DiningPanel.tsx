@@ -112,10 +112,8 @@ export function DiningPanel({
     <section className="space-y-5 rounded-2xl bg-card p-5 chunky">
       <div>
         <h2 className="text-xl font-semibold">Suggestions for your table</h2>
-        <p className="mt-2 text-sm text-muted-foreground">{data.ranking.message}</p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          {data.ranking.participants} sharing preferences. Personal histories and votes stay
-          private.
+        <p className="mt-2 text-sm text-muted-foreground">
+          {status === "lobby" ? "Add a pick to your voting pool." : "Explore picks for your table."}
         </p>
         {data.demo && (
           <p className="mt-2 text-sm font-bold">
@@ -125,27 +123,12 @@ export function DiningPanel({
         {data.generated && (
           <p className="mt-1 text-xs text-muted-foreground">
             {data.method === "gemini"
-              ? "Picked by Gemini for your table"
-              : "Using preference-based picks · Gemini unavailable"}
+              ? "Picked by Gemini"
+              : "Preference-based picks · Gemini unavailable"}
           </p>
         )}
-        {status === "lobby" && (
-          <p className="mt-3 rounded-xl bg-muted px-3 py-2 text-sm">
-            {data.preferences.participating ? (
-              <>
-                <span className="font-bold">Your preferences are included.</span>{" "}
-                {data.preferences.favoriteCuisines.length > 0 &&
-                  `Favorites: ${data.preferences.favoriteCuisines.join(", ")}. `}
-                {data.preferences.dislikedCuisines.length > 0 &&
-                  `Avoiding ${data.preferences.dislikedCuisines.length} cuisine${data.preferences.dislikedCuisines.length === 1 ? "" : "s"}.`}
-              </>
-            ) : (
-              <>
-                <span className="font-bold">Your preferences aren’t included yet.</span> Open “Share
-                my dining preferences” below and click “Use for this outing.”
-              </>
-            )}
-          </p>
+        {status === "lobby" && data.preferences.participating && (
+          <p className="mt-2 text-xs text-muted-foreground">Your preferences are included.</p>
         )}
         {(data.pending || generation.isFetching) && (
           <p className="mt-2 text-sm" role="status">
@@ -176,8 +159,8 @@ export function DiningPanel({
       <Tabs defaultValue="current">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <TabsList>
-            <TabsTrigger value="current">Current suggestions</TabsTrigger>
-            <TabsTrigger value="history">History (up to 3)</TabsTrigger>
+            <TabsTrigger value="current">Suggestions</TabsTrigger>
+            <TabsTrigger value="history">History</TabsTrigger>
           </TabsList>
           {isHost && status === "lobby" && (
             <Button
@@ -201,7 +184,7 @@ export function DiningPanel({
             <p className="text-xs text-muted-foreground">
               {data.generated && data.remaining === 0
                 ? "You've seen all matching options. Check History or adjust the group filters."
-                : `${data.remaining} more places to explore. No repeats.`}
+                : `${data.remaining} more places to explore.`}
             </p>
           )}
           {!isHost && status === "lobby" && (
@@ -221,8 +204,7 @@ export function DiningPanel({
             <div className="space-y-3 rounded-xl border border-dashed p-5 text-center">
               <p className="font-semibold">No suggestions are available yet.</p>
               <p className="text-sm text-muted-foreground">
-                {data.ranking.message} You can also search for a restaurant below and add it to the
-                pool.
+                {data.ranking.message} Try the restaurant search below.
               </p>
               {isHost && status === "lobby" && !data.generated && !generation.isFetching && (
                 <Button variant="outline" onClick={() => void generation.refetch()}>
@@ -253,6 +235,16 @@ export function DiningPanel({
           )}
         </TabsContent>
       </Tabs>
+      <details className="border-t pt-3 text-sm text-muted-foreground">
+        <summary className="cursor-pointer font-medium">How these picks are chosen</summary>
+        <div className="mt-2 space-y-2">
+          <p>{data.ranking.message}</p>
+          <p>
+            {data.ranking.participants} sharing preferences. Personal histories and votes stay
+            private.
+          </p>
+        </div>
+      </details>
     </section>
   );
 }
@@ -311,38 +303,41 @@ function PreferenceForm({
   }
   return (
     <>
-      <DiningConversation
-        session={session}
-        available={voiceAvailable}
-        rewardRestaurants={rewardRestaurants}
-        selectedPool={selectedPool}
-        onAddToPool={onAddToPool}
-        onViewRestaurant={onViewRestaurant}
-        onReview={(result) => {
-          setPreferences((current) => {
-            const favorites = result.favoriteCuisines ?? current.favoriteCuisines;
-            const dislikes = result.dislikedCuisines ?? current.dislikedCuisines;
-            return {
-              ...current,
-              favoriteCuisines: favorites.filter((c) => !result.dislikedCuisines?.includes(c)),
-              dislikedCuisines: dislikes.filter((c) => !result.favoriteCuisines?.includes(c)),
-              maxPrice: result.maxPrice ?? current.maxPrice,
-              maxDistanceKm: result.maxDistanceKm ?? current.maxDistanceKm,
-              diets: result.diets ?? current.diets,
-              novelty: result.novelty ?? current.novelty,
-            };
-          });
-          if (details.current) {
-            details.current.open = true;
-            details.current.scrollIntoView({ behavior: "smooth", block: "start" });
-          }
-        }}
-      />
+      <details className="rounded-xl border bg-background">
+        <summary className="cursor-pointer px-4 py-3 font-bold">Talk it out with Gemini</summary>
+        <div className="border-t p-3">
+          <DiningConversation
+            session={session}
+            available={voiceAvailable}
+            rewardRestaurants={rewardRestaurants}
+            selectedPool={selectedPool}
+            onAddToPool={onAddToPool}
+            onViewRestaurant={onViewRestaurant}
+            onReview={(result) => {
+              setPreferences((current) => {
+                const favorites = result.favoriteCuisines ?? current.favoriteCuisines;
+                const dislikes = result.dislikedCuisines ?? current.dislikedCuisines;
+                return {
+                  ...current,
+                  favoriteCuisines: favorites.filter((c) => !result.dislikedCuisines?.includes(c)),
+                  dislikedCuisines: dislikes.filter((c) => !result.favoriteCuisines?.includes(c)),
+                  maxPrice: result.maxPrice ?? current.maxPrice,
+                  maxDistanceKm: result.maxDistanceKm ?? current.maxDistanceKm,
+                  diets: result.diets ?? current.diets,
+                  novelty: result.novelty ?? current.novelty,
+                };
+              });
+              if (details.current) {
+                details.current.open = true;
+                details.current.scrollIntoView({ behavior: "smooth", block: "start" });
+              }
+            }}
+          />
+        </div>
+      </details>
       <details ref={details} className="group relative isolate rounded-xl border bg-background">
         <summary className="flex list-none cursor-pointer items-center justify-between gap-3 rounded-xl px-4 py-3 font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-          <span>
-            {initial.participating ? "Edit my dining preferences" : "Share my dining preferences"}
-          </span>
+          <span>{initial.participating ? "Edit my preferences" : "Add my preferences"}</span>
           <ChevronDown
             className="size-4 shrink-0 transition-transform group-open:rotate-180"
             aria-hidden="true"

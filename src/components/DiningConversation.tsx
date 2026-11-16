@@ -319,13 +319,10 @@ export function DiningConversation({
   }
 
   return (
-    <div
-      className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4"
-    >
-      <h3 className="font-extrabold">Let Gemini help you decide</h3>
+    <div className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
+      <h3 className="font-extrabold">Get ideas from your conversation</h3>
       <p className="text-sm text-muted-foreground">
-        Record up to a minute of your table's food discussion, then review what Gemini heard. Get
-        three restaurant picks from the discussion or edit the preferences to share for this outing.
+        Record up to a minute of your food discussion, then review the results.
       </p>
       <label className="flex items-start gap-2 text-sm">
         <input
@@ -336,8 +333,8 @@ export function DiningConversation({
           className="mt-1 shrink-0"
         />
         <span className="min-w-0 flex-1">
-          Everyone being recorded agrees to send this audio to Google Gemini for analysis. The app
-          doesn't save audio or a transcript.{" "}
+          Everyone being recorded agrees to send audio to Google Gemini for analysis. We don't save
+          audio or transcripts.{" "}
           <a
             className="underline"
             href="https://ai.google.dev/gemini-api/terms"
@@ -382,11 +379,6 @@ export function DiningConversation({
           </Button>
         )}
       </div>
-      {phase === "idle" && cooldownSeconds > 0 && (
-        <p className="text-sm text-muted-foreground">
-          You can start another recording when the countdown finishes.
-        </p>
-      )}
       {phase === "idle" && available && cooldown.isError && (
         <p role="alert" className="text-sm text-destructive">
           Couldn't check recording availability.{" "}
@@ -463,9 +455,7 @@ export function DiningConversation({
             {result.novelty !== null && <li>Familiar or new: {result.novelty}</li>}
           </ul>
           <p className="text-xs text-muted-foreground">
-            Check these carefully, especially dietary requirements. Undiscussed fields keep your
-            current choices. Get restaurant picks directly, or review and share these preferences
-            for the outing.
+            Check dietary needs carefully. Anything not discussed keeps your current settings.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -473,7 +463,7 @@ export function DiningConversation({
               disabled={phase !== "idle"}
               onClick={() => void getSuggestions(result)}
             >
-              {phase === "suggesting" ? "Finding restaurants..." : "Use audio for suggestions"}
+              {phase === "suggesting" ? "Finding restaurants..." : "Get restaurant picks"}
             </Button>
             <Button
               type="button"
@@ -484,7 +474,7 @@ export function DiningConversation({
                 setResult(null);
               }}
             >
-              Review in preference form
+              Edit preferences
             </Button>
             <Button
               type="button"
@@ -508,7 +498,7 @@ export function DiningConversation({
             {picks.method === "gemini"
               ? "Picked by Gemini from your discussion."
               : "Using preference-based picks; Gemini selection was unavailable."}{" "}
-            These picks are a private preview. Your group's votes still decide.
+            Private preview · your group's votes decide.
           </p>
           {picks.demo && (
             <p className="text-sm font-bold">
