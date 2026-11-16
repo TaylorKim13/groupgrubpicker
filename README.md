@@ -9,15 +9,26 @@ Group Grub helps friends and families choose where to eat together. A host creat
 - Create a table as a guest or use an account, and invite others by room code or link.
 - Share table invitations through Messages/SMS.
 - Discover restaurants around the group's search center and view them on a map.
-- Adjust location, radius, price, and table preferences; search the restaurant pool or nominate a wildcard.
+- Set a search center using browser location permission or an address, then choose a radius and group filters. A location is required before creating the table.
+- Discover nearby candidates, search or nominate a wildcard, and select at least two restaurants for the voting pool.
 - View Google price ranges when available, restaurant addresses, and directions.
 - View Google Popular Times where supported and available.
-- Vote together and reveal a group result.
-- Save account dining preferences and access account features backed by Supabase.
+- Vote for two different restaurants: **Want** earns 2 points and **Could** earns 1 point. Track participation and reveal the group result.
+- Share per-outing dining preferences, get up to three matching suggestions, and review previous suggestion sets. Optional Gemini integration provides AI picks and consent-based voice input; ordinary ranking remains available when AI is unavailable.
+- Submit community restaurant deals and view matching offers on restaurant cards. Account rewards indicators identify matching saved rewards restaurants; they do not redeem rewards.
+- Use email/password or configured Google sign-in, edit profiles and photos, save preferences, manage friends and crews, and provide private visit feedback. Google sign-in requires Supabase provider configuration.
+
+## How to use
+
+1. Choose **Start a new table**, enter a nickname, and choose an area using location access or an address.
+2. Set the radius, estimated price range, dietary needs, and maximum wait; then choose restaurants for the pool.
+3. Share the six-character room code or invite link. Friends can join as guests with nicknames.
+4. Optionally share dining preferences or use **Help us decide**. Voice input requires microphone permission, everyone's consent, HTTPS or localhost, and server-side Gemini configuration.
+5. Select at least two restaurants, open voting, and have each person submit a Want and a Could choice. Reveal the winner when ready.
 
 ### Restaurant data limitations
 
-Google restaurant results are a candidate list, not an exhaustive directory. Dollar-sign price levels and available price ranges are estimates, not menu quotes. Missing data must remain unknown.
+Google restaurant results are a candidate list, not an exhaustive directory. The UI labels price tiers as **Under $15**, **$15–30**, **$30–60**, and **$60+**, estimated USD per person before tax and tip. These tiers and Google-provided price ranges are estimates, not menu quotes. Missing data must remain unknown.
 
 Popular Times describes typical busyness; it does not guarantee a current wait in minutes. Live wait times are not available for every restaurant. Shared wait cards are snapshots, and sample restaurant wait values are demo data. Confirm current waits, prices, dietary suitability, and allergies directly with the restaurant.
 
@@ -65,7 +76,9 @@ Use the same Supabase project for both URL entries and the same publishable key 
 
 Never commit `.env`. Never place the Supabase service-role key or another server secret in a `VITE_` variable: those variables are exposed to browsers. See [.env.render.example](.env.render.example) for hosting settings and optional server integrations.
 
-For an existing team database, obtain the approved configuration from the team. For a separate development database, review and apply the SQL migrations in [supabase/migrations](supabase/migrations) in order before testing. Do not reset the shared team database. Local Supabase CLI workflows require their own local setup; they are not required to connect to the hosted team project.
+For an existing team database, obtain the approved configuration and confirm which migrations have already been applied. The original schema is in [supabase/migrations](supabase/migrations); subsequent application changes are in [drizzle/migrations](drizzle/migrations). A separate development database needs both the baseline schema and the applicable later migrations, including account, dining, rewards, deals, pool selection, and presence changes. Review the migration SQL and linked feature documentation before applying it. Do not rely solely on filename prefixes: this repository contains multiple migrations numbered `0007` and `0016`. Do not rerun applied migrations, reset the shared database, or use schema push against the intentionally empty generated Drizzle schema. Local Supabase CLI workflows require their own setup; they are not required to connect to the hosted team project.
+
+Configure Supabase Authentication's Site URL and allowed redirect URLs for your actual production and development origins, including `/account` and `/reset-password`. Enable and configure the Google provider separately if using Google sign-in. See [account settings](docs/account-settings.md), [account recovery](docs/account-recovery.md), and [social login setup](docs/social-login-setup.md).
 
 ### 4. Configure Google
 
@@ -88,7 +101,11 @@ https://groupgrub-team.onrender.com/*
 
 If Vite starts on another port, allow that origin as well. Do not apply browser website-referrer restrictions to the server key. See [Google Maps setup](docs/google-maps.md) for additional context; this README distinguishes Popular Times from live waits.
 
-### 5. Start
+### 5. Optional Gemini features
+
+Set `GEMINI_API_KEY` on the server to enable AI restaurant selection, voice preference extraction, and deal wording assistance. `GEMINI_MODEL` selects the model; `GEMINI_AUDIO_MODEL` optionally overrides it for audio. Never use a `VITE_` prefix for these secrets. Voice help is disabled without configuration; ranking falls back to ordinary preference scoring if AI selection fails. See [dining recommendations](docs/dining-recommendations.md) for migrations, consent, provider data handling, and verification.
+
+### 6. Start
 
 ```bash
 bun run dev
@@ -98,12 +115,13 @@ Open the URL printed in Terminal. Restart the development server after changing 
 
 ## Verify the app
 
-1. Create a new table and set its search center.
+1. Start a new table, test location permission or address entry, set filters, and select at least two restaurants.
 2. Confirm that the map and restaurant pool load. Check an available price range and a directions link.
 3. Open the invite in another browser or device, join with a nickname, and confirm both participants appear.
 4. Open voting, submit choices, and reveal the result.
 5. Test email account creation/sign-in and persistence after refresh. Confirm saved preferences work.
 6. Check invitation sharing and any available Popular Times display. Missing Popular Times or price data is not itself a failure.
+7. With the required migrations and optional credentials configured, test shared preferences, suggestion refresh/history, microphone consent and cancellation, rewards indicators, and a disposable community deal.
 
 ## Build and checks
 
@@ -129,11 +147,9 @@ The team site is https://groupgrub-team.onrender.com/.
 
 `render.yaml` contains the Blueprint configuration. `/health` verifies that the server responds; it does not verify database or Google connectivity. See [DEPLOY-RENDER.md](DEPLOY-RENDER.md) for deployment background; authentication providers should only be tested if currently exposed by the app and configured by the team.
 
-## iOS / Xcode companion
+## Repository scope
 
-The separate Group Grub iOS project wraps the hosted website in `WKWebView`. Its `AppConfig.website` should point to `https://groupgrub-team.onrender.com/`.
-
-Website changes become available when the app loads the deployed site. Native Swift changes require rebuilding the iOS app and distributing a new build. The iOS project is separate from this web repository.
+This repository contains the web application. Native iOS projects and their build or distribution configuration are maintained separately. A web-wrapper app loads website updates only after those changes reach its configured hosted URL; native changes still require a new native build.
 
 ## Troubleshooting
 
@@ -157,3 +173,4 @@ Website changes become available when the app loads the deployed site. Native Sw
 - [Render deployment](DEPLOY-RENDER.md)
 
 The original PDF is retained for historical project context. Some setup and feature descriptions in it predate the current application; use this README and the current code for setup.
+
