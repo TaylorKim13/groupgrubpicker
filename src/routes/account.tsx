@@ -13,6 +13,7 @@ import { getAccount } from "@/lib/account.functions";
 import { getGroupHistory } from "@/lib/room.functions";
 import { getAdminAccess } from "@/lib/metrics.functions";
 import { MetricsDashboard } from "@/components/MetricsDashboard";
+import { Maintenance } from "@/components/Maintenance";
 import { ThemeControl } from "@/components/ThemeControl";
 
 export const Route = createFileRoute("/account")({
@@ -84,12 +85,14 @@ function AccountPage() {
           <p className="mt-2 text-sm text-muted-foreground">Your people, preferences, and favorite places.</p>
         </div>
         <Tabs defaultValue="overview">
-          <TabsList className={`grid h-auto w-full grid-cols-2 sm:h-9 ${isAdmin ? "sm:grid-cols-4" : "min-[480px]:grid-cols-3"}`}>
+          <TabsList className={`grid h-auto w-full grid-cols-2 sm:h-9 ${isAdmin ? "sm:grid-cols-5" : "min-[480px]:grid-cols-3"}`}>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="preferences">Preferences</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
             {isAdmin && <TabsTrigger value="metrics">Metrics</TabsTrigger>}
+            {isAdmin && <TabsTrigger value="admin">Admin</TabsTrigger>}
           </TabsList>
+          {isAdmin && <TabsContent value="admin"><Maintenance userId={user.id} /></TabsContent>}
           {isAdmin && (
             <TabsContent value="metrics">
               <MetricsDashboard userId={user.id} />
